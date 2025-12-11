@@ -79,4 +79,23 @@ public class AdminController {
         postRepository.deleteById(id);
         return ResponseEntity.ok("Post deleted by Admin.");
     }
+    // 5. Edit Any User
+    @PutMapping("/users/{id}")
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
+        User user = userRepository.findById(id).orElseThrow();
+
+        // Update basic fields
+        user.setName(updatedData.getName());
+        user.setEmail(updatedData.getEmail());
+        user.setRole(updatedData.getRole());
+        user.setBatchYear(updatedData.getBatchYear());
+
+        // Update professional fields
+        user.setHeadline(updatedData.getHeadline());
+        user.setCurrentCompany(updatedData.getCurrentCompany());
+        user.setSkills(updatedData.getSkills());
+
+        userRepository.save(user);
+        return ResponseEntity.ok("User updated successfully by Admin.");
+    }
 }

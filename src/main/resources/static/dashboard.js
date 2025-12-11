@@ -2,14 +2,14 @@
 const API_URL = "/api";
 const WS_URL = "/ws";
 const token = localStorage.getItem("jwt_token");
-const myEmail = localStorage.getItem("user_email");
+const myEmail = localStorage.getItem("user_email"); // Saved from login
 const userName = localStorage.getItem("user_name");
 const userRole = localStorage.getItem("user_role");
 
 let stompClient = null;
 let currentChatPartner = null;
 let searchTimeout = null;
-let selectedUserForModal = null; // Store user when profile modal opens
+let selectedUserForModal = null; 
 
 // --- INITIALIZATION ---
 if (!token) {
@@ -51,7 +51,6 @@ async function switchTab(tab) {
         if(tab === 'directory') runSearch();
         if(tab === 'jobs') {
             fetchJobs();
-            // Show Post Button if Alumni/Admin
             if (userRole === "ALUMNI" || userRole === "ADMIN") {
                 const postBtn = document.getElementById("btnPostJob");
                 if(postBtn) postBtn.classList.remove("d-none");
@@ -59,6 +58,28 @@ async function switchTab(tab) {
         }
         if(tab === 'wall') fetchPosts();
         if(tab === 'profile') loadProfile();
+
+        // --- NEW: EVENTS TAB ---
+        if(tab === 'events') {
+            fetchEvents();
+            // Show "Add Event" button only for Admins
+            if (userRole === "ADMIN") {
+                // Small timeout to ensure DOM is ready
+                setTimeout(() => {
+                    const btnAdd = document.getElementById("btnAddEvent");
+                    if(btnAdd) btnAdd.classList.remove("d-none");
+                }, 100);
+            }
+        }
+
+        // --- NEW: ADMIN TAB ---
+        if(tab === 'admin') {
+            if(userRole !== 'ADMIN') {
+                container.innerHTML = `<div class="alert alert-danger text-center m-5">⛔ Access Denied</div>`;
+            } else {
+                loadAdminUsers();
+            }
+        }
 
     } catch(e) {
         container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
@@ -74,7 +95,6 @@ async function loadProfile() {
         const res = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
         if(res.ok) {
             const user = await res.json();
-            // Populate form fields if they exist (requires profile.html loaded)
             if(document.getElementById("pHeadline")) {
                 document.getElementById("pHeadline").value = user.headline || "";
                 document.getElementById("pCompany").value = user.currentCompany || "";
@@ -131,7 +151,6 @@ async function runSearch() {
             users.forEach(u => {
                 if(u.email === myEmail) return;
                 const initial = u.name.charAt(0).toUpperCase();
-                // Add click handler to open profile
                 tbody.innerHTML += `
                     <tr class="user-row" onclick='openUserProfile(${JSON.stringify(u)})'>
                         <td><div class="avatar-circle small">${initial}</div></td>
@@ -157,9 +176,7 @@ function openUserProfile(user) {
 }
 
 function openPrivateChatFromProfile() {
-    // Close Profile Modal
     bootstrap.Modal.getInstance(document.getElementById('userProfileModal')).hide();
-    // Open Chat
     openChatWithUser(selectedUserForModal);
 }
 
@@ -173,13 +190,10 @@ function connectToChat() {
         document.getElementById("chatStatus").innerText = "Online";
         document.getElementById("chatStatus").className = "badge bg-success ms-2";
         
-        // Global Chat
         stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
         
-        // Private Chat
         stompClient.subscribe('/user/queue/messages', payload => {
             const msg = JSON.parse(payload.body);
-            // Auto refresh list logic would go here if we had logic to detect tab
             if(document.getElementById("recentChatsList")) fetchRecentChats(); 
 
             if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
@@ -187,8 +201,10 @@ function connectToChat() {
             } else if (msg.senderName !== myEmail) {
                 document.getElementById("msgBadge").classList.remove("d-none");
                 const toastBody = document.getElementById("toastBody");
-                toastBody.innerText = `${msg.senderName}: ${msg.content}`;
-                new bootstrap.Toast(document.getElementById('liveToast')).show();
+                if(toastBody) {
+                    toastBody.innerText = `${msg.senderName}: ${msg.content}`;
+                    new bootstrap.Toast(document.getElementById('liveToast')).show();
+                }
             }
         });
     }, function() { document.getElementById("chatStatus").innerText = "Offline"; });
@@ -246,7 +262,6 @@ function displayPrivateMsg(msg) {
     area.scrollTop = area.scrollHeight;
 }
 
-// Global Chat Functions
 function sendMessage() {
     const input = document.getElementById("messageInput");
     if(input.value.trim()) {
@@ -254,6 +269,7 @@ function sendMessage() {
         input.value = "";
     }
 }
+
 function displayGlobalMsg(msg) {
     const area = document.getElementById("chatArea");
     area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
@@ -270,10 +286,8 @@ async function askBot() {
     const input = document.getElementById("botInput");
     const q = input.value.trim();
     if(!q) return;
-
     addBotMsg(q, 'my-message');
     input.value = "";
-
     try {
         const res = await fetch(`${API_URL}/bot/ask`, {
             method: "POST",
@@ -302,6 +316,7 @@ async function fetchJobs() {
         });
     }
 }
+
 async function postJob() {
     const data = {
         title: document.getElementById("jobTitle").value,
@@ -326,7 +341,191 @@ async function fetchPosts() {
         });
     }
 }
+
 async function createPost() {
     const res = await fetch(`${API_URL}/posts`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ content: document.getElementById("postContent").value, imageUrl: document.getElementById("postImage").value }) });
     if(res.ok) fetchPosts();
+}
+
+// ================= MODULE 5: EVENTS =================
+async function fetchEvents() {
+    const res = await fetch(`${API_URL}/events`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const events = await res.json();
+        const list = document.getElementById("eventsList");
+        if(list) {
+            list.innerHTML = "";
+            if(events.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No upcoming events.</div>`;
+            
+            events.forEach(e => {
+                const date = new Date(e.dateTime).toLocaleString();
+                list.innerHTML += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card event-card h-100 shadow-sm p-3">
+                            <div class="d-flex justify-content-between">
+                                <h5 class="fw-bold text-primary">${e.title}</h5>
+                                ${userRole==='ADMIN' ? `<button class="btn btn-sm text-danger" onclick="deleteEvent(${e.id})"><i class="fas fa-trash"></i></button>` : ''}
+                            </div>
+                            <p class="text-muted small mb-2"><i class="fas fa-clock me-1"></i> ${date} <span class="ms-2"><i class="fas fa-map-marker-alt me-1"></i> ${e.location}</span></p>
+                            <p>${e.description}</p>
+                        </div>
+                    </div>`;
+            });
+        }
+    }
+}
+
+// --- FIX: Renamed from createEvent to publishNewEvent ---
+async function publishNewEvent() {
+    const data = {
+        title: document.getElementById("evtTitle").value,
+        description: document.getElementById("evtDesc").value,
+        location: document.getElementById("evtLoc").value,
+        dateTime: document.getElementById("evtDate").value
+    };
+    const res = await fetch(`${API_URL}/events`, { 
+        method: "POST", 
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+        body: JSON.stringify(data) 
+    });
+    
+    if(res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
+        fetchEvents(); // Refresh list
+    } else {
+        alert("Failed to create event");
+    }
+}
+async function fetchJobs() {
+    const res = await fetch(`${API_URL}/jobs`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const jobs = await res.json();
+        const list = document.getElementById("jobList");
+        list.innerHTML = "";
+        
+        jobs.forEach(j => {
+            // FIX: Show Delete Button if ADMIN
+            let deleteBtn = "";
+            if (userRole === "ADMIN") {
+                deleteBtn = `<button class="btn btn-sm btn-danger float-end ms-2" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button>`;
+            }
+
+            list.innerHTML += `
+                <div class="card p-3 mb-2 shadow-sm job-card">
+                    <div class="d-flex justify-content-between">
+                        <h5>${j.title}</h5>
+                        <div>${deleteBtn}</div>
+                    </div>
+                    <h6 class="text-muted">${j.company}</h6>
+                    <p>${j.description}</p>
+                    <a href="mailto:${j.applyLink}" class="btn btn-sm btn-outline-primary">Apply</a>
+                </div>`;
+        });
+    }
+}
+
+// Add this new function for deleting jobs
+async function deleteJob(id) {
+    if(!confirm("Admin: Delete this job?")) return;
+    // We reuse the generic delete endpoint if available, or create a specific one
+    // Assuming you have DELETE /api/jobs/{id} in JobController
+    const res = await fetch(`${API_URL}/jobs/${id}`, { 
+        method: "DELETE", 
+        headers: { "Authorization": `Bearer ${token}` } 
+    });
+    if(res.ok) fetchJobs();
+}
+
+async function deleteEvent(id) {
+    if(!confirm("Delete event?")) return;
+    await fetch(`${API_URL}/events/${id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
+    fetchEvents();
+}
+
+// ================= MODULE 6: ADMIN =================
+async function loadAdminUsers() {
+    const res = await fetch(`${API_URL}/users`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const users = await res.json();
+        const tbody = document.getElementById("adminUserTable");
+        if(tbody) {
+            tbody.innerHTML = "";
+            users.forEach(u => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td>${u.name}</td>
+                        <td>${u.role}</td>
+                        <td>${u.email}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick='openEditUserModal(${JSON.stringify(u)})'><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`;
+            });
+        }
+    }
+}
+
+function openEditUserModal(user) {
+    document.getElementById("editUserId").value = user.id;
+    document.getElementById("editName").value = user.name;
+    document.getElementById("editEmail").value = user.email;
+    document.getElementById("editRole").value = user.role;
+    document.getElementById("editHeadline").value = user.headline || "";
+    document.getElementById("editSkills").value = user.skills || "";
+    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+}
+
+async function adminSaveUser() {
+    const id = document.getElementById("editUserId").value;
+    
+    const data = {
+        name: document.getElementById("editName").value,
+        email: document.getElementById("editEmail").value,
+        role: document.getElementById("editRole").value,
+        headline: document.getElementById("editHeadline").value,
+        skills: document.getElementById("editSkills").value
+    };
+    
+    console.log("Admin updating user:", id, data);
+
+    const res = await fetch(`${API_URL}/admin/users/${id}`, { 
+        method: "PUT", 
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
+        body: JSON.stringify(data) 
+    });
+    
+    if(res.ok) {
+        alert("✅ User Updated Successfully!");
+        bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+        loadAdminUsers(); // Refresh the Admin Table
+    } else {
+        alert("❌ Failed to update user. Check console.");
+        console.error(await res.text());
+    }
+}
+
+async function adminCreateUser() {
+    const data = {
+        name: document.getElementById("adminName").value,
+        email: document.getElementById("adminEmail").value,
+        role: document.getElementById("adminRole").value,
+        password: "placeholder" 
+    };
+
+    const res = await fetch(`${API_URL}/admin/create-user`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    
+    if(res.ok) {
+        alert("User Created! Default Pass: Bvicam@2025");
+        document.getElementById("adminName").value = "";
+        document.getElementById("adminEmail").value = "";
+        loadAdminUsers();
+    } else { alert("Failed to create user"); }
+}
+
+async function deleteUser(id) {
+    if(!confirm("Are you sure?")) return;
+    const res = await fetch(`${API_URL}/admin/delete-user/${id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) loadAdminUsers();
 }

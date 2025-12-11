@@ -46,4 +46,18 @@ public class JobController {
         jobRepository.save(job);
         return ResponseEntity.ok("Job posted successfully!");
     }
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteJob(@PathVariable Long id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElseThrow();
+        Job job = jobRepository.findById(id).orElseThrow();
+
+        // Allow if ADMIN or if the user Posted it
+        if (user.getRole().equals("ADMIN") || job.getPostedBy().getId().equals(user.getId())) {
+            jobRepository.deleteById(id);
+            return ResponseEntity.ok("Job deleted.");
+        }
+        return ResponseEntity.status(403).body("Not authorized.");
+    }
 }

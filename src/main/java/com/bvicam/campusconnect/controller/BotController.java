@@ -15,6 +15,8 @@ public class BotController {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private com.bvicam.campusconnect.repository.EventRepository eventRepository;
 
     @PostMapping("/ask")
     public Map<String, String> askBot(@RequestBody Map<String, String> payload) {
@@ -56,7 +58,18 @@ public class BotController {
         else if (question.contains("syllabus") || question.contains("subjects")) {
             answer = "📚 **MCA Syllabus:** You can download the latest syllabus from the Dashboard > Resources section.";
         }
-
+        else if (question.contains("event") || question.contains("workshop") || question.contains("seminar")) {
+            List<com.bvicam.campusconnect.entity.Event> events = eventRepository.findByDateTimeAfterOrderByDateTimeAsc(java.time.LocalDateTime.now());
+            if (events.isEmpty()) {
+                answer = "📅 There are no upcoming events scheduled at the moment.";
+            } else {
+                StringBuilder sb = new StringBuilder("📅 **Upcoming Events:**<br>");
+                for (com.bvicam.campusconnect.entity.Event e : events) {
+                    sb.append("• **").append(e.getTitle()).append("** at ").append(e.getLocation()).append("<br>");
+                }
+                answer = sb.toString();
+            }
+        }
         return Map.of("answer", answer);
     }
 }

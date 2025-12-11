@@ -1,0 +1,49 @@
+<div class="content-card p-4">
+    <h4 class="mb-4">Admin Dashboard</h4>
+    
+    <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-users">Manage Users</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-broadcast">Broadcast Email</button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-users">
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                    <i class="fas fa-user-plus"></i> Onboard New User
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Email</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminUserTable">
+                        <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-broadcast">
+            <div class="card bg-light border-0 p-3">
+                <h6 class="fw-bold mb-3"><i class="fas fa-bullhorn me-2"></i>Send Announcement</h6>
+                <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Subject">
+                <textarea id="broadcastBody" class="form-control mb-2" rows="4" placeholder="Message to ALL users..."></textarea>
+                <button class="btn btn-dark w-100" onclick="sendBroadcast()">
+                    <i class="fas fa-paper-plane"></i> Send Broadcast
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
