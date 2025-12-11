@@ -1,33 +1,68 @@
 <div class="content-card p-4">
-    <h4 class="mb-4">Admin Dashboard</h4>
-    
-    <ul class="nav nav-tabs mb-3" id="adminTabs">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-users">Manage Users</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-feedback">User Feedback</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-broadcast">Broadcast</button></li>
+    <h4 class="mb-4 border-bottom border-danger border-3 pb-2">Admin Dashboard (Updated)</h4>
+
+    <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-users-btn" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">Manage Users</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold text-primary" id="tab-feedback-btn" data-bs-toggle="tab" data-bs-target="#tab-feedback" type="button" role="tab" onclick="loadAdminFeedback()">
+                <i class="fas fa-comments"></i> User Feedback
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-broadcast-btn" data-bs-toggle="tab" data-bs-target="#tab-broadcast" type="button" role="tab">Broadcast Email</button>
+        </li>
     </ul>
 
-    <div class="tab-content">
-        <div class="tab-pane fade show active" id="tab-users">
-            <button class="btn btn-sm btn-success mb-2 float-end" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="fas fa-plus"></i> Add User</button>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle"><tbody id="adminUserTable"></tbody></table>
-            </div>
-        </div>
+    <div class="tab-content" id="adminTabsContent">
 
-        <div class="tab-pane fade" id="tab-feedback">
+        <div class="tab-pane fade show active" id="tab-users" role="tabpanel">
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                    <i class="fas fa-user-plus"></i> Onboard New User
+                </button>
+            </div>
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light"><tr><th>User</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead>
-                    <tbody id="adminFeedbackTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                    <tr><th>ID</th><th>Name</th><th>Role</th><th>Email</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="adminUserTable">
+                    <tr><td colspan="5" class="text-center">Loading users...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
 
-        <div class="tab-pane fade" id="tab-broadcast">
-            <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Subject">
-            <textarea id="broadcastBody" class="form-control mb-2" rows="3" placeholder="Message"></textarea>
-            <button class="btn btn-dark w-100" onclick="sendBroadcast()">Send</button>
+        <div class="tab-pane fade" id="tab-feedback" role="tabpanel">
+            <div class="alert alert-info py-2 small"><i class="fas fa-info-circle me-1"></i> Showing all student and alumni feedback.</div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th>Submitted By</th>
+                        <th>Rating</th>
+                        <th>Comments</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    <tbody id="adminFeedbackTable">
+                    <tr><td colspan="4" class="text-center py-4 text-muted">Click the tab to load feedback...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-broadcast" role="tabpanel">
+            <div class="card bg-light border-0 p-3">
+                <label class="fw-bold mb-2">Send Email to Everyone</label>
+                <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Email Subject">
+                <textarea id="broadcastBody" class="form-control mb-2" rows="4" placeholder="Message content..."></textarea>
+                <button class="btn btn-dark w-100" onclick="sendBroadcast()">
+                    <i class="fas fa-paper-plane me-2"></i> Send Broadcast
+                </button>
+            </div>
         </div>
     </div>
 </div>

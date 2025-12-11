@@ -2,96 +2,121 @@
 const API_URL = "/api";
 const WS_URL = "/ws";
 const token = localStorage.getItem("jwt_token");
-const myEmail = localStorage.getItem("user_email"); // Saved from login
+const myEmail = localStorage.getItem("user_email");
 const userName = localStorage.getItem("user_name");
 const userRole = localStorage.getItem("user_role");
 
 let stompClient = null;
 let currentChatPartner = null;
 let searchTimeout = null;
-let selectedUserForModal = null; 
+let selectedUserForModal = null;
 
 // --- INITIALIZATION ---
 if (!token) {
-    window.location.href = "index.html";
+    window.location.href = "login.html";
 } else {
     document.getElementById("welcomeUser").innerText = userName;
 
-    // Ensure email is stored (Vital for Messaging)
+    // Show Admin Tab if eligible
+    if (userRole === 'ADMIN') {
+        const adminTab = document.getElementById("tab-admin");
+        if (adminTab) adminTab.classList.remove("d-none");
+    }
+
     if (!myEmail) {
         fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } })
             .then(res => res.json())
             .then(user => localStorage.setItem("user_email", user.email));
     }
 
-    // Default to Messages
-    switchTab('messages'); 
+    // Default Tab
+    switchTab('messages');
     connectToChat();
 }
 
-// --- DYNAMIC CONTENT LOADING ---
+// --- DYNAMIC CONTENT LOADING (WITH CACHE BUSTER & ADMIN FIX) ---
 async function switchTab(tab) {
     // 1. Highlight UI
     document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
     const btn = document.getElementById(`tab-${tab}`);
-    if(btn) btn.classList.add('active');
+    if (btn) btn.classList.add('active');
 
     // 2. Load HTML Component
     const container = document.getElementById("main-content");
     container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
 
     try {
-        const response = await fetch(`components/${tab}.html`);
-        if(!response.ok) throw new Error("Component file not found");
+        // 🔥 CACHE BUSTER: ?v=${Date.now()} ensures browser doesn't load old HTML
+        const response = await fetch(`components/${tab}.html?v=${Date.now()}`);
+        if (!response.ok) throw new Error("Component not found");
         const html = await response.text();
         container.innerHTML = html;
 
         // 3. Trigger Feature Logic
-        if(tab === 'messages') fetchRecentChats();
-        if(tab === 'directory') runSearch();
-        if(tab === 'jobs') {
-            fetchJobs();
-            if (userRole === "ALUMNI" || userRole === "ADMIN") {
-                const postBtn = document.getElementById("btnPostJob");
-                if(postBtn) postBtn.classList.remove("d-none");
-            }
-        }
-        if(tab === 'wall') fetchPosts();
-        if(tab === 'profile') loadProfile();
-
-        if(tab === 'events') {
+        if (tab === 'messages') fetchRecentChats();
+        if (tab === 'directory') runSearch();
+        if (tab === 'wall') fetchPosts();
+        if (tab === 'profile') loadProfile();
+        
+        if (tab === 'events') {
             fetchEvents();
             if (userRole === "ADMIN") {
+                // Wait for HTML to render before finding button
                 setTimeout(() => {
                     const btnAdd = document.getElementById("btnAddEvent");
-                    if(btnAdd) btnAdd.classList.remove("d-none");
+                    if (btnAdd) btnAdd.classList.remove("d-none");
                 }, 100);
             }
         }
 
-        if(tab === 'admin') {
-            if(userRole !== 'ADMIN') {
-                container.innerHTML = `<div class="alert alert-danger text-center m-5">⛔ Access Denied</div>`;
-            } else {
-                loadAdminUsers();
+        if (tab === 'jobs') {
+            fetchJobs();
+            if (userRole === "ALUMNI" || userRole === "ADMIN") {
+                const b = document.getElementById("btnPostJob");
+                if (b) b.classList.remove("d-none");
             }
         }
 
-    } catch(e) {
+        // ✅ ADMIN LOGIC FIX
+        if (tab === 'admin') {
+            if (userRole !== 'ADMIN') {
+                container.innerHTML = `<div class="alert alert-danger m-5">⛔ Access Denied</div>`;
+            } else {
+                loadAdminUsers(); // Load Users by default
+
+                // 🔥 CRITICAL FIX: Attach listener to Feedback Tab after HTML loads
+                setTimeout(() => {
+                    // Try to find the tab by typical Bootstrap attributes
+                    const feedbackTab = document.querySelector('button[data-bs-target="#feedback"], a[href="#feedback"], #tab-feedback-btn');
+                    const usersTab = document.querySelector('button[data-bs-target="#users"], a[href="#users"], #tab-users-btn');
+                    
+                    if(feedbackTab) {
+                        feedbackTab.addEventListener('click', loadAdminFeedback);
+                        console.log("Feedback listener attached");
+                    }
+                    if(usersTab) {
+                        usersTab.addEventListener('click', loadAdminUsers);
+                    }
+                }, 200);
+            }
+        }
+
+    } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+        console.error(e);
     }
 }
 
-function logout() { localStorage.clear(); window.location.href="index.html"; }
+function logout() { localStorage.clear(); window.location.href = "login.html"; }
 
 
 // ================= MODULE 1: PROFILE MANAGEMENT =================
 async function loadProfile() {
     try {
         const res = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
-        if(res.ok) {
+        if (res.ok) {
             const user = await res.json();
-            if(document.getElementById("pHeadline")) {
+            if (document.getElementById("pHeadline")) {
                 document.getElementById("pHeadline").value = user.headline || "";
                 document.getElementById("pCompany").value = user.currentCompany || "";
                 document.getElementById("pDesignation").value = user.designation || "";
@@ -101,7 +126,7 @@ async function loadProfile() {
                 document.getElementById("pGithub").value = user.githubUrl || "";
             }
         }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
 }
 
 async function saveProfile() {
@@ -121,7 +146,7 @@ async function saveProfile() {
         body: JSON.stringify(data)
     });
 
-    if(res.ok) alert("✅ Profile Updated!");
+    if (res.ok) alert("✅ Profile Updated!");
     else alert("❌ Failed to update");
 }
 
@@ -146,7 +171,6 @@ async function runSearch() {
     } catch(e) { console.error(e); }
 }
 
-// FIX: Separate Render Function to Handle Admin Buttons
 function renderDirectoryTable(users) {
     const tbody = document.getElementById("tableBody");
     tbody.innerHTML = "";
@@ -156,8 +180,6 @@ function renderDirectoryTable(users) {
         if (u.email === myEmail) return;
         
         const initial = u.name.charAt(0).toUpperCase();
-        
-        // ✅ ADMIN FIX: Show Edit Button if User is Admin
         let actionBtns = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openChatWithUser(${JSON.stringify(u)})"><i class="fas fa-paper-plane"></i></button>`;
         
         if (userRole === 'ADMIN') {
@@ -182,7 +204,6 @@ function openUserProfile(user) {
     document.getElementById("modalHeadline").innerText = user.headline || "No Headline";
     document.getElementById("modalCompany").innerText = user.currentCompany || "-";
     document.getElementById("modalSkills").innerText = user.skills || "-";
-    
     new bootstrap.Modal(document.getElementById('userProfileModal')).show();
 }
 
@@ -198,8 +219,11 @@ function connectToChat() {
     stompClient.debug = null;
 
     stompClient.connect({}, function () {
-        document.getElementById("chatStatus").innerText = "Online";
-        document.getElementById("chatStatus").className = "badge bg-success ms-2";
+        const status = document.getElementById("chatStatus");
+        if(status) {
+             status.innerText = "Online";
+             status.className = "badge bg-success ms-2";
+        }
         
         stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
         
@@ -210,7 +234,8 @@ function connectToChat() {
             if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
                 displayPrivateMsg(msg);
             } else if (msg.senderName !== myEmail) {
-                document.getElementById("msgBadge").classList.remove("d-none");
+                const badge = document.getElementById("msgBadge");
+                if(badge) badge.classList.remove("d-none");
                 const toastBody = document.getElementById("toastBody");
                 if(toastBody) {
                     toastBody.innerText = `${msg.senderName}: ${msg.content}`;
@@ -218,7 +243,10 @@ function connectToChat() {
                 }
             }
         });
-    }, function() { document.getElementById("chatStatus").innerText = "Offline"; });
+    }, function() { 
+        const status = document.getElementById("chatStatus");
+        if(status) status.innerText = "Offline"; 
+    });
 }
 
 async function fetchRecentChats() {
@@ -226,6 +254,7 @@ async function fetchRecentChats() {
     if(res.ok) {
         const users = await res.json();
         const list = document.getElementById("recentChatsList");
+        if(!list) return;
         list.innerHTML = "";
         if(users.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No chats yet.</div>`;
         users.forEach(u => {
@@ -283,8 +312,10 @@ function sendMessage() {
 
 function displayGlobalMsg(msg) {
     const area = document.getElementById("chatArea");
-    area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
-    area.scrollTop = area.scrollHeight;
+    if(area) {
+        area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
+        area.scrollTop = area.scrollHeight;
+    }
 }
 
 // ================= MODULE 4: BOT & JOBS & WALL =================
@@ -321,6 +352,7 @@ async function fetchJobs() {
     if(res.ok) {
         const jobs = await res.json();
         const list = document.getElementById("jobList");
+        if(!list) return;
         list.innerHTML = "";
         jobs.forEach(j => {
             let deleteBtn = "";
@@ -364,11 +396,13 @@ async function fetchPosts() {
     if(res.ok) {
         const posts = await res.json();
         const feed = document.getElementById("feedArea");
-        feed.innerHTML = "";
-        posts.forEach(p => {
-            const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" class="img-fluid rounded mt-2" style="max-height:300px">` : '';
-            feed.innerHTML += `<div class="card p-3 mb-3 shadow-sm"><div class="fw-bold">${p.author.name}</div><p>${p.content}</p>${imgHtml}</div>`;
-        });
+        if(feed) {
+            feed.innerHTML = "";
+            posts.forEach(p => {
+                const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" class="img-fluid rounded mt-2" style="max-height:300px">` : '';
+                feed.innerHTML += `<div class="card p-3 mb-3 shadow-sm"><div class="fw-bold">${p.author.name}</div><p>${p.content}</p>${imgHtml}</div>`;
+            });
+        }
     }
 }
 
@@ -530,27 +564,43 @@ async function submitFeedback() {
     }
 }
 
-// Call this when Admin switches to Feedback Tab
+// ✅ FIXED: This function is now correctly called by the listener in switchTab
 async function loadAdminFeedback() {
-    const res = await fetch(`${API_URL}/feedback`, { headers: { "Authorization": `Bearer ${token}` } });
-    if(res.ok) {
-        const feedbacks = await res.json();
-        const tbody = document.getElementById("adminFeedbackTable");
-        if(tbody) {
+    const tbody = document.getElementById("adminFeedbackTable");
+    if(!tbody) {
+        console.error("Admin feedback table not found in DOM");
+        return;
+    }
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4"><div class="spinner-border text-primary spinner-border-sm"></div> Loading...</td></tr>`;
+
+    try {
+        const res = await fetch(`${API_URL}/feedback`, { headers: { "Authorization": `Bearer ${token}` } });
+        if(res.ok) {
+            const feedbacks = await res.json();
             tbody.innerHTML = "";
+            
+            if (feedbacks.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">No feedback received yet.</td></tr>`;
+                return;
+            }
+
             feedbacks.forEach(f => {
-                const stars = "⭐".repeat(f.rating); 
+                const stars = "⭐".repeat(f.rating);
+                const date = new Date(f.submittedAt).toLocaleDateString();
+                
                 tbody.innerHTML += `
                     <tr>
                         <td>
                             <div class="fw-bold">${f.submittedBy.name}</div>
                             <small class="text-muted">${f.submittedBy.role}</small>
                         </td>
-                        <td>${stars}</td>
+                        <td class="text-warning" style="letter-spacing: 2px;">${stars}</td>
                         <td>${f.comments}</td>
-                        <td class="small text-muted">${new Date(f.submittedAt).toLocaleDateString()}</td>
+                        <td class="small text-muted">${date}</td>
                     </tr>`;
             });
         }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Error loading feedback.</td></tr>`;
     }
 }
