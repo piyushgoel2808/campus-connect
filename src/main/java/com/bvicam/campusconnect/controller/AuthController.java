@@ -72,4 +72,18 @@ public class AuthController {
 
         return ResponseEntity.ok(new AuthResponse(token, user.getName(), user.getRole()));
     }
+    // 3. CHANGE PASSWORD (Forced or Voluntary)
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody java.util.Map<String, String> request) {
+        String email = request.get("email");
+        String newPassword = request.get("newPassword");
+
+        User user = userRepository.findByEmail(email).orElseThrow();
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordChanged(true); // Flag: Password is now secure
+
+        userRepository.save(user);
+        return ResponseEntity.ok("Password changed successfully!");
+    }
 }

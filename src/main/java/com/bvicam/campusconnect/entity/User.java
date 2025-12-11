@@ -34,10 +34,24 @@ public class User {
     private Integer batchYear;
 
     // Security Flag
-    private boolean isPasswordChanged = false;
+    private boolean isPasswordChanged = false; // Default is false
 
     // Profile Links (Optional)
     private String linkedinUrl;
     private String githubUrl;
     private String skills; // Stored as comma-separated string "Java,Python,SQL"
+    // ... existing fields ...
+
+    // ✅ NEW PROFESSIONAL FIELDS
+    private String headline;       // e.g. "SDE II at Amazon"
+    private String currentCompany; // e.g. "Amazon"
+    private String designation;    // e.g. "Software Engineer"
+
+    @Column(length = 2000)
+    private String pastExperience; // e.g. "Intern at TCS (2020), Freelancer (2019)"
+
+    // Existing fields we added earlier, ensuring they are there:
+    // private String linkedinUrl;
+    // private String githubUrl;
+    // private String skills;
 }
