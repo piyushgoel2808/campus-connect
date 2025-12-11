@@ -29,6 +29,18 @@ public class UserController {
         User user = userRepository.findByEmail(email).orElseThrow();
         return ResponseEntity.ok(user);
     }
+    @GetMapping("/search")
+    public List<User> searchDirectory(
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) Integer batch,
+            @RequestParam(required = false) String q) {
+
+        // Handle "ALL" as null
+        if ("ALL".equals(role)) role = null;
+        if (q != null && q.trim().isEmpty()) q = null;
+
+        return userRepository.searchUsers(role, batch, q);
+    }
 
     // 3. Update Profile (The LinkedIn Feature)
 // Import the new DTO at the top

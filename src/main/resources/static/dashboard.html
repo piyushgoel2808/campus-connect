@@ -3,307 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Connect Dashboard</title>
+    <title>Campus Connect</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        
-        /* Navbar */
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
         .navbar { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .navbar-brand { font-weight: 700; color: #0d6efd !important; letter-spacing: 0.5px; }
-        
-        /* Layout & Columns */
-        .main-container { max-width: 1400px; margin: 20px auto; }
-        
-        /* Left Tabs */
         .nav-pills .nav-link { 
-            color: #65676b; font-weight: 600; padding: 12px 20px; text-align: left; border-radius: 8px; margin-bottom: 5px; 
-            transition: all 0.2s;
+            color: #65676b; font-weight: 600; text-align: left; padding: 12px 20px; border-radius: 8px; margin-bottom: 5px; 
         }
         .nav-pills .nav-link:hover { background-color: #f2f2f2; }
         .nav-pills .nav-link.active { background-color: #e7f3ff; color: #1877f2; }
-        .nav-pills i { width: 25px; }
 
-        /* Cards & Content */
-        .content-card { background: white; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 15px; border: none; }
-        .job-card { border-left: 5px solid #0d6efd; transition: transform 0.2s; }
-        .job-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        
-        /* Chat Box (Sticky on Desktop) */
+        /* Chat Styles */
         .chat-column { height: calc(100vh - 100px); position: sticky; top: 80px; }
-        .chat-card { height: 100%; border-radius: 10px; border: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
-        .chat-input-area { padding: 10px; background: white; border-top: 1px solid #eee; border-radius: 0 0 10px 10px; }
+        .chat-card { height: 100%; display: flex; flex-direction: column; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .chat-box { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
         
-        .message { margin-bottom: 8px; padding: 8px 12px; border-radius: 18px; max-width: 85%; font-size: 0.9rem; position: relative; }
-        .my-message { background: #0084ff; color: white; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 4px; }
-        .other-message { background: #e4e6eb; color: black; align-self: flex-start; border-bottom-left-radius: 4px; }
-        .system-message { text-align: center; font-size: 0.75rem; color: #65676b; margin: 10px 0; }
+        .message { margin-bottom: 8px; padding: 8px 12px; border-radius: 15px; max-width: 80%; font-size: 0.9rem; word-wrap: break-word; }
+        .my-message { background: #0084ff; color: white; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 2px; }
+        .other-message { background: #e4e6eb; color: black; align-self: flex-start; border-bottom-left-radius: 2px; }
 
-        /* Responsive Fixes */
-        @media (max-width: 992px) {
-            .chat-column { height: 500px; position: static; margin-top: 20px; }
-        }
+        /* Recent Chats List */
+        .chat-item { cursor: pointer; transition: 0.2s; padding: 15px; border-bottom: 1px solid #eee; }
+        .chat-item:hover { background-color: #f8f9fa; }
+        .avatar-circle { width: 45px; height: 45px; background: #e9ecef; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #495057; font-size: 1.2rem; }
     </style>
 </head>
 <body>
 
     <nav class="navbar navbar-expand-lg sticky-top">
-        <div class="container-fluid px-lg-5">
-            <a class="navbar-brand" href="#"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navContent">
-                <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item me-3">
-                        <span class="fw-bold text-dark" id="welcomeUser">Loading...</span>
-                        <span id="userRoleBadge" class="badge bg-secondary ms-1"></span>
-                    </li>
-                    <li class="nav-item">
-                        <button class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="logout()">
-                            <i class="fas fa-sign-out-alt me-1"></i> Logout
-                        </button>
-                    </li>
-                </ul>
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold text-primary" href="#"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</a>
+            <div class="d-flex align-items-center">
+                <span class="fw-bold me-2 d-none d-md-block" id="welcomeUser">...</span>
+                <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="logout()">Logout</button>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid main-container">
-        <div class="row">
-            
+    <div class="container-fluid mt-4 px-4">
+        <div class="row g-4">
             <div class="col-lg-2 d-none d-lg-block">
                 <div class="nav flex-column nav-pills sticky-top" style="top: 90px;">
-                    <button class="nav-link active" id="tab-directory" onclick="switchTab('directory')">
-                        <i class="fas fa-users"></i> Directory
+                    <button class="nav-link active" id="tab-messages" onclick="switchTab('messages')">
+                        <i class="fas fa-comment-dots me-2"></i> Messages <span id="msgBadge" class="badge bg-danger ms-2 d-none">New</span>
                     </button>
-                    <button class="nav-link" id="tab-jobs" onclick="switchTab('jobs')">
-                        <i class="fas fa-briefcase"></i> Job Board
-                    </button>
-                    <button class="nav-link" id="tab-wall" onclick="switchTab('wall')">
-                        <i class="fas fa-newspaper"></i> Memory Wall
-                    </button>
-                    <button class="nav-link" id="tab-profile" onclick="switchTab('profile')">
-                        <i class="fas fa-user-circle"></i> My Profile
-                    </button>
-                    <button class="nav-link d-none" id="tab-admin" onclick="switchTab('admin')">
-                        <i class="fas fa-user-shield"></i> Admin Panel
-                    </button>
+                    <button class="nav-link" id="tab-directory" onclick="switchTab('directory')"><i class="fas fa-users me-2"></i> Directory</button>
+                    <button class="nav-link" id="tab-jobs" onclick="switchTab('jobs')"><i class="fas fa-briefcase me-2"></i> Job Board</button>
+                    <button class="nav-link" id="tab-wall" onclick="switchTab('wall')"><i class="fas fa-newspaper me-2"></i> Memory Wall</button>
+                    <button class="nav-link" id="tab-profile" onclick="switchTab('profile')"><i class="fas fa-user-circle me-2"></i> My Profile</button>
                 </div>
             </div>
 
             <div class="col-12 d-lg-none mb-3">
                 <div class="nav nav-pills nav-fill bg-white p-2 rounded shadow-sm">
-                    <button class="nav-link active" onclick="switchTab('directory')"><i class="fas fa-users"></i></button>
+                    <button class="nav-link active" onclick="switchTab('messages')"><i class="fas fa-comment-dots"></i></button>
+                    <button class="nav-link" onclick="switchTab('directory')"><i class="fas fa-users"></i></button>
                     <button class="nav-link" onclick="switchTab('jobs')"><i class="fas fa-briefcase"></i></button>
                     <button class="nav-link" onclick="switchTab('wall')"><i class="fas fa-newspaper"></i></button>
-                    <button class="nav-link" onclick="switchTab('profile')"><i class="fas fa-user"></i></button>
                 </div>
             </div>
 
             <div class="col-lg-7">
                 
-                <div id="view-directory">
-                    <div class="content-card p-4">
-                        <h4 class="mb-4">Student & Alumni Directory</h4>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Name & Headline</th>
-                                        <th>Role</th>
-                                        <th>Contact</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tableBody">
-                                    <tr><td colspan="3" class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div id="view-messages">
+    <div class="row g-0 border rounded overflow-hidden shadow-sm bg-white" style="height: calc(100vh - 120px);">
+        
+        <div class="col-md-4 border-end d-flex flex-column">
+            <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">Chats</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="switchTab('directory')"><i class="fas fa-plus"></i> New</button>
+            </div>
+            <div id="recentChatsList" class="flex-grow-1 overflow-auto bg-white">
                 </div>
+        </div>
+
+        <div class="col-md-8 d-none d-md-flex flex-column align-items-center justify-content-center bg-light text-muted">
+            <i class="fas fa-comments fa-3x mb-3 text-secondary"></i>
+            <p>Select a conversation to start chatting</p>
+        </div>
+    </div>
+</div>
+
+<div id="view-directory" class="d-none">
+    <div class="content-card p-4">
+        
+        <div class="row g-2 mb-4 align-items-end">
+            <div class="col-md-4">
+                <label class="small text-muted fw-bold">SEARCH</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="dirSearch" class="form-control border-start-0 ps-0" placeholder="Name, Company, Skills..." onkeyup="debouncedSearch()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="small text-muted fw-bold">ROLE</label>
+                <select id="filterRole" class="form-select" onchange="runSearch()">
+                    <option value="ALL">All Users</option>
+                    <option value="STUDENT">Students</option>
+                    <option value="ALUMNI">Alumni</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="small text-muted fw-bold">BATCH YEAR</label>
+                <select id="filterBatch" class="form-select" onchange="runSearch()">
+                    <option value="">All Years</option>
+                    <option value="2026">2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                    <option value="2020">2020</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" onclick="runSearch()">Apply</button>
+            </div>
+        </div>
+
+        <div class="table-responsive border rounded">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-3" style="width: 60px;">#</th>
+                        <th>Name / Headline</th>
+                        <th>Batch</th>
+                        <th>Role</th>
+                        <th class="text-end pe-3">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="5" class="text-center py-5 text-muted">Loading Directory...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="text-center mt-2 small text-muted">Showing top 50 results</div>
+    </div>
+</div>
 
                 <div id="view-jobs" class="d-none">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4>Career Opportunities</h4>
-                        <button id="btnPostJob" class="btn btn-success rounded-pill px-4 d-none" data-bs-toggle="modal" data-bs-target="#postJobModal">
-                            <i class="fas fa-plus me-2"></i> Post Job
-                        </button>
+                    <div class="d-flex justify-content-between mb-3">
+                        <h4>Jobs</h4>
+                        <button id="btnPostJob" class="btn btn-success d-none" data-bs-toggle="modal" data-bs-target="#postJobModal">Post Job</button>
                     </div>
                     <div id="jobList"></div>
                 </div>
 
                 <div id="view-wall" class="d-none">
-                    <div class="content-card p-3 mb-4">
-                        <div class="d-flex mb-2">
-                            <div class="bg-secondary rounded-circle me-2" style="width: 40px; height: 40px;"></div>
-                            <textarea id="postContent" class="form-control border-0 bg-light rounded-pill px-3 py-2" rows="1" placeholder="What's on your mind?"></textarea>
-                        </div>
-                        <div class="collapse" id="expandPost">
-                            <input type="text" id="postImage" class="form-control form-control-sm mb-2" placeholder="Image URL (Optional)">
-                        </div>
-                        <div class="d-flex justify-content-end border-top pt-2 mt-2">
-                            <button class="btn btn-primary btn-sm rounded-pill px-4" onclick="createPost()">Post</button>
-                        </div>
+                    <div class="card p-3 mb-3 shadow-sm">
+                        <textarea id="postContent" class="form-control border-0 bg-light mb-2" placeholder="Share update..."></textarea>
+                        <button class="btn btn-primary btn-sm float-end" onclick="createPost()">Post</button>
                     </div>
                     <div id="feedArea"></div>
                 </div>
 
                 <div id="view-profile" class="d-none">
-                    <div class="content-card p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h4>Edit Profile</h4>
-                            <button class="btn btn-primary rounded-pill px-4" onclick="saveProfile()">
-                                <i class="fas fa-save me-2"></i> Save Changes
-                            </button>
-                        </div>
-                        <form id="profileForm">
-                            <div class="row g-3">
-                                <div class="col-md-12">
-                                    <label class="form-label text-muted small">Professional Headline</label>
-                                    <input type="text" id="pHeadline" class="form-control" placeholder="e.g. SDE II at Amazon">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-muted small">Current Company</label>
-                                    <input type="text" id="pCompany" class="form-control">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-muted small">Designation</label>
-                                    <input type="text" id="pDesignation" class="form-control">
-                                </div>
-                                <div class="col-md-12">
-                                    <label class="form-label text-muted small">Skills (Comma Separated)</label>
-                                    <input type="text" id="pSkills" class="form-control" placeholder="Java, Spring Boot, React...">
-                                </div>
-                                <div class="col-md-12">
-                                    <label class="form-label text-muted small">Past Experience</label>
-                                    <textarea id="pExperience" class="form-control" rows="3"></textarea>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-muted small">LinkedIn URL</label>
-                                    <input type="text" id="pLinkedin" class="form-control">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-muted small">GitHub URL</label>
-                                    <input type="text" id="pGithub" class="form-control">
-                                </div>
-                            </div>
-                        </form>
+                    <div class="card p-4 shadow-sm">
+                        <h4>Edit Profile</h4>
+                        <input type="text" id="pHeadline" class="form-control mb-2" placeholder="Headline">
+                        <button class="btn btn-primary" onclick="saveProfile()">Save</button>
                     </div>
                 </div>
-
-                <div id="view-admin" class="d-none">
-                    <div class="content-card p-4">
-                        <h4 class="mb-4">Admin Controls</h4>
-                        
-                        <div class="card bg-light border-0 mb-4">
-                            <div class="card-body">
-                                <h6 class="fw-bold mb-3">Onboard New User</h6>
-                                <div class="row g-2">
-                                    <div class="col-md-4">
-                                        <input type="text" id="adminName" class="form-control" placeholder="Full Name">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <input type="email" id="adminEmail" class="form-control" placeholder="Email Address">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <select id="adminRole" class="form-select">
-                                            <option value="STUDENT">Student</option>
-                                            <option value="ALUMNI">Alumni</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-12 text-end mt-2">
-                                        <button class="btn btn-dark btn-sm" onclick="adminCreateUser()">
-                                            <i class="fas fa-plus-circle me-1"></i> Create User
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card bg-info bg-opacity-10 border-0 mb-4">
-                            <div class="card-body">
-                                <h6 class="fw-bold mb-3"><i class="fas fa-bullhorn me-2"></i>Alumni Broadcast</h6>
-                                <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Email Subject">
-                                <textarea id="broadcastBody" class="form-control mb-2" rows="3" placeholder="Message content..."></textarea>
-                                <div class="text-end">
-                                    <button class="btn btn-primary btn-sm" onclick="sendBroadcast()">
-                                        <i class="fas fa-paper-plane me-1"></i> Send to All
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <h6 class="fw-bold">Manage Users</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead class="table-light">
-                                    <tr><th>ID</th><th>Name</th><th>Role</th><th>Email</th><th>Action</th></tr>
-                                </thead>
-                                <tbody id="adminUserTable"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
             <div class="col-lg-3 chat-column">
-                <div class="chat-card bg-white">
-                    <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
-                        <h6 class="mb-0 fw-bold"><i class="fas fa-comments me-2 text-primary"></i>Community Chat</h6>
-                        <span class="badge bg-success rounded-pill" id="chatStatus">Live</span>
+                <div class="card chat-card">
+                    <div class="card-header bg-white fw-bold border-bottom">
+                        💬 Global Chat <span id="chatStatus" class="badge bg-secondary ms-2">...</span>
                     </div>
-                    <div id="chatArea" class="chat-messages d-flex flex-column">
-                        <div class="system-message">Connecting...</div>
-                    </div>
-                    <div class="chat-input-area">
+                    <div id="chatArea" class="chat-box d-flex flex-column"></div>
+                    <div class="p-2 border-top bg-white">
                         <div class="input-group">
-                            <input type="text" id="messageInput" class="form-control border-0 bg-light" placeholder="Type a message..." onkeypress="handleEnter(event)">
-                            <button class="btn btn-link text-primary" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+                            <input type="text" id="messageInput" class="form-control" placeholder="Type..." onkeypress="if(event.key==='Enter') sendMessage()">
+                            <button class="btn btn-primary" onclick="sendMessage()">Send</button>
                         </div>
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <div class="modal fade" id="postJobModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
+    <div class="modal fade" id="privateChatModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Post a Job</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="privChatTitle">Chat</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <input type="text" id="jobTitle" class="form-control mb-2" placeholder="Job Title" required>
-                    <input type="text" id="jobCompany" class="form-control mb-2" placeholder="Company" required>
-                    <input type="text" id="jobLocation" class="form-control mb-2" placeholder="Location">
-                    <textarea id="jobDesc" class="form-control mb-2" rows="3" placeholder="Job Description"></textarea>
-                    <input type="email" id="jobLink" class="form-control" placeholder="Apply Email/Link">
+                <div class="modal-body p-0">
+                    <div id="privateChatArea" class="chat-box" style="height: 350px;"></div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary w-100" onclick="postJob()">Post Now</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="passwordModal" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">⚠️ Security Alert</h5>
-                </div>
-                <div class="modal-body">
-                    <p>You are using a default password. You <strong>must</strong> change it to continue.</p>
-                    <input type="password" id="newPassword" class="form-control" placeholder="Enter New Password">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-danger w-100" onclick="changePassword()">Update Password</button>
+                <div class="modal-footer p-2">
+                    <div class="input-group">
+                        <input type="text" id="privMsgInput" class="form-control" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendPrivateMessage()">
+                        <button class="btn btn-primary" onclick="sendPrivateMessage()">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -313,12 +209,5 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <script src="dashboard.js"></script>
-    
-    <script>
-        document.getElementById('postContent').addEventListener('focus', function() {
-            document.getElementById('expandPost').classList.add('show');
-            this.rows = 3;
-        });
-    </script>
 </body>
 </html>
