@@ -1,3 +1,4 @@
+// --- CONFIGURATION ---
 const API_URL = "/api";
 const WS_URL = "/ws";
 const token = localStorage.getItem("jwt_token");
@@ -8,14 +9,15 @@ const userRole = localStorage.getItem("user_role");
 let stompClient = null;
 let currentChatPartner = null;
 let searchTimeout = null;
+let selectedUserForModal = null; // Store user when profile modal opens
 
-// --- INIT ---
-if (!token) window.location.href = "index.html";
-else {
+// --- INITIALIZATION ---
+if (!token) {
+    window.location.href = "index.html";
+} else {
     document.getElementById("welcomeUser").innerText = userName;
-    if (userRole === "ALUMNI" || userRole === "ADMIN") document.getElementById("btnPostJob").classList.remove("d-none");
-    
-    // Ensure email is stored
+
+    // Ensure email is stored (Vital for Messaging)
     if (!myEmail) {
         fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } })
             .then(res => res.json())
@@ -23,43 +25,65 @@ else {
     }
 
     // Default to Messages
-    fetchRecentChats(); 
+    switchTab('messages'); 
     connectToChat();
 }
 
-function switchTab(tab) {
-    ['messages', 'directory', 'jobs', 'wall', 'profile'].forEach(t => {
-        document.getElementById(`view-${t}`).classList.add('d-none');
-        const btn = document.getElementById(`tab-${t}`);
-        if(btn) btn.classList.remove('active');
-    });
-
-    document.getElementById(`view-${tab}`).classList.remove('d-none');
+// --- DYNAMIC CONTENT LOADING ---
+async function switchTab(tab) {
+    // 1. Highlight UI
+    document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
     const btn = document.getElementById(`tab-${tab}`);
     if(btn) btn.classList.add('active');
 
-    if(tab === 'messages') fetchRecentChats();
-    if(tab === 'directory') runSearch();
-    if(tab === 'jobs') fetchJobs();
-    if(tab === 'wall') fetchPosts();
-    if(tab === 'profile') loadProfile();
+    // 2. Load HTML Component
+    const container = document.getElementById("main-content");
+    container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
+
+    try {
+        const response = await fetch(`components/${tab}.html`);
+        if(!response.ok) throw new Error("Component file not found");
+        const html = await response.text();
+        container.innerHTML = html;
+
+        // 3. Trigger Feature Logic
+        if(tab === 'messages') fetchRecentChats();
+        if(tab === 'directory') runSearch();
+        if(tab === 'jobs') {
+            fetchJobs();
+            // Show Post Button if Alumni/Admin
+            if (userRole === "ALUMNI" || userRole === "ADMIN") {
+                const postBtn = document.getElementById("btnPostJob");
+                if(postBtn) postBtn.classList.remove("d-none");
+            }
+        }
+        if(tab === 'wall') fetchPosts();
+        if(tab === 'profile') loadProfile();
+
+    } catch(e) {
+        container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+    }
 }
 
 function logout() { localStorage.clear(); window.location.href="index.html"; }
 
-// ================= MODULE 1: PROFILE (RESTORED!) =================
+
+// ================= MODULE 1: PROFILE MANAGEMENT =================
 async function loadProfile() {
     try {
         const res = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
         if(res.ok) {
             const user = await res.json();
-            document.getElementById("pHeadline").value = user.headline || "";
-            document.getElementById("pCompany").value = user.currentCompany || "";
-            document.getElementById("pDesignation").value = user.designation || "";
-            document.getElementById("pSkills").value = user.skills || "";
-            document.getElementById("pExperience").value = user.pastExperience || "";
-            document.getElementById("pLinkedin").value = user.linkedinUrl || "";
-            document.getElementById("pGithub").value = user.githubUrl || "";
+            // Populate form fields if they exist (requires profile.html loaded)
+            if(document.getElementById("pHeadline")) {
+                document.getElementById("pHeadline").value = user.headline || "";
+                document.getElementById("pCompany").value = user.currentCompany || "";
+                document.getElementById("pDesignation").value = user.designation || "";
+                document.getElementById("pSkills").value = user.skills || "";
+                document.getElementById("pExperience").value = user.pastExperience || "";
+                document.getElementById("pLinkedin").value = user.linkedinUrl || "";
+                document.getElementById("pGithub").value = user.githubUrl || "";
+            }
         }
     } catch(e) { console.error(e); }
 }
@@ -85,45 +109,98 @@ async function saveProfile() {
     else alert("❌ Failed to update");
 }
 
-// ================= MODULE 2: CAMPUS BOT (RESTORED!) =================
-function toggleBot() {
-    const win = document.getElementById("botWindow");
-    win.style.display = win.style.display === "none" ? "block" : "none";
-}
+// ================= MODULE 2: DIRECTORY & SEARCH =================
+function debouncedSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(runSearch, 400); }
 
-async function askBot() {
-    const input = document.getElementById("botInput");
-    const q = input.value.trim();
-    if(!q) return;
-
-    addBotMsg(q, 'my-message');
-    input.value = "";
+async function runSearch() {
+    const q = document.getElementById("dirSearch").value;
+    const role = document.getElementById("filterRole").value;
+    const batch = document.getElementById("filterBatch").value;
+    
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
 
     try {
-        const res = await fetch(`${API_URL}/bot/ask`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ question: q })
+        const url = `${API_URL}/users/search?role=${role}&batch=${batch}&q=${encodeURIComponent(q)}`;
+        const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+        if(res.ok) {
+            const users = await res.json();
+            tbody.innerHTML = "";
+            if(users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4">No users found.</td></tr>`; return; }
+            
+            users.forEach(u => {
+                if(u.email === myEmail) return;
+                const initial = u.name.charAt(0).toUpperCase();
+                // Add click handler to open profile
+                tbody.innerHTML += `
+                    <tr class="user-row" onclick='openUserProfile(${JSON.stringify(u)})'>
+                        <td><div class="avatar-circle small">${initial}</div></td>
+                        <td><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></td>
+                        <td><span class="badge ${u.role==='ALUMNI'?'bg-success':'bg-primary'}">${u.role}</span></td>
+                        <td><button class="btn btn-sm btn-outline-primary"><i class="fas fa-paper-plane"></i></button></td>
+                    </tr>`;
+            });
+        }
+    } catch(e) { console.error(e); }
+}
+
+function openUserProfile(user) {
+    selectedUserForModal = user;
+    document.getElementById("modalName").innerText = user.name;
+    document.getElementById("modalAvatar").innerText = user.name.charAt(0).toUpperCase();
+    document.getElementById("modalRole").innerText = user.role;
+    document.getElementById("modalHeadline").innerText = user.headline || "No Headline";
+    document.getElementById("modalCompany").innerText = user.currentCompany || "-";
+    document.getElementById("modalSkills").innerText = user.skills || "-";
+    
+    new bootstrap.Modal(document.getElementById('userProfileModal')).show();
+}
+
+function openPrivateChatFromProfile() {
+    // Close Profile Modal
+    bootstrap.Modal.getInstance(document.getElementById('userProfileModal')).hide();
+    // Open Chat
+    openChatWithUser(selectedUserForModal);
+}
+
+// ================= MODULE 3: MESSAGING & CHAT =================
+function connectToChat() {
+    const socket = new SockJS(WS_URL);
+    stompClient = Stomp.over(socket);
+    stompClient.debug = null;
+
+    stompClient.connect({}, function () {
+        document.getElementById("chatStatus").innerText = "Online";
+        document.getElementById("chatStatus").className = "badge bg-success ms-2";
+        
+        // Global Chat
+        stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
+        
+        // Private Chat
+        stompClient.subscribe('/user/queue/messages', payload => {
+            const msg = JSON.parse(payload.body);
+            // Auto refresh list logic would go here if we had logic to detect tab
+            if(document.getElementById("recentChatsList")) fetchRecentChats(); 
+
+            if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
+                displayPrivateMsg(msg);
+            } else if (msg.senderName !== myEmail) {
+                document.getElementById("msgBadge").classList.remove("d-none");
+                const toastBody = document.getElementById("toastBody");
+                toastBody.innerText = `${msg.senderName}: ${msg.content}`;
+                new bootstrap.Toast(document.getElementById('liveToast')).show();
+            }
         });
-        const data = await res.json();
-        addBotMsg(data.answer, 'other-message');
-    } catch(e) { addBotMsg("⚠️ Server Error", 'other-message'); }
+    }, function() { document.getElementById("chatStatus").innerText = "Offline"; });
 }
 
-function addBotMsg(txt, cls) {
-    const area = document.getElementById("botMessages");
-    area.innerHTML += `<div class="message ${cls}" style="max-width:90%;">${txt}</div>`;
-    area.scrollTop = area.scrollHeight;
-}
-
-// ================= MODULE 3: MESSAGES & CHAT =================
 async function fetchRecentChats() {
     const res = await fetch(`${API_URL}/messages/partners`, { headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) {
         const users = await res.json();
         const list = document.getElementById("recentChatsList");
         list.innerHTML = "";
-        if(users.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No chats.</div>`;
+        if(users.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No chats yet.</div>`;
         users.forEach(u => {
             const initial = u.name.charAt(0).toUpperCase();
             list.innerHTML += `
@@ -153,29 +230,6 @@ async function loadChatHistory(partner) {
     }
 }
 
-function connectToChat() {
-    const socket = new SockJS(WS_URL);
-    stompClient = Stomp.over(socket);
-    stompClient.debug = null;
-
-    stompClient.connect({}, function () {
-        document.getElementById("chatStatus").innerText = "Online";
-        stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
-        stompClient.subscribe('/user/queue/messages', payload => {
-            const msg = JSON.parse(payload.body);
-            fetchRecentChats(); // Auto-refresh list
-            if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
-                displayPrivateMsg(msg);
-            } else if (msg.senderName !== myEmail) {
-                document.getElementById("msgBadge").classList.remove("d-none");
-                const toastBody = document.getElementById("toastBody");
-                toastBody.innerText = `${msg.senderName}: ${msg.content}`;
-                new bootstrap.Toast(document.getElementById('liveToast')).show();
-            }
-        });
-    });
-}
-
 function sendPrivateMessage() {
     const input = document.getElementById("privMsgInput");
     const content = input.value.trim();
@@ -187,46 +241,12 @@ function sendPrivateMessage() {
 
 function displayPrivateMsg(msg) {
     const area = document.getElementById("privateChatArea");
-    const isMe = msg.senderName === myEmail; // Now works correctly
+    const isMe = msg.senderName === myEmail;
     area.innerHTML += `<div class="message ${isMe?'my-message':'other-message'}">${msg.content}</div>`;
     area.scrollTop = area.scrollHeight;
 }
 
-// ================= MODULE 4: DIRECTORY (ADVANCED) =================
-function debouncedSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(runSearch, 400); }
-
-async function runSearch() {
-    const q = document.getElementById("dirSearch").value;
-    const role = document.getElementById("filterRole").value;
-    const batch = document.getElementById("filterBatch").value;
-    
-    const tbody = document.getElementById("tableBody");
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
-
-    try {
-        const url = `${API_URL}/users/search?role=${role}&batch=${batch}&q=${encodeURIComponent(q)}`;
-        const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
-        if(res.ok) {
-            const users = await res.json();
-            tbody.innerHTML = "";
-            if(users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4">No users found.</td></tr>`; return; }
-            
-            users.forEach(u => {
-                if(u.email === myEmail) return;
-                const initial = u.name.charAt(0).toUpperCase();
-                tbody.innerHTML += `
-                    <tr class="user-row" onclick='openChatWithUser(${JSON.stringify(u)})'>
-                        <td><div class="avatar-circle small">${initial}</div></td>
-                        <td><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></td>
-                        <td><span class="badge ${u.role==='ALUMNI'?'bg-success':'bg-primary'}">${u.role}</span></td>
-                        <td><button class="btn btn-sm btn-outline-primary"><i class="fas fa-paper-plane"></i></button></td>
-                    </tr>`;
-            });
-        }
-    } catch(e) { console.error(e); }
-}
-
-// ================= GLOBAL CHAT & JOBS & WALL =================
+// Global Chat Functions
 function sendMessage() {
     const input = document.getElementById("messageInput");
     if(input.value.trim()) {
@@ -237,6 +257,37 @@ function sendMessage() {
 function displayGlobalMsg(msg) {
     const area = document.getElementById("chatArea");
     area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
+    area.scrollTop = area.scrollHeight;
+}
+
+// ================= MODULE 4: BOT & JOBS & WALL =================
+function toggleBot() {
+    const win = document.getElementById("botWindow");
+    win.style.display = win.style.display === "none" ? "block" : "none";
+}
+
+async function askBot() {
+    const input = document.getElementById("botInput");
+    const q = input.value.trim();
+    if(!q) return;
+
+    addBotMsg(q, 'my-message');
+    input.value = "";
+
+    try {
+        const res = await fetch(`${API_URL}/bot/ask`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        addBotMsg(data.answer, 'other-message');
+    } catch(e) { addBotMsg("⚠️ Server Error", 'other-message'); }
+}
+
+function addBotMsg(txt, cls) {
+    const area = document.getElementById("botMessages");
+    area.innerHTML += `<div class="message ${cls}" style="max-width:90%;">${txt}</div>`;
     area.scrollTop = area.scrollHeight;
 }
 

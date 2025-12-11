@@ -29,11 +29,11 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // ✅ NEW: Allow Frames (Required for SockJS/Chat to work)
                 .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/index.html", "/dashboard.html", "/app.js", "/dashboard.js", "/css/**", "/js/**", "/ws/**").permitAll()
+                        // ✅ ADD "/components/**" to this list!
+                        .requestMatchers("/", "/index.html", "/dashboard.html", "/app.js", "/dashboard.js", "/components/**", "/css/**", "/js/**", "/ws/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
