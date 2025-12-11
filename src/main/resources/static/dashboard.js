@@ -59,12 +59,9 @@ async function switchTab(tab) {
         if(tab === 'wall') fetchPosts();
         if(tab === 'profile') loadProfile();
 
-        // --- NEW: EVENTS TAB ---
         if(tab === 'events') {
             fetchEvents();
-            // Show "Add Event" button only for Admins
             if (userRole === "ADMIN") {
-                // Small timeout to ensure DOM is ready
                 setTimeout(() => {
                     const btnAdd = document.getElementById("btnAddEvent");
                     if(btnAdd) btnAdd.classList.remove("d-none");
@@ -72,7 +69,6 @@ async function switchTab(tab) {
             }
         }
 
-        // --- NEW: ADMIN TAB ---
         if(tab === 'admin') {
             if(userRole !== 'ADMIN') {
                 container.innerHTML = `<div class="alert alert-danger text-center m-5">⛔ Access Denied</div>`;
@@ -145,22 +141,37 @@ async function runSearch() {
         const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
         if(res.ok) {
             const users = await res.json();
-            tbody.innerHTML = "";
-            if(users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4">No users found.</td></tr>`; return; }
-            
-            users.forEach(u => {
-                if(u.email === myEmail) return;
-                const initial = u.name.charAt(0).toUpperCase();
-                tbody.innerHTML += `
-                    <tr class="user-row" onclick='openUserProfile(${JSON.stringify(u)})'>
-                        <td><div class="avatar-circle small">${initial}</div></td>
-                        <td><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></td>
-                        <td><span class="badge ${u.role==='ALUMNI'?'bg-success':'bg-primary'}">${u.role}</span></td>
-                        <td><button class="btn btn-sm btn-outline-primary"><i class="fas fa-paper-plane"></i></button></td>
-                    </tr>`;
-            });
+            renderDirectoryTable(users);
         }
     } catch(e) { console.error(e); }
+}
+
+// FIX: Separate Render Function to Handle Admin Buttons
+function renderDirectoryTable(users) {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    if (users.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5">No users found.</td></tr>`; return; }
+
+    users.forEach(u => {
+        if (u.email === myEmail) return;
+        
+        const initial = u.name.charAt(0).toUpperCase();
+        
+        // ✅ ADMIN FIX: Show Edit Button if User is Admin
+        let actionBtns = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openChatWithUser(${JSON.stringify(u)})"><i class="fas fa-paper-plane"></i></button>`;
+        
+        if (userRole === 'ADMIN') {
+            actionBtns += ` <button class="btn btn-sm btn-outline-dark ms-1" onclick='event.stopPropagation(); openEditUserModal(${JSON.stringify(u)})'><i class="fas fa-edit"></i></button>`;
+        }
+
+        tbody.innerHTML += `
+            <tr class="user-row" onclick='openUserProfile(${JSON.stringify(u)})'>
+                <td class="ps-3"><div class="avatar-circle small">${initial}</div></td>
+                <td><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></td>
+                <td><span class="badge ${u.role==='ALUMNI'?'bg-success':'bg-primary'}">${u.role}</span></td>
+                <td class="text-end pe-3">${actionBtns}</td>
+            </tr>`;
+    });
 }
 
 function openUserProfile(user) {
@@ -312,7 +323,20 @@ async function fetchJobs() {
         const list = document.getElementById("jobList");
         list.innerHTML = "";
         jobs.forEach(j => {
-            list.innerHTML += `<div class="card p-3 mb-2 shadow-sm job-card"><h5>${j.title}</h5><h6 class="text-muted">${j.company}</h6><p>${j.description}</p><a href="mailto:${j.applyLink}" class="btn btn-sm btn-outline-primary">Apply</a></div>`;
+            let deleteBtn = "";
+            if (userRole === "ADMIN") {
+                deleteBtn = `<button class="btn btn-sm btn-danger float-end ms-2" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button>`;
+            }
+            list.innerHTML += `
+                <div class="card p-3 mb-2 shadow-sm job-card">
+                    <div class="d-flex justify-content-between">
+                        <h5>${j.title}</h5>
+                        <div>${deleteBtn}</div>
+                    </div>
+                    <h6 class="text-muted">${j.company}</h6>
+                    <p>${j.description}</p>
+                    <a href="mailto:${j.applyLink}" class="btn btn-sm btn-outline-primary">Apply</a>
+                </div>`;
         });
     }
 }
@@ -327,6 +351,12 @@ async function postJob() {
     };
     const res = await fetch(`${API_URL}/jobs`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if(res.ok) { bootstrap.Modal.getInstance(document.getElementById('postJobModal')).hide(); fetchJobs(); }
+}
+
+async function deleteJob(id) {
+    if(!confirm("Admin: Delete this job?")) return;
+    const res = await fetch(`${API_URL}/jobs/${id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) fetchJobs();
 }
 
 async function fetchPosts() {
@@ -375,7 +405,6 @@ async function fetchEvents() {
     }
 }
 
-// --- FIX: Renamed from createEvent to publishNewEvent ---
 async function publishNewEvent() {
     const data = {
         title: document.getElementById("evtTitle").value,
@@ -383,57 +412,13 @@ async function publishNewEvent() {
         location: document.getElementById("evtLoc").value,
         dateTime: document.getElementById("evtDate").value
     };
-    const res = await fetch(`${API_URL}/events`, { 
-        method: "POST", 
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-        body: JSON.stringify(data) 
-    });
-    
+    const res = await fetch(`${API_URL}/events`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if(res.ok) {
         bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
-        fetchEvents(); // Refresh list
+        fetchEvents();
     } else {
         alert("Failed to create event");
     }
-}
-async function fetchJobs() {
-    const res = await fetch(`${API_URL}/jobs`, { headers: { "Authorization": `Bearer ${token}` } });
-    if(res.ok) {
-        const jobs = await res.json();
-        const list = document.getElementById("jobList");
-        list.innerHTML = "";
-        
-        jobs.forEach(j => {
-            // FIX: Show Delete Button if ADMIN
-            let deleteBtn = "";
-            if (userRole === "ADMIN") {
-                deleteBtn = `<button class="btn btn-sm btn-danger float-end ms-2" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button>`;
-            }
-
-            list.innerHTML += `
-                <div class="card p-3 mb-2 shadow-sm job-card">
-                    <div class="d-flex justify-content-between">
-                        <h5>${j.title}</h5>
-                        <div>${deleteBtn}</div>
-                    </div>
-                    <h6 class="text-muted">${j.company}</h6>
-                    <p>${j.description}</p>
-                    <a href="mailto:${j.applyLink}" class="btn btn-sm btn-outline-primary">Apply</a>
-                </div>`;
-        });
-    }
-}
-
-// Add this new function for deleting jobs
-async function deleteJob(id) {
-    if(!confirm("Admin: Delete this job?")) return;
-    // We reuse the generic delete endpoint if available, or create a specific one
-    // Assuming you have DELETE /api/jobs/{id} in JobController
-    const res = await fetch(`${API_URL}/jobs/${id}`, { 
-        method: "DELETE", 
-        headers: { "Authorization": `Bearer ${token}` } 
-    });
-    if(res.ok) fetchJobs();
 }
 
 async function deleteEvent(id) {
@@ -479,7 +464,6 @@ function openEditUserModal(user) {
 
 async function adminSaveUser() {
     const id = document.getElementById("editUserId").value;
-    
     const data = {
         name: document.getElementById("editName").value,
         email: document.getElementById("editEmail").value,
@@ -488,29 +472,22 @@ async function adminSaveUser() {
         skills: document.getElementById("editSkills").value
     };
     
-    console.log("Admin updating user:", id, data);
-
-    const res = await fetch(`${API_URL}/admin/users/${id}`, { 
-        method: "PUT", 
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, 
-        body: JSON.stringify(data) 
-    });
-    
+    const res = await fetch(`${API_URL}/admin/users/${id}`, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if(res.ok) {
         alert("✅ User Updated Successfully!");
         bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
-        loadAdminUsers(); // Refresh the Admin Table
+        loadAdminUsers();
     } else {
-        alert("❌ Failed to update user. Check console.");
-        console.error(await res.text());
+        alert("❌ Failed to update user.");
     }
 }
 
 async function adminCreateUser() {
     const data = {
-        name: document.getElementById("adminName").value,
-        email: document.getElementById("adminEmail").value,
-        role: document.getElementById("adminRole").value,
+        name: document.getElementById("newUserName").value,
+        email: document.getElementById("newUserEmail").value,
+        role: document.getElementById("newUserRole").value,
+        batchYear: document.getElementById("newUserBatch").value,
         password: "placeholder" 
     };
 
@@ -518,8 +495,7 @@ async function adminCreateUser() {
     
     if(res.ok) {
         alert("User Created! Default Pass: Bvicam@2025");
-        document.getElementById("adminName").value = "";
-        document.getElementById("adminEmail").value = "";
+        bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
         loadAdminUsers();
     } else { alert("Failed to create user"); }
 }
@@ -528,4 +504,53 @@ async function deleteUser(id) {
     if(!confirm("Are you sure?")) return;
     const res = await fetch(`${API_URL}/admin/delete-user/${id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) loadAdminUsers();
+}
+
+// ================= MODULE: FEEDBACK SYSTEM =================
+function openFeedbackModal() {
+    new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+}
+
+async function submitFeedback() {
+    const rating = document.getElementById("fbRating").value;
+    const comment = document.getElementById("fbComment").value;
+    
+    const res = await fetch(`${API_URL}/feedback`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: parseInt(rating), comments: comment })
+    });
+    
+    if(res.ok) {
+        alert("Thank you for your feedback!");
+        bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+        document.getElementById("fbComment").value = "";
+    } else {
+        alert("Failed to submit feedback.");
+    }
+}
+
+// Call this when Admin switches to Feedback Tab
+async function loadAdminFeedback() {
+    const res = await fetch(`${API_URL}/feedback`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const feedbacks = await res.json();
+        const tbody = document.getElementById("adminFeedbackTable");
+        if(tbody) {
+            tbody.innerHTML = "";
+            feedbacks.forEach(f => {
+                const stars = "⭐".repeat(f.rating); 
+                tbody.innerHTML += `
+                    <tr>
+                        <td>
+                            <div class="fw-bold">${f.submittedBy.name}</div>
+                            <small class="text-muted">${f.submittedBy.role}</small>
+                        </td>
+                        <td>${stars}</td>
+                        <td>${f.comments}</td>
+                        <td class="small text-muted">${new Date(f.submittedAt).toLocaleDateString()}</td>
+                    </tr>`;
+            });
+        }
+    }
 }

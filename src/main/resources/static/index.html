@@ -3,40 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Connect Login</title>
+    <title>Campus Connect | BVICAM</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { background: #f0f2f5; display: flex; align-items: center; height: 100vh; }
-        .login-card { max-width: 400px; width: 100%; margin: auto; padding: 20px; border-radius: 10px; background: white; shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .brand-header { text-align: center; color: #0d6efd; margin-bottom: 20px; }
+        :root {
+            --primary-color: #0d6efd;
+            --secondary-color: #0a2647;
+            --accent-color: #ffc107;
+        }
+
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            overflow-x: hidden;
+            scroll-behavior: smooth; /* Smooth scrolling for the About link */
+        }
+        
+        /* Top Bar for College Name */
+        .top-bar {
+            background-color: var(--secondary-color);
+            color: white;
+            font-size: 1.1rem; /* Increased size */
+            font-weight: 700;  /* Bold */
+            padding: 12px 0;   /* More breathing room */
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1031;
+            position: relative;
+        }
+
+        /* Navbar */
+        .navbar {
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            padding: 10px 0;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--secondary-color) !important;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+        /* Logo styling */
+        .navbar-brand img {
+            height: 50px; /* Adjust logo size */
+            margin-right: 10px;
+        }
+
+        /* Hero Section */
+        .hero-section {
+            background: linear-gradient(rgba(10, 38, 71, 0.85), rgba(13, 110, 253, 0.75)), url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            color: white;
+            padding: 120px 0;
+            position: relative;
+        }
+        .hero-content {
+            z-index: 2;
+            position: relative;
+        }
+
+        /* Stats Section */
+        .stats-section {
+            background-color: #f8f9fa;
+            padding: 60px 0;
+        }
+        .stat-card h3 {
+            color: var(--primary-color);
+            font-weight: 700;
+            font-size: 2.5rem;
+        }
+
+        /* Feature Cards */
+        .feature-card {
+            border: none;
+            transition: all 0.3s ease;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            border-radius: 12px;
+            padding: 40px 30px;
+            height: 100%;
+            border-bottom: 4px solid transparent;
+        }
+        .feature-card:hover { 
+            transform: translateY(-10px); 
+            border-bottom: 4px solid var(--primary-color);
+        }
+        .feature-icon { 
+            font-size: 3rem; 
+            color: var(--primary-color); 
+            margin-bottom: 25px; 
+            background: rgba(13, 110, 253, 0.1);
+            width: 80px;
+            height: 80px;
+            line-height: 80px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        /* Call to Action */
+        .cta-section {
+            background: var(--secondary-color);
+            color: white;
+            padding: 80px 0;
+        }
+
+        /* Footer */
+        footer { 
+            background: #212529; 
+            color: #adb5bd; 
+            padding-top: 60px; 
+            font-size: 0.9rem;
+        }
+        footer h5 {
+            color: white;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        footer a { 
+            color: #adb5bd; 
+            text-decoration: none; 
+            transition: 0.3s;
+        }
+        footer a:hover { 
+            color: white; 
+            padding-left: 5px;
+        }
+        .developer-tag {
+            background: #1a1e21;
+            padding: 40px 0;
+            margin-top: 40px;
+            border-top: 3px solid var(--primary-color); /* Highlight the dev section */
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="login-card shadow">
-            <h2 class="brand-header">🎓 Campus Connect</h2>
-            
-            <div id="alertBox" class="alert alert-danger d-none"></div>
-
-            <form id="loginForm">
-                <div class="mb-3">
-                    <label class="form-label">Email Address</label>
-                    <input type="email" id="email" class="form-control" placeholder="student@bvicam.in" required>
+    <div class="top-bar">
+        <div class="container text-center text-md-start">
+            <div class="row align-items-center">
+                <div class="col-md-12 text-center">
+                    <i class="fas fa-university me-2"></i> Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM)
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Password</label>
-                    <input type="password" id="password" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Login</button>
-            </form>
-            
-            <div class="text-center mt-3">
-                <small>Don't have an account? Ask Admin.</small>
             </div>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="https://bvicam.in/Content/ForntEnd/images/logo.png" alt="BVICAM Logo">
+                Campus Connect
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Features</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#about">About</a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <a href="https://bvicam.in" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">Official Website</a>
+                    </li>
+                    <li class="nav-item ms-2">
+                        <a href="login.html" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm">Login / Sign Up</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero-section text-center d-flex align-items-center">
+        <div class="container hero-content">
+            <span class="badge bg-warning text-dark mb-3 px-3 py-2 rounded-pill">Exclusive for BVICAM Students & Alumni</span>
+            <h1 class="display-3 fw-bold mb-4">Bridging the Gap Between<br>Talent & Opportunity</h1>
+            <p class="lead mb-5 opacity-90 mx-auto" style="max-width: 700px;">
+                Connect with distinguished Alumni, discover exclusive career opportunities, and engage with the vibrant BVICAM community in real-time.
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="login.html" class="btn btn-primary btn-lg px-5 py-3 fw-bold rounded-pill shadow hover-effect">Get Started</a>
+                <a href="#features" class="btn btn-outline-light btn-lg px-5 py-3 fw-bold rounded-pill">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats-section">
+        <div class="container">
+            <div class="row text-center g-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <h3>500+</h3>
+                        <p class="text-muted mb-0">Active Alumni</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <h3>100+</h3>
+                        <p class="text-muted mb-0">Job Opportunities</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <h3>24/7</h3>
+                        <p class="text-muted mb-0">Community Support</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="py-5">
+        <div class="container py-5">
+            <div class="text-center mb-5">
+                <h6 class="text-primary fw-bold text-uppercase ls-2">Key Features</h6>
+                <h2 class="fw-bold display-6">Why Join Campus Connect?</h2>
+                <p class="text-muted mx-auto" style="max-width: 600px;">Everything you need to grow your professional network within the BVICAM ecosystem.</p>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <h4>Alumni Directory</h4>
+                        <p class="text-muted">Search and connect with seniors working in top MNCs like Amazon, Google, TCS, and more.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-briefcase"></i>
+                        </div>
+                        <h4>Job Board</h4>
+                        <p class="text-muted">Access exclusive job and internship openings posted directly by our trusted Alumni network.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <h4>Real-Time Chat</h4>
+                        <p class="text-muted">Engage in instant messaging for mentorship, project discussions, and guidance.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section text-center">
+        <div class="container">
+            <h2 class="mb-4 fw-bold">Ready to Accelerate Your Career?</h2>
+            <p class="mb-5 lead opacity-75">Join the fastest-growing network of BVICAM professionals today.</p>
+            <a href="login.html" class="btn btn-light text-primary btn-lg px-5 py-3 rounded-pill fw-bold shadow">Join Now</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-lg-5 col-md-12 mb-4">
+                    <h5 class="text-white"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</h5>
+                    <p>An exclusive platform for Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM) to foster relationships between students and alumni.</p>
+                    <div class="mt-4">
+                        <a href="#" class="me-3"><i class="fab fa-linkedin fa-lg"></i></a>
+                        <a href="#" class="me-3"><i class="fab fa-twitter fa-lg"></i></a>
+                        <a href="#" class="me-3"><i class="fab fa-instagram fa-lg"></i></a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="#">Home</a></li>
+                        <li class="mb-2"><a href="#features">Features</a></li>
+                        <li class="mb-2"><a href="login.html">Login</a></li>
+                        <li class="mb-2"><a href="https://bvicam.in">BVICAM Official</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-4 col-md-6 mb-4">
+                    <h5>Contact</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><i class="fas fa-map-marker-alt me-2 text-primary"></i> A-4, Paschim Vihar, New Delhi - 110063</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2 text-primary"></i> +91-11-25275055</li>
+                        <li class="mb-2"><i class="fas fa-envelope me-2 text-primary"></i> mca@bvicam.ac.in</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="developer-tag text-center" id="about">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-6 text-md-start mb-2 mb-md-0">
+                        &copy; 2025 BVICAM Campus Connect. All rights reserved.
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <small style="font-size: 1rem;">
+                            Designed & Developed with <i class="fas fa-heart text-danger"></i> by 
+                            <br>
+                            <span class="text-white fw-bold" style="font-size: 1.2rem; text-decoration: underline;">Piyush Goel</span>
+                            <br>
+                            <a href="mailto:piyushgoel2808@gmail.com" class="text-white"><i class="fas fa-envelope me-1"></i> piyushgoel2808@gmail.com</a>
+                            <span class="mx-2">|</span>
+                            <a href="https://www.linkedin.com/in/piyush-goel-26548b142" target="_blank" class="text-white">
+                                <i class="fab fa-linkedin fa-lg"></i> Connect on LinkedIn
+                            </a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

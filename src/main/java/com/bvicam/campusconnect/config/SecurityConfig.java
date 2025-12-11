@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // ✅ ADD "/components/**" to this list!
-                        .requestMatchers("/", "/index.html", "/dashboard.html", "/app.js", "/dashboard.js", "/components/**", "/css/**", "/js/**", "/ws/**").permitAll()
+                        .requestMatchers("/", "/index.html", "/login.html", "/dashboard.html", "/app.js", "/dashboard.js", "/components/**", "/css/**", "/js/**", "/ws/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()

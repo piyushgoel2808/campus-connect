@@ -60,6 +60,10 @@
                     <button class="nav-link" id="tab-wall" onclick="switchTab('wall')"><i class="fas fa-newspaper me-2"></i> Wall</button>
                     <button class="nav-link" id="tab-profile" onclick="switchTab('profile')"><i class="fas fa-user-circle me-2"></i> Profile</button>
                     <button class="nav-link d-none" id="tab-admin" onclick="switchTab('admin')"><i class="fas fa-shield-alt me-2"></i> Admin</button>
+                    
+                    <button class="nav-link text-warning" onclick="openFeedbackModal()">
+                        <i class="fas fa-star me-2"></i> Rate Us
+                    </button>
                 </div>
             </div>
             
@@ -194,6 +198,33 @@
                     <input type="datetime-local" id="evtDate" class="form-control">
                 </div>
                 <div class="modal-footer"><button class="btn btn-primary" onclick="publishNewEvent()">Publish Event</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="feedbackModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Rate Your Experience</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="text-muted">How are you liking Campus Connect?</p>
+                    <div class="mb-3">
+                        <select id="fbRating" class="form-select text-center" style="font-size: 1.2rem;">
+                            <option value="5">⭐⭐⭐⭐⭐ (Excellent)</option>
+                            <option value="4">⭐⭐⭐⭐ (Good)</option>
+                            <option value="3">⭐⭐⭐ (Average)</option>
+                            <option value="2">⭐⭐ (Poor)</option>
+                            <option value="1">⭐ (Terrible)</option>
+                        </select>
+                    </div>
+                    <textarea id="fbComment" class="form-control" rows="3" placeholder="Tell us what needs improvement..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-dark w-100" onclick="submitFeedback()">Submit Feedback</button>
+                </div>
             </div>
         </div>
     </div>
