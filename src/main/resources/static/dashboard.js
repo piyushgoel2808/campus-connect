@@ -1,182 +1,157 @@
-// --- CONFIGURATION ---
 const API_URL = "/api";
 const WS_URL = "/ws";
-
-// --- STATE ---
 const token = localStorage.getItem("jwt_token");
-const myEmail = localStorage.getItem("user_email"); // Make sure your Login saves this!
+const myEmail = localStorage.getItem("user_email");
 const userName = localStorage.getItem("user_name");
 const userRole = localStorage.getItem("user_role");
 
 let stompClient = null;
 let currentChatPartner = null;
-let searchTimeout = null; // For debounce
+let searchTimeout = null;
 
-// --- INITIALIZATION ---
-if (!token) {
-    window.location.href = "index.html";
-} else {
-    // Setup Header
+// --- INIT ---
+if (!token) window.location.href = "index.html";
+else {
     document.getElementById("welcomeUser").innerText = userName;
-    if (userRole === "ALUMNI" || userRole === "ADMIN") {
-        const postBtn = document.getElementById("btnPostJob");
-        if(postBtn) postBtn.classList.remove("d-none");
-    }
+    if (userRole === "ALUMNI" || userRole === "ADMIN") document.getElementById("btnPostJob").classList.remove("d-none");
     
-    // Initial Loads
+    // Ensure email is stored
+    if (!myEmail) {
+        fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(user => localStorage.setItem("user_email", user.email));
+    }
+
+    // Default to Messages
     fetchRecentChats(); 
     connectToChat();
 }
 
-// --- NAVIGATION ---
 function switchTab(tab) {
-    // Hide all views
     ['messages', 'directory', 'jobs', 'wall', 'profile'].forEach(t => {
-        const view = document.getElementById(`view-${t}`);
+        document.getElementById(`view-${t}`).classList.add('d-none');
         const btn = document.getElementById(`tab-${t}`);
-        if(view) view.classList.add('d-none');
         if(btn) btn.classList.remove('active');
     });
 
-    // Show selected view
-    const view = document.getElementById(`view-${tab}`);
+    document.getElementById(`view-${tab}`).classList.remove('d-none');
     const btn = document.getElementById(`tab-${tab}`);
-    if(view) view.classList.remove('d-none');
     if(btn) btn.classList.add('active');
 
-    // Tab Specific Logic
     if(tab === 'messages') fetchRecentChats();
-    if(tab === 'directory') initDirectory(); // UPDATED: Calls new advanced logic
+    if(tab === 'directory') runSearch();
     if(tab === 'jobs') fetchJobs();
     if(tab === 'wall') fetchPosts();
     if(tab === 'profile') loadProfile();
 }
 
-// ==========================================
-// MODULE 1: ADVANCED DIRECTORY
-// ==========================================
+function logout() { localStorage.clear(); window.location.href="index.html"; }
 
-function initDirectory() {
-    runSearch(); // Load default view
-}
-
-// The Master Search Function
-async function runSearch() {
-    const q = document.getElementById("dirSearch").value;
-    const role = document.getElementById("filterRole").value;
-    const batch = document.getElementById("filterBatch").value;
-
-    const tbody = document.getElementById("tableBody");
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
-
+// ================= MODULE 1: PROFILE (RESTORED!) =================
+async function loadProfile() {
     try {
-        // Call the Backend API (Ensure your Backend Controller supports these params)
-        const url = `${API_URL}/users/search?role=${role}&batch=${batch}&q=${encodeURIComponent(q)}`;
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
-        
-        if (response.ok) {
-            const users = await response.json();
-            renderDirectoryTable(users);
-        }
-    } catch (e) { console.error("Search failed", e); }
-}
-
-// "Debounce": Waits 400ms after typing stops before calling API
-function debouncedSearch() {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(runSearch, 400); 
-}
-
-function renderDirectoryTable(users) {
-    const tbody = document.getElementById("tableBody");
-    tbody.innerHTML = "";
-
-    if (users.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">No users found matching filters.</td></tr>`;
-        return;
-    }
-
-    users.forEach(user => {
-        if (user.email === myEmail) return; // Hide self
-        
-        const initial = user.name.charAt(0).toUpperCase();
-        // Handle null batchYear gracefully
-        const batchBadge = user.batchYear ? `<span class="badge bg-light text-dark border">${user.batchYear}</span>` : '<span class="text-muted small">-</span>';
-        
-        tbody.innerHTML += `
-            <tr class="user-row" onclick='openUserProfile(${JSON.stringify(user)})'>
-                <td class="ps-3"><div class="avatar-circle small">${initial}</div></td>
-                <td>
-                    <div class="fw-bold text-dark">${user.name}</div>
-                    <small class="text-muted">${user.headline || user.currentCompany || "Member"}</small>
-                </td>
-                <td>${batchBadge}</td>
-                <td><span class="badge ${user.role==='ALUMNI'?'bg-success':'bg-primary'}">${user.role}</span></td>
-                <td class="text-end pe-3">
-                    <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openChatWithUser(${JSON.stringify(user)})">
-                        <i class="fas fa-paper-plane"></i> Msg
-                    </button>
-                </td>
-            </tr>`;
-    });
-}
-
-// Placeholder for Profile Modal (Optional)
-function openUserProfile(user) {
-    alert(`View Profile: ${user.name}\n\nCompany: ${user.currentCompany || 'N/A'}\nHeadline: ${user.headline || 'N/A'}`);
-}
-
-// ==========================================
-// MODULE 2: MESSAGING (WhatsApp Style)
-// ==========================================
-
-async function fetchRecentChats() {
-    try {
-        const res = await fetch(`${API_URL}/messages/partners`, { headers: { "Authorization": `Bearer ${token}` } });
+        const res = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
         if(res.ok) {
-            const users = await res.json();
-            const list = document.getElementById("recentChatsList");
-            if(list) {
-                list.innerHTML = "";
-                
-                if(users.length === 0) {
-                    list.innerHTML = `<div class="text-center py-5 text-muted">No conversations yet. Go to Directory to start chatting!</div>`;
-                    return;
-                }
-
-                users.forEach(user => {
-                    const initial = user.name.charAt(0).toUpperCase();
-                    list.innerHTML += `
-                        <div class="chat-item d-flex align-items-center" onclick='openChatWithUser(${JSON.stringify(user)})'>
-                            <div class="avatar-circle me-3">${initial}</div>
-                            <div class="flex-grow-1">
-                                <div class="fw-bold text-dark">${user.name}</div>
-                                <small class="text-muted">${user.headline || user.role}</small>
-                            </div>
-                            <div class="text-end">
-                                <button class="btn btn-sm btn-light"><i class="fas fa-chevron-right"></i></button>
-                            </div>
-                        </div>`;
-                });
-            }
+            const user = await res.json();
+            document.getElementById("pHeadline").value = user.headline || "";
+            document.getElementById("pCompany").value = user.currentCompany || "";
+            document.getElementById("pDesignation").value = user.designation || "";
+            document.getElementById("pSkills").value = user.skills || "";
+            document.getElementById("pExperience").value = user.pastExperience || "";
+            document.getElementById("pLinkedin").value = user.linkedinUrl || "";
+            document.getElementById("pGithub").value = user.githubUrl || "";
         }
     } catch(e) { console.error(e); }
 }
 
-function openChatWithUser(user) {
-    currentChatPartner = user.email; // Using email as ID
-    document.getElementById("privChatTitle").innerText = "Chat with " + user.name;
-    const modalEl = document.getElementById('privateChatModal');
-    if(modalEl) {
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
+async function saveProfile() {
+    const data = {
+        headline: document.getElementById("pHeadline").value,
+        currentCompany: document.getElementById("pCompany").value,
+        designation: document.getElementById("pDesignation").value,
+        skills: document.getElementById("pSkills").value,
+        pastExperience: document.getElementById("pExperience").value,
+        linkedinUrl: document.getElementById("pLinkedin").value,
+        githubUrl: document.getElementById("pGithub").value
+    };
+
+    const res = await fetch(`${API_URL}/users/profile`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+
+    if(res.ok) alert("✅ Profile Updated!");
+    else alert("❌ Failed to update");
+}
+
+// ================= MODULE 2: CAMPUS BOT (RESTORED!) =================
+function toggleBot() {
+    const win = document.getElementById("botWindow");
+    win.style.display = win.style.display === "none" ? "block" : "none";
+}
+
+async function askBot() {
+    const input = document.getElementById("botInput");
+    const q = input.value.trim();
+    if(!q) return;
+
+    addBotMsg(q, 'my-message');
+    input.value = "";
+
+    try {
+        const res = await fetch(`${API_URL}/bot/ask`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        addBotMsg(data.answer, 'other-message');
+    } catch(e) { addBotMsg("⚠️ Server Error", 'other-message'); }
+}
+
+function addBotMsg(txt, cls) {
+    const area = document.getElementById("botMessages");
+    area.innerHTML += `<div class="message ${cls}" style="max-width:90%;">${txt}</div>`;
+    area.scrollTop = area.scrollHeight;
+}
+
+// ================= MODULE 3: MESSAGES & CHAT =================
+async function fetchRecentChats() {
+    const res = await fetch(`${API_URL}/messages/partners`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const users = await res.json();
+        const list = document.getElementById("recentChatsList");
+        list.innerHTML = "";
+        if(users.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No chats.</div>`;
+        users.forEach(u => {
+            const initial = u.name.charAt(0).toUpperCase();
+            list.innerHTML += `
+                <div class="chat-item d-flex align-items-center p-3 border-bottom" onclick='openChatWithUser(${JSON.stringify(u)})'>
+                    <div class="avatar-circle me-3">${initial}</div>
+                    <div><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></div>
+                </div>`;
+        });
     }
+}
+
+function openChatWithUser(user) {
+    currentChatPartner = user.email;
+    document.getElementById("privChatTitle").innerText = "Chat with " + user.name;
+    const modal = new bootstrap.Modal(document.getElementById('privateChatModal'));
+    modal.show();
     loadChatHistory(currentChatPartner);
 }
 
-// ==========================================
-// MODULE 3: WEBSOCKETS (UPDATED)
-// ==========================================
+async function loadChatHistory(partner) {
+    document.getElementById("privateChatArea").innerHTML = "<div class='text-center small text-muted mt-2'>Loading...</div>";
+    const res = await fetch(`${API_URL}/messages/history?partnerEmail=${partner}`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const msgs = await res.json();
+        document.getElementById("privateChatArea").innerHTML = "";
+        msgs.forEach(m => displayPrivateMsg({ senderName: m.senderEmail, content: m.content }));
+    }
+}
 
 function connectToChat() {
     const socket = new SockJS(WS_URL);
@@ -184,53 +159,74 @@ function connectToChat() {
     stompClient.debug = null;
 
     stompClient.connect({}, function () {
-        const statusEl = document.getElementById("chatStatus");
-        if(statusEl) {
-            statusEl.innerText = "Online";
-            statusEl.className = "badge bg-success ms-2";
-        }
-        
-        // 1. Public Chat Subscription
+        document.getElementById("chatStatus").innerText = "Online";
         stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
-        
-        // 2. Private Message Subscription (UPDATED LOGIC)
         stompClient.subscribe('/user/queue/messages', payload => {
             const msg = JSON.parse(payload.body);
-            
-            // 🔴 CRITICAL FIX: Refresh Messages List Instantly
-            fetchRecentChats(); 
-
-            // If Chat Modal is Open with this person, append message
+            fetchRecentChats(); // Auto-refresh list
             if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
                 displayPrivateMsg(msg);
-            } 
-            // Else show notification
-            else if (msg.senderName !== myEmail) {
-                showToastNotification(msg.senderName, msg.content);
-                const badge = document.getElementById("msgBadge");
-                if(badge) badge.classList.remove("d-none");
+            } else if (msg.senderName !== myEmail) {
+                document.getElementById("msgBadge").classList.remove("d-none");
+                const toastBody = document.getElementById("toastBody");
+                toastBody.innerText = `${msg.senderName}: ${msg.content}`;
+                new bootstrap.Toast(document.getElementById('liveToast')).show();
             }
         });
-    }, function() { 
-        const statusEl = document.getElementById("chatStatus");
-        if(statusEl) {
-            statusEl.innerText = "Offline";
-            statusEl.className = "badge bg-danger ms-2";
-        }
     });
 }
 
-function showToastNotification(sender, content) {
-    const toastBody = document.getElementById("toastBody");
-    if(toastBody) {
-        toastBody.innerText = `${sender}: ${content}`;
-        const toastEl = document.getElementById('liveToast');
-        if(toastEl) new bootstrap.Toast(toastEl).show();
-    }
+function sendPrivateMessage() {
+    const input = document.getElementById("privMsgInput");
+    const content = input.value.trim();
+    if(!content) return;
+    stompClient.send("/app/chat.private", {}, JSON.stringify({ senderName: myEmail, receiverName: currentChatPartner, content: content, type: 'CHAT' }));
+    displayPrivateMsg({ senderName: myEmail, content: content });
+    input.value = "";
 }
 
-// --- CHAT HELPERS ---
+function displayPrivateMsg(msg) {
+    const area = document.getElementById("privateChatArea");
+    const isMe = msg.senderName === myEmail; // Now works correctly
+    area.innerHTML += `<div class="message ${isMe?'my-message':'other-message'}">${msg.content}</div>`;
+    area.scrollTop = area.scrollHeight;
+}
 
+// ================= MODULE 4: DIRECTORY (ADVANCED) =================
+function debouncedSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(runSearch, 400); }
+
+async function runSearch() {
+    const q = document.getElementById("dirSearch").value;
+    const role = document.getElementById("filterRole").value;
+    const batch = document.getElementById("filterBatch").value;
+    
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
+
+    try {
+        const url = `${API_URL}/users/search?role=${role}&batch=${batch}&q=${encodeURIComponent(q)}`;
+        const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+        if(res.ok) {
+            const users = await res.json();
+            tbody.innerHTML = "";
+            if(users.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4">No users found.</td></tr>`; return; }
+            
+            users.forEach(u => {
+                if(u.email === myEmail) return;
+                const initial = u.name.charAt(0).toUpperCase();
+                tbody.innerHTML += `
+                    <tr class="user-row" onclick='openChatWithUser(${JSON.stringify(u)})'>
+                        <td><div class="avatar-circle small">${initial}</div></td>
+                        <td><div class="fw-bold text-dark">${u.name}</div><small class="text-muted">${u.headline||u.role}</small></td>
+                        <td><span class="badge ${u.role==='ALUMNI'?'bg-success':'bg-primary'}">${u.role}</span></td>
+                        <td><button class="btn btn-sm btn-outline-primary"><i class="fas fa-paper-plane"></i></button></td>
+                    </tr>`;
+            });
+        }
+    } catch(e) { console.error(e); }
+}
+
+// ================= GLOBAL CHAT & JOBS & WALL =================
 function sendMessage() {
     const input = document.getElementById("messageInput");
     if(input.value.trim()) {
@@ -238,51 +234,48 @@ function sendMessage() {
         input.value = "";
     }
 }
-
 function displayGlobalMsg(msg) {
     const area = document.getElementById("chatArea");
-    if(area) {
-        area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
-        area.scrollTop = area.scrollHeight;
-    }
+    area.innerHTML += `<div class="message ${msg.senderName===userName?'my-message':'other-message'}"><b>${msg.senderName}:</b> ${msg.content}</div>`;
+    area.scrollTop = area.scrollHeight;
 }
 
-async function loadChatHistory(partner) {
-    const res = await fetch(`${API_URL}/messages/history?partnerEmail=${partner}`, { headers: { "Authorization": `Bearer ${token}` } });
+async function fetchJobs() {
+    const res = await fetch(`${API_URL}/jobs`, { headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) {
-        const msgs = await res.json();
-        const area = document.getElementById("privateChatArea");
-        area.innerHTML = "";
-        msgs.forEach(m => displayPrivateMsg({ senderName: m.senderEmail, content: m.content }));
+        const jobs = await res.json();
+        const list = document.getElementById("jobList");
+        list.innerHTML = "";
+        jobs.forEach(j => {
+            list.innerHTML += `<div class="card p-3 mb-2 shadow-sm job-card"><h5>${j.title}</h5><h6 class="text-muted">${j.company}</h6><p>${j.description}</p><a href="mailto:${j.applyLink}" class="btn btn-sm btn-outline-primary">Apply</a></div>`;
+        });
     }
 }
-
-function sendPrivateMessage() {
-    const input = document.getElementById("privMsgInput");
-    const content = input.value.trim();
-    if(!content) return;
-    
-    stompClient.send("/app/chat.private", {}, JSON.stringify({ senderName: myEmail, receiverName: currentChatPartner, content: content, type: 'CHAT' }));
-    
-    // Immediate UI Update (Optimistic update)
-    displayPrivateMsg({ senderName: myEmail, content: content });
-    input.value = "";
+async function postJob() {
+    const data = {
+        title: document.getElementById("jobTitle").value,
+        company: document.getElementById("jobCompany").value,
+        location: document.getElementById("jobLocation").value,
+        description: document.getElementById("jobDesc").value,
+        applyLink: document.getElementById("jobLink").value
+    };
+    const res = await fetch(`${API_URL}/jobs`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if(res.ok) { bootstrap.Modal.getInstance(document.getElementById('postJobModal')).hide(); fetchJobs(); }
 }
 
-function displayPrivateMsg(msg) {
-    const area = document.getElementById("privateChatArea");
-    if(area) {
-        const isMe = msg.senderName === myEmail;
-        area.innerHTML += `<div class="message ${isMe?'my-message':'other-message'}">${msg.content}</div>`;
-        area.scrollTop = area.scrollHeight;
+async function fetchPosts() {
+    const res = await fetch(`${API_URL}/posts`, { headers: { "Authorization": `Bearer ${token}` } });
+    if(res.ok) {
+        const posts = await res.json();
+        const feed = document.getElementById("feedArea");
+        feed.innerHTML = "";
+        posts.forEach(p => {
+            const imgHtml = p.imageUrl ? `<img src="${p.imageUrl}" class="img-fluid rounded mt-2" style="max-height:300px">` : '';
+            feed.innerHTML += `<div class="card p-3 mb-3 shadow-sm"><div class="fw-bold">${p.author.name}</div><p>${p.content}</p>${imgHtml}</div>`;
+        });
     }
 }
-
-// ==========================================
-// PLACEHOLDERS (Jobs, Wall, Profile)
-// ==========================================
-function fetchJobs() { console.log("Jobs placeholder"); }
-function fetchPosts() { console.log("Posts placeholder"); }
-function loadProfile() { console.log("Profile placeholder"); }
-function createPost() {} 
-function saveProfile() {}
+async function createPost() {
+    const res = await fetch(`${API_URL}/posts`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ content: document.getElementById("postContent").value, imageUrl: document.getElementById("postImage").value }) });
+    if(res.ok) fetchPosts();
+}
