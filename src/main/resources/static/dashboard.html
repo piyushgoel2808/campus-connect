@@ -197,6 +197,7 @@
                 <div id="view-admin" class="d-none">
                     <div class="content-card p-4">
                         <h4 class="mb-4">Admin Controls</h4>
+                        
                         <div class="card bg-light border-0 mb-4">
                             <div class="card-body">
                                 <h6 class="fw-bold mb-3">Onboard New User</h6>
@@ -218,6 +219,19 @@
                                             <i class="fas fa-plus-circle me-1"></i> Create User
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card bg-info bg-opacity-10 border-0 mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3"><i class="fas fa-bullhorn me-2"></i>Alumni Broadcast</h6>
+                                <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Email Subject">
+                                <textarea id="broadcastBody" class="form-control mb-2" rows="3" placeholder="Message content..."></textarea>
+                                <div class="text-end">
+                                    <button class="btn btn-primary btn-sm" onclick="sendBroadcast()">
+                                        <i class="fas fa-paper-plane me-1"></i> Send to All
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -301,7 +315,6 @@
     <script src="dashboard.js"></script>
     
     <script>
-        // Simple UI Tweak for Wall Input
         document.getElementById('postContent').addEventListener('focus', function() {
             document.getElementById('expandPost').classList.add('show');
             this.rows = 3;

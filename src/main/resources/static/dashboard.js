@@ -24,7 +24,7 @@ if (!token) {
     // 3. Initial Load
     fetchUsers();
     connectToChat();
-    checkPasswordStatus(); // NEW: Check password on startup
+    checkPasswordStatus(); 
 }
 
 // --- NAVIGATION ---
@@ -34,7 +34,7 @@ function switchTab(tabName) {
     document.getElementById("view-jobs").classList.add("d-none");
     document.getElementById("view-wall").classList.add("d-none");
     document.getElementById("view-profile").classList.add("d-none");
-    document.getElementById("view-admin").classList.add("d-none"); // NEW: Hide Admin
+    document.getElementById("view-admin").classList.add("d-none");
 
     // Show selected
     document.getElementById(`view-${tabName}`).classList.remove("d-none");
@@ -43,10 +43,7 @@ function switchTab(tabName) {
     if (tabName === 'jobs') fetchJobs();
     if (tabName === 'wall') fetchPosts();
     if (tabName === 'profile') loadProfile();
-    // NEW: Load Admin Data
-    if (tabName === 'admin') {
-        loadAdminUsers();
-    }
+    if (tabName === 'admin') loadAdminUsers();
 }
 
 function logout() {
@@ -131,7 +128,7 @@ async function postJob() {
     } else { alert("Failed to post job."); }
 }
 
-// ================= MODULE 3: MEMORY WALL =================
+// ================= MODULE 3: MEMORY WALL (Updated with Delete) =================
 async function fetchPosts() {
     try {
         const response = await fetch(`${API_URL}/posts`, {
@@ -147,8 +144,15 @@ async function fetchPosts() {
                 const initial = post.author.name.charAt(0).toUpperCase();
                 const imageHtml = post.imageUrl ? `<img src="${post.imageUrl}" class="img-fluid rounded mt-2" style="max-height:300px; width:100%; object-fit:cover;">` : '';
                 
+                // CHECK: Is current user ADMIN or the Author?
+                let deleteBtn = "";
+                if (userRole === "ADMIN" || post.author.name === userName) {
+                    deleteBtn = `<button class="btn btn-sm text-danger position-absolute top-0 end-0 m-2" onclick="deletePost(${post.id})"><i class="fas fa-times"></i></button>`;
+                }
+                
                 feed.innerHTML += `
-                    <div class="content-card p-3">
+                    <div class="content-card p-3 position-relative">
+                        ${deleteBtn}
                         <div class="d-flex align-items-center mb-2">
                             <div class="bg-light rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold text-secondary" style="width:35px; height:35px;">${initial}</div>
                             <div>
@@ -251,7 +255,7 @@ function connectToChat() {
     stompClient.connect({}, function () {
         document.getElementById("chatStatus").className = "badge bg-success rounded-pill";
         document.getElementById("chatStatus").innerText = "Online";
-        document.getElementById("chatArea").innerHTML = ""; // Clear connecting msg
+        document.getElementById("chatArea").innerHTML = ""; 
         
         stompClient.subscribe('/topic/public', function (payload) {
             displayMessage(JSON.parse(payload.body));
@@ -300,13 +304,9 @@ async function checkPasswordStatus() {
         });
         if (response.ok) {
             const user = await response.json();
-
-            // 1. Show Admin Tab if user is Admin
             if (user.role === 'ADMIN') {
                 document.getElementById('tab-admin').classList.remove('d-none');
             }
-
-            // 2. Check if password needs change
             if (user.passwordChanged === false) {
                 new bootstrap.Modal(document.getElementById('passwordModal')).show();
             }
@@ -319,7 +319,7 @@ async function adminCreateUser() {
         name: document.getElementById("adminName").value,
         email: document.getElementById("adminEmail").value,
         role: document.getElementById("adminRole").value,
-        password: "placeholder" // Backend ignores this and sets default
+        password: "placeholder"
     };
 
     try {
@@ -333,7 +333,7 @@ async function adminCreateUser() {
             alert("User Created! Default Password: Bvicam@2025");
             document.getElementById("adminName").value = "";
             document.getElementById("adminEmail").value = "";
-            loadAdminUsers(); // Refresh list
+            loadAdminUsers(); 
         } else {
             alert("Failed to create user.");
         }
@@ -375,7 +375,6 @@ async function changePassword() {
     const newPass = document.getElementById("newPassword").value;
     if(newPass.length < 4) return alert("Password too short!");
 
-    // Fetch 'me' to get email
     const meResponse = await fetch(`${API_URL}/users/me`, { headers: { "Authorization": `Bearer ${token}` } });
     const meParams = await meResponse.json();
 
@@ -389,4 +388,34 @@ async function changePassword() {
         alert("Password Changed! Please Login again.");
         logout();
     }
+}
+
+// NEW: Broadcast Function
+async function sendBroadcast() {
+    if(!confirm("Send this email to EVERYONE?")) return;
+
+    const subject = document.getElementById("broadcastSubject").value;
+    const body = document.getElementById("broadcastBody").value;
+
+    const response = await fetch(`${API_URL}/admin/broadcast`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: subject, body: body })
+    });
+
+    if(response.ok) {
+        alert("Broadcast Started! Check server logs.");
+        document.getElementById("broadcastSubject").value = "";
+        document.getElementById("broadcastBody").value = "";
+    }
+}
+
+// NEW: Delete Post Function
+async function deletePost(id) {
+    if(!confirm("Delete this post?")) return;
+    const response = await fetch(`${API_URL}/posts/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+    });
+    if(response.ok) fetchPosts();
 }
