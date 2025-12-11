@@ -1,0 +1,38 @@
+### Register a New Student
+POST http://localhost:8080/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "student1@bvicam.in",
+  "password": "MySecurePassword123",
+  "name": "Rahul Sharma",
+  "role": "STUDENT",
+  "enrollmentNumber": "001020304"
+}
+
+### Login with that Student
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "student1@bvicam.in",
+  "password": "MySecurePassword123"
+}
+
+
+### Get All Jobs
+GET http://localhost:8080/api/jobs
+Authorization: Bearer <PASTE_YOUR_TOKEN_HERE>
+
+### Post a Job (You must login as ALUMNI first to do this successfully!)
+POST http://localhost:8080/api/jobs
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHVkZW50MUBidmljYW0uaW4iLCJpYXQiOjE3NjU0NjY5OTIsImV4cCI6MTc2NTUwMjk5Mn0.UNprbcR1VvABfL4qjOT0Sv2VAbGB6dFCgxQNR-0iVA4
+Content-Type: application/json
+
+{
+  "title": "Software Engineer Intern",
+  "company": "Google",
+  "location": "Bangalore",
+  "description": "Looking for Java developers.",
+  "applyLink": "careers@google.com"
+}
