@@ -491,6 +491,8 @@ function openEditUserModal(user) {
     document.getElementById("editName").value = user.name;
     document.getElementById("editEmail").value = user.email;
     document.getElementById("editRole").value = user.role;
+    // ✅ Load Batch Year (New Fix)
+    document.getElementById("editBatch").value = user.batchYear || "";
     document.getElementById("editHeadline").value = user.headline || "";
     document.getElementById("editSkills").value = user.skills || "";
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
@@ -502,6 +504,8 @@ async function adminSaveUser() {
         name: document.getElementById("editName").value,
         email: document.getElementById("editEmail").value,
         role: document.getElementById("editRole").value,
+        // ✅ Send Batch Year (New Fix)
+        batchYear: document.getElementById("editBatch").value,
         headline: document.getElementById("editHeadline").value,
         skills: document.getElementById("editSkills").value
     };

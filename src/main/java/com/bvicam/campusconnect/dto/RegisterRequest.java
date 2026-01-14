@@ -4,9 +4,12 @@ import lombok.Data;
 
 @Data
 public class RegisterRequest {
-    private String email;
-    private String password; // Plain text password from user
     private String name;
-    private String role;     // STUDENT, ALUMNI
+    private String email;
+    private String password;
+    private String role; // STUDENT or ALUMNI
     private String enrollmentNumber;
+
+    // ✅ ADD THIS MISSING FIELD
+    private Integer batchYear;
 }

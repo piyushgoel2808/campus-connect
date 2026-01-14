@@ -1,9 +1,8 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.RegisterRequest;
-import com.bvicam.campusconnect.entity.Post;
 import com.bvicam.campusconnect.entity.User;
-import com.bvicam.campusconnect.repository.PostRepository; // ✅ Added Import
+import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
 import com.bvicam.campusconnect.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,17 +16,22 @@ import java.util.Map;
 @RequestMapping("/api/admin")
 public class AdminController {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
+    private final PostRepository postRepository; // ✅ Fixed: Repository is now available
 
+    // ✅ Constructor Injection (Removes "Field injection not recommended" warning)
     @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private EmailService emailService;
-
-    @Autowired
-    private PostRepository postRepository; // ✅ FIXED: Added this missing piece!
+    public AdminController(UserRepository userRepository,
+                           PasswordEncoder passwordEncoder,
+                           EmailService emailService,
+                           PostRepository postRepository) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
+        this.postRepository = postRepository;
+    }
 
     // 1. Create User (Onboarding)
     @PostMapping("/create-user")
@@ -42,9 +46,15 @@ public class AdminController {
         user.setRole(request.getRole());
         user.setEnrollmentNumber(request.getEnrollmentNumber());
 
+        // Default password logic
         String defaultPass = "Bvicam@2025";
         user.setPasswordHash(passwordEncoder.encode(defaultPass));
         user.setPasswordChanged(false);
+
+        // ✅ Fixed: Saves Batch Year (Requires RegisterRequest to have getBatchYear())
+        if (request.getBatchYear() != null) {
+            user.setBatchYear(request.getBatchYear());
+        }
 
         userRepository.save(user);
         return ResponseEntity.ok("User created with default password: " + defaultPass);
@@ -66,6 +76,10 @@ public class AdminController {
         String subject = payload.get("subject");
         String body = payload.get("body");
 
+        if (subject == null || body == null) {
+            return ResponseEntity.badRequest().body("Subject and body are required");
+        }
+
         emailService.sendBroadcastEmail(subject, body);
         return ResponseEntity.ok("Broadcast started in background!");
     }
@@ -73,6 +87,7 @@ public class AdminController {
     // 4. Moderate Content (Delete Any Post)
     @DeleteMapping("/delete-post/{id}")
     public ResponseEntity<?> deletePost(@PathVariable Long id) {
+        // ✅ Fixed: Now uses the injected postRepository
         if (!postRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
@@ -80,22 +95,35 @@ public class AdminController {
         return ResponseEntity.ok("Post deleted by Admin.");
     }
 
-    // 5. Edit Any User
-// 5. Edit Any User (The critical missing link)
+    // 5. Update User (Robust Version)
     @PutMapping("/users/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
-        User user = userRepository.findById(id).orElseThrow();
+        System.out.println("📝 Admin attempting to update user ID: " + id);
 
-        // Update ALL fields
-        user.setName(updatedData.getName());
-        user.setEmail(updatedData.getEmail());
-        user.setRole(updatedData.getRole());
-        user.setBatchYear(updatedData.getBatchYear());
-        user.setHeadline(updatedData.getHeadline());
-        user.setCurrentCompany(updatedData.getCurrentCompany());
-        user.setSkills(updatedData.getSkills());
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        userRepository.save(user);
-        return ResponseEntity.ok("User updated successfully.");
+        // Update fields safely
+        if (updatedData.getName() != null) user.setName(updatedData.getName());
+        if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail());
+        if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
+
+        // Update Batch Year
+        if (updatedData.getBatchYear() != null) user.setBatchYear(updatedData.getBatchYear());
+
+        // Update Professional details
+        if (updatedData.getHeadline() != null) user.setHeadline(updatedData.getHeadline());
+        if (updatedData.getSkills() != null) user.setSkills(updatedData.getSkills());
+        if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
+
+        try {
+            userRepository.save(user);
+            System.out.println("✅ User " + id + " updated successfully!");
+            return ResponseEntity.ok("User updated successfully.");
+        } catch (Exception e) {
+            System.err.println("❌ Error saving user: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
     }
 }
