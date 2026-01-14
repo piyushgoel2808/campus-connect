@@ -1,4 +1,4 @@
-// --- CONFIGURATION ---
+// ================= CONFIGURATION =================
 const API_URL = "/api";
 const WS_URL = "/ws";
 const token = localStorage.getItem("jwt_token");
@@ -11,7 +11,7 @@ let currentChatPartner = null;
 let searchTimeout = null;
 let selectedUserForModal = null;
 
-// --- INITIALIZATION ---
+// ================= INITIALIZATION =================
 if (!token) {
     window.location.href = "login.html";
 } else {
@@ -34,7 +34,7 @@ if (!token) {
     connectToChat();
 }
 
-// --- DYNAMIC CONTENT LOADING (WITH CACHE BUSTER & ADMIN FIX) ---
+// ================= DYNAMIC CONTENT LOADING =================
 async function switchTab(tab) {
     // 1. Highlight UI
     document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
@@ -57,11 +57,10 @@ async function switchTab(tab) {
         if (tab === 'directory') runSearch();
         if (tab === 'wall') fetchPosts();
         if (tab === 'profile') loadProfile();
-        
+
         if (tab === 'events') {
             fetchEvents();
             if (userRole === "ADMIN") {
-                // Wait for HTML to render before finding button
                 setTimeout(() => {
                     const btnAdd = document.getElementById("btnAddEvent");
                     if (btnAdd) btnAdd.classList.remove("d-none");
@@ -77,7 +76,7 @@ async function switchTab(tab) {
             }
         }
 
-        // ✅ ADMIN LOGIC FIX
+        // ✅ ADMIN LOGIC
         if (tab === 'admin') {
             if (userRole !== 'ADMIN') {
                 container.innerHTML = `<div class="alert alert-danger m-5">⛔ Access Denied</div>`;
@@ -86,13 +85,11 @@ async function switchTab(tab) {
 
                 // 🔥 CRITICAL FIX: Attach listener to Feedback Tab after HTML loads
                 setTimeout(() => {
-                    // Try to find the tab by typical Bootstrap attributes
                     const feedbackTab = document.querySelector('button[data-bs-target="#feedback"], a[href="#feedback"], #tab-feedback-btn');
                     const usersTab = document.querySelector('button[data-bs-target="#users"], a[href="#users"], #tab-users-btn');
-                    
+
                     if(feedbackTab) {
                         feedbackTab.addEventListener('click', loadAdminFeedback);
-                        console.log("Feedback listener attached");
                     }
                     if(usersTab) {
                         usersTab.addEventListener('click', loadAdminUsers);
@@ -157,7 +154,7 @@ async function runSearch() {
     const q = document.getElementById("dirSearch").value;
     const role = document.getElementById("filterRole").value;
     const batch = document.getElementById("filterBatch").value;
-    
+
     const tbody = document.getElementById("tableBody");
     tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
 
@@ -178,10 +175,10 @@ function renderDirectoryTable(users) {
 
     users.forEach(u => {
         if (u.email === myEmail) return;
-        
+
         const initial = u.name.charAt(0).toUpperCase();
         let actionBtns = `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openChatWithUser(${JSON.stringify(u)})"><i class="fas fa-paper-plane"></i></button>`;
-        
+
         if (userRole === 'ADMIN') {
             actionBtns += ` <button class="btn btn-sm btn-outline-dark ms-1" onclick='event.stopPropagation(); openEditUserModal(${JSON.stringify(u)})'><i class="fas fa-edit"></i></button>`;
         }
@@ -224,12 +221,12 @@ function connectToChat() {
              status.innerText = "Online";
              status.className = "badge bg-success ms-2";
         }
-        
+
         stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
-        
+
         stompClient.subscribe('/user/queue/messages', payload => {
             const msg = JSON.parse(payload.body);
-            if(document.getElementById("recentChatsList")) fetchRecentChats(); 
+            if(document.getElementById("recentChatsList")) fetchRecentChats();
 
             if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
                 displayPrivateMsg(msg);
@@ -243,9 +240,9 @@ function connectToChat() {
                 }
             }
         });
-    }, function() { 
+    }, function() {
         const status = document.getElementById("chatStatus");
-        if(status) status.innerText = "Offline"; 
+        if(status) status.innerText = "Offline";
     });
 }
 
@@ -420,7 +417,7 @@ async function fetchEvents() {
         if(list) {
             list.innerHTML = "";
             if(events.length === 0) list.innerHTML = `<div class="text-center py-5 text-muted">No upcoming events.</div>`;
-            
+
             events.forEach(e => {
                 const date = new Date(e.dateTime).toLocaleString();
                 list.innerHTML += `
@@ -461,7 +458,7 @@ async function deleteEvent(id) {
     fetchEvents();
 }
 
-// ================= MODULE 6: ADMIN =================
+// ================= MODULE 6: ADMIN USERS =================
 async function loadAdminUsers() {
     const res = await fetch(`${API_URL}/users`, { headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) {
@@ -491,7 +488,6 @@ function openEditUserModal(user) {
     document.getElementById("editName").value = user.name;
     document.getElementById("editEmail").value = user.email;
     document.getElementById("editRole").value = user.role;
-    // ✅ Load Batch Year (New Fix)
     document.getElementById("editBatch").value = user.batchYear || "";
     document.getElementById("editHeadline").value = user.headline || "";
     document.getElementById("editSkills").value = user.skills || "";
@@ -504,12 +500,11 @@ async function adminSaveUser() {
         name: document.getElementById("editName").value,
         email: document.getElementById("editEmail").value,
         role: document.getElementById("editRole").value,
-        // ✅ Send Batch Year (New Fix)
         batchYear: document.getElementById("editBatch").value,
         headline: document.getElementById("editHeadline").value,
         skills: document.getElementById("editSkills").value
     };
-    
+
     const res = await fetch(`${API_URL}/admin/users/${id}`, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
     if(res.ok) {
         alert("✅ User Updated Successfully!");
@@ -526,11 +521,11 @@ async function adminCreateUser() {
         email: document.getElementById("newUserEmail").value,
         role: document.getElementById("newUserRole").value,
         batchYear: document.getElementById("newUserBatch").value,
-        password: "placeholder" 
+        password: "placeholder"
     };
 
     const res = await fetch(`${API_URL}/admin/create-user`, { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    
+
     if(res.ok) {
         alert("User Created! Default Pass: Bvicam@2025");
         bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
@@ -544,7 +539,7 @@ async function deleteUser(id) {
     if(res.ok) loadAdminUsers();
 }
 
-// ================= MODULE: FEEDBACK SYSTEM =================
+// ================= MODULE 7: ADMIN FEEDBACK & BULK UPLOAD =================
 function openFeedbackModal() {
     new bootstrap.Modal(document.getElementById('feedbackModal')).show();
 }
@@ -552,13 +547,13 @@ function openFeedbackModal() {
 async function submitFeedback() {
     const rating = document.getElementById("fbRating").value;
     const comment = document.getElementById("fbComment").value;
-    
+
     const res = await fetch(`${API_URL}/feedback`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ rating: parseInt(rating), comments: comment })
     });
-    
+
     if(res.ok) {
         alert("Thank you for your feedback!");
         bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
@@ -568,7 +563,6 @@ async function submitFeedback() {
     }
 }
 
-// ✅ FIXED: This function is now correctly called by the listener in switchTab
 async function loadAdminFeedback() {
     const tbody = document.getElementById("adminFeedbackTable");
     if(!tbody) {
@@ -582,7 +576,7 @@ async function loadAdminFeedback() {
         if(res.ok) {
             const feedbacks = await res.json();
             tbody.innerHTML = "";
-            
+
             if (feedbacks.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">No feedback received yet.</td></tr>`;
                 return;
@@ -591,7 +585,7 @@ async function loadAdminFeedback() {
             feedbacks.forEach(f => {
                 const stars = "⭐".repeat(f.rating);
                 const date = new Date(f.submittedAt).toLocaleDateString();
-                
+
                 tbody.innerHTML += `
                     <tr>
                         <td>
@@ -606,5 +600,54 @@ async function loadAdminFeedback() {
         }
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Error loading feedback.</td></tr>`;
+    }
+}
+
+async function uploadBulkDataExcel() {
+    console.log("Button Clicked!"); // Debugging
+
+    const fileInput = document.getElementById("bulkFileExcel");
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("⚠️ Please select an Excel file (.xlsx)!");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Find the button to show loading state
+    const btn = document.querySelector("button[onclick='uploadBulkDataExcel()']");
+    if (btn) {
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Processing...`;
+        btn.disabled = true;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/upload-users-excel`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: formData
+        });
+
+        const text = await res.text();
+        console.log("Server Response:", text);
+
+        if (res.ok) {
+            alert(text);
+            fileInput.value = ""; // Clear input
+            if(typeof loadAdminUsers === "function") loadAdminUsers(); // Refresh table
+        } else {
+            alert("❌ Upload Failed: " + text);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Network Error: " + e.message);
+    } finally {
+        if (btn) {
+            btn.innerHTML = `<i class="fas fa-upload me-1"></i> Upload .xlsx`;
+            btn.disabled = false;
+        }
     }
 }

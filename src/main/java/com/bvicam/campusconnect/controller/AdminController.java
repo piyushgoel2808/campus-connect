@@ -9,6 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.InputStream;
+import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.usermodel.*;
 
 import java.util.Map;
 
@@ -124,6 +129,73 @@ public class AdminController {
             System.err.println("❌ Error saving user: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
+    }
+    // 8. Bulk Upload Users via EXCEL (.xlsx)
+    @PostMapping("/upload-users-excel")
+    public ResponseEntity<?> uploadUsersExcel(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) return ResponseEntity.badRequest().body("Please select an Excel file.");
+
+        try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            int count = 0;
+            int rowNum = 0;
+
+            for (Row row : sheet) {
+                // Skip Header Row
+                if (rowNum++ == 0) continue;
+
+                // 1. Mandatory Fields
+                String name = getCellValue(row.getCell(0));
+                String email = getCellValue(row.getCell(1));
+                String role = getCellValue(row.getCell(2)).toUpperCase();
+
+                // Validation: Skip empty rows or duplicates
+                if (name.isEmpty() || email.isEmpty() || userRepository.existsByEmail(email)) continue;
+
+                User user = new User();
+                user.setName(name);
+                user.setEmail(email);
+                user.setRole(role);
+
+                // 2. Numeric Fields (Batch Year)
+                try {
+                    String batchStr = getCellValue(row.getCell(3));
+                    if (!batchStr.isEmpty()) {
+                        user.setBatchYear((int) Double.parseDouble(batchStr));
+                    }
+                } catch (Exception e) { /* Ignore number errors */ }
+
+                // 3. Optional String Fields (Cols 4 - 11)
+                user.setEnrollmentNumber(getCellValue(row.getCell(4)));
+                user.setCurrentCompany(getCellValue(row.getCell(5)));
+                user.setDesignation(getCellValue(row.getCell(6)));
+                user.setHeadline(getCellValue(row.getCell(7)));
+                user.setSkills(getCellValue(row.getCell(8)));
+                user.setGithubUrl(getCellValue(row.getCell(9)));
+                user.setLinkedinUrl(getCellValue(row.getCell(10)));
+                user.setPastExperience(getCellValue(row.getCell(11)));
+
+                // 4. System Defaults (Security)
+                user.setPasswordHash(passwordEncoder.encode("Bvicam@2025")); // Default Password
+                user.setPasswordChanged(false);
+
+                userRepository.save(user);
+                count++;
+            }
+            return ResponseEntity.ok("✅ Uploaded " + count + " users successfully!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
+    }
+    // Helper to extract string from any cell type (String or Numeric)
+    private String getCellValue(Cell cell) {
+        if (cell == null) return "";
+        switch (cell.getCellType()) {
+            case STRING: return cell.getStringCellValue().trim();
+            case NUMERIC: return String.valueOf(cell.getNumericCellValue());
+            default: return "";
         }
     }
 }
