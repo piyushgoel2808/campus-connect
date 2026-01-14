@@ -170,46 +170,75 @@
     </div>
 
     <div class="modal fade" id="editUserModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-warning">
-                    <h5 class="modal-title">Edit User (Admin)</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="editUserId">
-                    
-                    <label class="small fw-bold">Full Name</label>
-                    <input type="text" id="editName" class="form-control mb-2">
-                    
-                    <label class="small fw-bold">Email</label>
-                    <input type="email" id="editEmail" class="form-control mb-2">
-                    
-                    <div class="row">
-                        <div class="col-6">
-                            <label class="small fw-bold">Role</label>
-                            <select id="editRole" class="form-select mb-2">
-                                <option value="STUDENT">Student</option>
-                                <option value="ALUMNI">Alumni</option>
-                                <option value="ADMIN">Admin</option>
-                            </select>
+        <div class="modal-dialog modal-lg"> <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">Edit User (Full Admin Access)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold text-primary">Basic Info</h6>
+                        <label class="small">Full Name</label>
+                        <input type="text" id="editName" class="form-control mb-2">
+
+                        <label class="small">Email</label>
+                        <input type="email" id="editEmail" class="form-control mb-2">
+
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="small">Role</label>
+                                <select id="editRole" class="form-select mb-2">
+                                    <option value="STUDENT">Student</option>
+                                    <option value="ALUMNI">Alumni</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="small">Batch</label>
+                                <input type="number" id="editBatch" class="form-control mb-2">
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <label class="small fw-bold">Batch Year</label>
-                            <input type="number" id="editBatch" class="form-control mb-2" placeholder="2024">
-                        </div>
+                        <label class="small">Enrollment No.</label>
+                        <input type="text" id="editEnrollment" class="form-control mb-2">
                     </div>
 
-                    <label class="small fw-bold">Headline</label>
-                    <input type="text" id="editHeadline" class="form-control mb-2">
-                    
-                    <label class="small fw-bold">Skills</label>
-                    <input type="text" id="editSkills" class="form-control">
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary w-100" onclick="adminSaveUser()">Save Changes</button>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold text-success">Professional Profile</h6>
+                        <label class="small">Headline</label>
+                        <input type="text" id="editHeadline" class="form-control mb-2">
+
+                        <label class="small">Company</label>
+                        <input type="text" id="editCompany" class="form-control mb-2">
+
+                        <label class="small">Designation</label>
+                        <input type="text" id="editDesignation" class="form-control mb-2">
+
+                        <label class="small">Skills</label>
+                        <input type="text" id="editSkills" class="form-control mb-2">
+
+                        <label class="small">LinkedIn URL</label>
+                        <input type="text" id="editLinkedin" class="form-control mb-2">
+                    </div>
+
+                    <div class="col-12">
+                        <label class="small">Past Experience / Bio</label>
+                        <textarea id="editExperience" class="form-control" rows="2"></textarea>
+                    </div>
                 </div>
             </div>
+            <div class="modal-footer justify-content-between">
+                <button class="btn btn-outline-danger" onclick="adminResetPassword()">
+                    <i class="fas fa-key me-1"></i> Reset Password
+                </button>
+
+                <button class="btn btn-primary px-4" onclick="adminSaveUser()">
+                    <i class="fas fa-save me-1"></i> Save Changes
+                </button>
+            </div>
+        </div>
         </div>
     </div>
 

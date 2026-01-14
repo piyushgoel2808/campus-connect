@@ -485,33 +485,55 @@ async function loadAdminUsers() {
 
 function openEditUserModal(user) {
     document.getElementById("editUserId").value = user.id;
-    document.getElementById("editName").value = user.name;
-    document.getElementById("editEmail").value = user.email;
-    document.getElementById("editRole").value = user.role;
+
+    // Basic
+    document.getElementById("editName").value = user.name || "";
+    document.getElementById("editEmail").value = user.email || "";
+    document.getElementById("editRole").value = user.role || "STUDENT";
     document.getElementById("editBatch").value = user.batchYear || "";
+    document.getElementById("editEnrollment").value = user.enrollmentNumber || "";
+
+    // Professional
     document.getElementById("editHeadline").value = user.headline || "";
+    document.getElementById("editCompany").value = user.currentCompany || "";
+    document.getElementById("editDesignation").value = user.designation || "";
     document.getElementById("editSkills").value = user.skills || "";
+    document.getElementById("editLinkedin").value = user.linkedinUrl || "";
+    document.getElementById("editExperience").value = user.pastExperience || "";
+
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
 }
 
 async function adminSaveUser() {
     const id = document.getElementById("editUserId").value;
+
     const data = {
         name: document.getElementById("editName").value,
         email: document.getElementById("editEmail").value,
         role: document.getElementById("editRole").value,
         batchYear: document.getElementById("editBatch").value,
+        enrollmentNumber: document.getElementById("editEnrollment").value,
+
         headline: document.getElementById("editHeadline").value,
-        skills: document.getElementById("editSkills").value
+        currentCompany: document.getElementById("editCompany").value,
+        designation: document.getElementById("editDesignation").value,
+        skills: document.getElementById("editSkills").value,
+        linkedinUrl: document.getElementById("editLinkedin").value,
+        pastExperience: document.getElementById("editExperience").value
     };
 
-    const res = await fetch(`${API_URL}/admin/users/${id}`, { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const res = await fetch(`${API_URL}/admin/users/${id}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+
     if(res.ok) {
-        alert("✅ User Updated Successfully!");
+        alert("✅ User Profile Updated!");
         bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
         loadAdminUsers();
     } else {
-        alert("❌ Failed to update user.");
+        alert("❌ Update failed.");
     }
 }
 
@@ -537,6 +559,21 @@ async function deleteUser(id) {
     if(!confirm("Are you sure?")) return;
     const res = await fetch(`${API_URL}/admin/delete-user/${id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) loadAdminUsers();
+}
+async function adminResetPassword() {
+    const id = document.getElementById("editUserId").value;
+    if(!confirm("⚠️ Are you sure? This will reset the password to 'Bvicam@2025'.")) return;
+
+    const res = await fetch(`${API_URL}/admin/users/${id}/reset-password`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if(res.ok) {
+        alert("✅ Password reset to 'Bvicam@2025' successfully!");
+    } else {
+        alert("❌ Failed to reset password.");
+    }
 }
 
 // ================= MODULE 7: ADMIN FEEDBACK & BULK UPLOAD =================

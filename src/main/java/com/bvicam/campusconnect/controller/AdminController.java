@@ -11,13 +11,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import java.io.InputStream;
 import org.springframework.web.multipart.MultipartFile;
-import org.apache.poi.ss.usermodel.*;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.IOException; // Good practice to have this too
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Map;
 
 @RestController
@@ -27,9 +25,8 @@ public class AdminController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-    private final PostRepository postRepository; // ✅ Fixed: Repository is now available
+    private final PostRepository postRepository;
 
-    // ✅ Constructor Injection (Removes "Field injection not recommended" warning)
     @Autowired
     public AdminController(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
@@ -54,12 +51,10 @@ public class AdminController {
         user.setRole(request.getRole());
         user.setEnrollmentNumber(request.getEnrollmentNumber());
 
-        // Default password logic
         String defaultPass = "Bvicam@2025";
         user.setPasswordHash(passwordEncoder.encode(defaultPass));
         user.setPasswordChanged(false);
 
-        // ✅ Fixed: Saves Batch Year (Requires RegisterRequest to have getBatchYear())
         if (request.getBatchYear() != null) {
             user.setBatchYear(request.getBatchYear());
         }
@@ -95,7 +90,6 @@ public class AdminController {
     // 4. Moderate Content (Delete Any Post)
     @DeleteMapping("/delete-post/{id}")
     public ResponseEntity<?> deletePost(@PathVariable Long id) {
-        // ✅ Fixed: Now uses the injected postRepository
         if (!postRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
@@ -103,38 +97,44 @@ public class AdminController {
         return ResponseEntity.ok("Post deleted by Admin.");
     }
 
-    // 5. Update User (Robust Version)
+    // 5. Update User (UPDATED: All-Fields Version)
     @PutMapping("/users/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
-        System.out.println("📝 Admin attempting to update user ID: " + id);
+        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
 
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // Update fields safely
+        // Update Standard Fields
         if (updatedData.getName() != null) user.setName(updatedData.getName());
         if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail());
         if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
-
-        // Update Batch Year
         if (updatedData.getBatchYear() != null) user.setBatchYear(updatedData.getBatchYear());
 
-        // Update Professional details
+        // Update Professional Fields (Admin Authority)
+        if (updatedData.getEnrollmentNumber() != null) user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
+        if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
+        if (updatedData.getDesignation() != null) user.setDesignation(updatedData.getDesignation());
         if (updatedData.getHeadline() != null) user.setHeadline(updatedData.getHeadline());
         if (updatedData.getSkills() != null) user.setSkills(updatedData.getSkills());
-        if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
+        if (updatedData.getGithubUrl() != null) user.setGithubUrl(updatedData.getGithubUrl());
+        if (updatedData.getLinkedinUrl() != null) user.setLinkedinUrl(updatedData.getLinkedinUrl());
+        if (updatedData.getPastExperience() != null) user.setPastExperience(updatedData.getPastExperience());
 
-        try {
-            userRepository.save(user);
-            System.out.println("✅ User " + id + " updated successfully!");
-            return ResponseEntity.ok("User updated successfully.");
-        } catch (Exception e) {
-            System.err.println("❌ Error saving user: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("Error: " + e.getMessage());
-        }
+        userRepository.save(user);
+        return ResponseEntity.ok("✅ User updated successfully.");
     }
-    // 8. Bulk Upload Users via EXCEL (.xlsx)
+
+    // 9. Reset User Password (NEW: Admin Only)
+    @PutMapping("/users/{id}/reset-password")
+    public ResponseEntity<?> resetPassword(@PathVariable Long id) {
+        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Reset to default
+        user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
+        user.setPasswordChanged(false); // Force them to change it on next login
+
+        userRepository.save(user);
+        return ResponseEntity.ok("✅ Password reset to 'Bvicam@2025'");
+    }
+
     // 8. Universal Bulk Upload (Supports both .xlsx and .csv)
     @PostMapping("/upload-users-excel")
     public ResponseEntity<?> uploadUsersUniversal(@RequestParam("file") MultipartFile file) {
@@ -144,7 +144,6 @@ public class AdminController {
         if (fileName == null) return ResponseEntity.badRequest().body("Invalid file.");
 
         try {
-            // 🔀 BRANCH LOGIC: Check file extension
             if (fileName.toLowerCase().endsWith(".csv")) {
                 return processCSV(file);
             } else if (fileName.toLowerCase().endsWith(".xlsx")) {
@@ -168,12 +167,10 @@ public class AdminController {
             for (Row row : sheet) {
                 if (rowNum++ == 0) continue; // Skip Header
 
-                // Extract Data using the helper
                 String name = getCellValue(row.getCell(0));
                 String email = getCellValue(row.getCell(1));
                 if (name.isEmpty() || email.isEmpty()) continue;
 
-                // Call the save user logic
                 saveUserFromData(name, email,
                         getCellValue(row.getCell(2)), // Role
                         getCellValue(row.getCell(3)), // Batch
@@ -202,12 +199,11 @@ public class AdminController {
             while ((line = reader.readLine()) != null) {
                 if (rowNum++ == 0) continue; // Skip Header
 
-                // Regex to split by comma ONLY if not inside quotes (Handles "C++, DSA")
+                // Regex to split by comma ONLY if not inside quotes
                 String[] data = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
 
-                if (data.length < 2) continue; // Skip empty rows
+                if (data.length < 2) continue;
 
-                // Clean up quotes from data if present (e.g. "C++, DSA" -> C++, DSA)
                 for(int i=0; i<data.length; i++) {
                     data[i] = data[i].trim().replace("\"", "");
                 }
@@ -216,7 +212,6 @@ public class AdminController {
                 String email = data[1];
                 if (name.isEmpty() || email.isEmpty()) continue;
 
-                // Safely get other fields (check length to prevent index errors)
                 saveUserFromData(name, email,
                         (data.length > 2) ? data[2] : "STUDENT",
                         (data.length > 3) ? data[3] : "",
@@ -240,7 +235,7 @@ public class AdminController {
                                   String company, String desig, String head, String skills,
                                   String git, String linked, String exp) {
 
-        if (userRepository.existsByEmail(email)) return; // Skip duplicates
+        if (userRepository.existsByEmail(email)) return;
 
         User user = new User();
         user.setName(name);
@@ -264,7 +259,7 @@ public class AdminController {
         user.setPasswordChanged(false);
         userRepository.save(user);
     }
-    // Helper to extract string from any cell type (String or Numeric)
+
     private String getCellValue(Cell cell) {
         if (cell == null) return "";
         switch (cell.getCellType()) {
