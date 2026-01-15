@@ -6,6 +6,7 @@ import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
 import com.bvicam.campusconnect.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -64,13 +65,13 @@ public class AdminController {
     }
 
     // 2. Delete User
-    @DeleteMapping("/delete-user/{id}")
+    @DeleteMapping("/users/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
-        userRepository.deleteById(id);
-        return ResponseEntity.ok("User deleted successfully.");
+        userRepository.deleteById(id); // Cascade will now handle the cleanup
+        return ResponseEntity.ok("✅ User and all their data deleted.");
     }
 
     // 3. Broadcast Email

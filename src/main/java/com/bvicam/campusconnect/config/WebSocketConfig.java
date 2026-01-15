@@ -12,10 +12,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // This is the "Door" where the frontend connects to start chatting
+        // Allow connections from ANY domain (localhost or Render)
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // Allow connections from anywhere (Mobile/Web)
-                .withSockJS(); // Fallback options if WebSocket isn't supported
+                .setAllowedOriginPatterns("*") // <--- This is the key fix!
+                .withSockJS();
     }
 
     @Override

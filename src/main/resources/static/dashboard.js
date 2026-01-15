@@ -1,5 +1,5 @@
 // ================= CONFIGURATION =================
-const API_URL = "/api";
+const API_URL = "";
 const WS_URL = "/ws";
 const token = localStorage.getItem("jwt_token");
 const myEmail = localStorage.getItem("user_email");
