@@ -211,41 +211,70 @@ function openPrivateChatFromProfile() {
 
 // ================= MODULE 3: MESSAGING & CHAT =================
 function connectToChat() {
-    const socket = new SockJS(WS_URL);
+    const socket = new SockJS(`${WS_URL}`);
     stompClient = Stomp.over(socket);
-    stompClient.debug = null;
+    stompClient.debug = null; // Disable debug logs to keep console clean
 
-    stompClient.connect({}, function () {
-        const status = document.getElementById("chatStatus");
-        if(status) {
-             status.innerText = "Online";
-             status.className = "badge bg-success ms-2";
-        }
+    stompClient.connect({}, function (frame) {
+        console.log('✅ Connected to WebSocket: ' + frame);
 
-        stompClient.subscribe('/topic/public', payload => displayGlobalMsg(JSON.parse(payload.body)));
+        // 1. Subscribe to Public Chat
+        stompClient.subscribe('/topic/public', function (msg) {
+            showPublicMessage(JSON.parse(msg.body));
+        });
 
-        stompClient.subscribe('/user/queue/messages', payload => {
-            const msg = JSON.parse(payload.body);
-            if(document.getElementById("recentChatsList")) fetchRecentChats();
+        // 2. Subscribe to Private Messages (Unlocks Real-time 1-on-1)
+        // This listens to "/user/queue/messages" which Spring Security routes automatically
+        stompClient.subscribe('/user/queue/messages', function (msg) {
+            const message = JSON.parse(msg.body);
 
-            if (currentChatPartner && (msg.senderName === currentChatPartner || msg.senderName === myEmail)) {
-                displayPrivateMsg(msg);
-            } else if (msg.senderName !== myEmail) {
-                const badge = document.getElementById("msgBadge");
-                if(badge) badge.classList.remove("d-none");
-                const toastBody = document.getElementById("toastBody");
-                if(toastBody) {
-                    toastBody.innerText = `${msg.senderName}: ${msg.content}`;
-                    new bootstrap.Toast(document.getElementById('liveToast')).show();
-                }
+            // If the chat modal is open with THIS sender, show it immediately
+            if (currentChatPartner && (message.senderEmail === currentChatPartner || message.senderEmail === myEmail)) {
+                renderPrivateMessage(message);
+            } else {
+                // Otherwise, show a notification toast
+                showToast(`New message from ${message.senderName}: ${message.content.substring(0, 20)}...`);
             }
         });
-    }, function() {
-        const status = document.getElementById("chatStatus");
-        if(status) status.innerText = "Offline";
+
+    }, function(error) {
+        console.error("❌ WebSocket Error: " + error);
+        // Optional: Retry connection after 5 seconds
+        setTimeout(connectToChat, 5000);
     });
 }
+// ================= PRIVATE CHAT HELPER =================
 
+function renderPrivateMessage(msg) {
+    const area = document.getElementById("privateChatArea");
+
+    // Safety check: If the chat modal isn't open, we can't draw the message
+    if (!area) return;
+
+    // Prevent duplicates: Check if a message with this ID already exists
+    // (We use timestamp as a fallback ID if the server doesn't send one)
+    const msgId = msg.id || `temp-${new Date(msg.timestamp).getTime()}`;
+    const existing = document.getElementById(`msg-${msgId}`);
+    if(existing) return;
+
+    // Determine if I sent it or they sent it
+    const isMe = msg.senderEmail === myEmail;
+
+    // Create the message bubble div
+    const div = document.createElement("div");
+    div.id = `msg-${msgId}`;
+    div.className = `message ${isMe ? 'my-message' : 'other-message'}`;
+    div.innerText = msg.content;
+
+    // Add a tooltip with the time
+    div.title = new Date(msg.timestamp).toLocaleTimeString();
+
+    // Add to the chat window
+    area.appendChild(div);
+
+    // Auto-scroll to the bottom so the newest message is visible
+    area.scrollTop = area.scrollHeight;
+}
 async function fetchRecentChats() {
     const res = await fetch(`${API_URL}/messages/partners`, { headers: { "Authorization": `Bearer ${token}` } });
     if(res.ok) {
