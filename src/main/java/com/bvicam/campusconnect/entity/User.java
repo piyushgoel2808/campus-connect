@@ -1,6 +1,6 @@
 package com.bvicam.campusconnect.entity;
-
-import com.bvicam.campusconnect.dto.ChatMessage;
+import com.bvicam.campusconnect.entity.ChatMessage;
+//import com.bvicam.campusconnect.dto.ChatMessage;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;

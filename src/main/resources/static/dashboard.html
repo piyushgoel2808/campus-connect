@@ -310,6 +310,45 @@
             <div class="toast-body bg-white" id="toastBody"></div>
         </div>
     </div>
+    <div class="modal fade" id="editEventModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Edit Event</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editEventId">
+                    <label>Title</label>
+                    <input type="text" id="editEventTitle" class="form-control mb-2">
+                    <label>Description</label>
+                    <textarea id="editEventDesc" class="form-control mb-2"></textarea>
+                    <label>Location</label>
+                    <input type="text" id="editEventLoc" class="form-control mb-2">
+                    <label>Date & Time</label>
+                    <input type="datetime-local" id="editEventDate" class="form-control mb-2">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="submitEditEvent()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="participantsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Event Participants</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul id="participantsList" class="list-group">
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>

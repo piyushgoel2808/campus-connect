@@ -12,9 +12,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Allow connections from ANY domain (localhost or Render)
+        // ✅ ALLOW ALL ORIGINS (Fixes the connection issue on Render)
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // <--- This is the key fix!
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
