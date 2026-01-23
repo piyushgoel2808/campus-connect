@@ -8,6 +8,7 @@ import com.bvicam.campusconnect.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // Added for safety
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.apache.poi.ss.usermodel.*;
@@ -17,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -39,66 +41,59 @@ public class AdminController {
         this.postRepository = postRepository;
     }
 
-    // 1. Create User (Onboarding)
-    @PostMapping("/create-user")
-    public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            return ResponseEntity.badRequest().body("Email already exists!");
-        }
+    // =========================================================
+    // 1. USER MANAGEMENT (CRUD)
+    // =========================================================
 
-        User user = new User();
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
-        user.setRole(request.getRole());
-        user.setEnrollmentNumber(request.getEnrollmentNumber());
-
-        String defaultPass = "Bvicam@2025";
-        user.setPasswordHash(passwordEncoder.encode(defaultPass));
-        user.setPasswordChanged(false);
-
-        if (request.getBatchYear() != null) {
-            user.setBatchYear(request.getBatchYear());
-        }
-
-        userRepository.save(user);
-        return ResponseEntity.ok("User created with default password: " + defaultPass);
+    // GET ALL USERS (Matches GET /api/admin/users)
+    // Used for the Admin Dashboard list
+    @GetMapping("/users")
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(userRepository.findAll());
     }
 
-    // 2. Delete User
-    @DeleteMapping("/users/{id}")
+    // CREATE USER (Matches POST /api/admin/users)
+    // RENAMED from '/create-user' to fix the 404 error
+    @PostMapping("/users")
+    public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
+        try {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                return ResponseEntity.badRequest().body("Error: Email already exists!");
+            }
+
+            User user = new User();
+            user.setName(request.getName());
+            user.setEmail(request.getEmail());
+            user.setRole(request.getRole());
+            user.setEnrollmentNumber(request.getEnrollmentNumber());
+
+            String defaultPass = "Bvicam@2025";
+            user.setPasswordHash(passwordEncoder.encode(defaultPass));
+            user.setPasswordChanged(false);
+
+            if (request.getBatchYear() != null) {
+                user.setBatchYear(request.getBatchYear());
+            }
+
+            userRepository.save(user);
+            return ResponseEntity.ok("✅ User created successfully!");
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error creating user: " + e.getMessage());
+        }
+    }
+
+    // DELETE USER (Matches DELETE /api/admin/delete-user/{id})
+    @DeleteMapping("/delete-user/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
-        userRepository.deleteById(id); // Cascade will now handle the cleanup
-        return ResponseEntity.ok("✅ User and all their data deleted.");
+        userRepository.deleteById(id);
+        return ResponseEntity.ok("✅ User deleted successfully.");
     }
 
-    // 3. Broadcast Email
-    @PostMapping("/broadcast")
-    public ResponseEntity<?> sendBroadcast(@RequestBody Map<String, String> payload) {
-        String subject = payload.get("subject");
-        String body = payload.get("body");
-
-        if (subject == null || body == null) {
-            return ResponseEntity.badRequest().body("Subject and body are required");
-        }
-
-        emailService.sendBroadcastEmail(subject, body);
-        return ResponseEntity.ok("Broadcast started in background!");
-    }
-
-    // 4. Moderate Content (Delete Any Post)
-    @DeleteMapping("/delete-post/{id}")
-    public ResponseEntity<?> deletePost(@PathVariable Long id) {
-        if (!postRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        postRepository.deleteById(id);
-        return ResponseEntity.ok("Post deleted by Admin.");
-    }
-
-    // 5. Update User (UPDATED: All-Fields Version)
+    // UPDATE USER (Matches PUT /api/admin/users/{id})
     @PutMapping("/users/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
@@ -109,7 +104,7 @@ public class AdminController {
         if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
         if (updatedData.getBatchYear() != null) user.setBatchYear(updatedData.getBatchYear());
 
-        // Update Professional Fields (Admin Authority)
+        // Update Professional Fields
         if (updatedData.getEnrollmentNumber() != null) user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
         if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
         if (updatedData.getDesignation() != null) user.setDesignation(updatedData.getDesignation());
@@ -123,20 +118,44 @@ public class AdminController {
         return ResponseEntity.ok("✅ User updated successfully.");
     }
 
-    // 9. Reset User Password (NEW: Admin Only)
+    // RESET PASSWORD
     @PutMapping("/users/{id}/reset-password")
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
-
-        // Reset to default
         user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
-        user.setPasswordChanged(false); // Force them to change it on next login
-
+        user.setPasswordChanged(false);
         userRepository.save(user);
         return ResponseEntity.ok("✅ Password reset to 'Bvicam@2025'");
     }
 
-    // 8. Universal Bulk Upload (Supports both .xlsx and .csv)
+    // =========================================================
+    // 2. MODERATION & BROADCAST
+    // =========================================================
+
+    @PostMapping("/broadcast")
+    public ResponseEntity<?> sendBroadcast(@RequestBody Map<String, String> payload) {
+        String subject = payload.get("subject");
+        String body = payload.get("body");
+        if (subject == null || body == null) {
+            return ResponseEntity.badRequest().body("Subject and body are required");
+        }
+        emailService.sendBroadcastEmail(subject, body);
+        return ResponseEntity.ok("Broadcast started in background!");
+    }
+
+    @DeleteMapping("/delete-post/{id}")
+    public ResponseEntity<?> deletePost(@PathVariable Long id) {
+        if (!postRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        postRepository.deleteById(id);
+        return ResponseEntity.ok("Post deleted by Admin.");
+    }
+
+    // =========================================================
+    // 3. BULK UPLOAD (CSV & EXCEL)
+    // =========================================================
+
     @PostMapping("/upload-users-excel")
     public ResponseEntity<?> uploadUsersUniversal(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) return ResponseEntity.badRequest().body("Please select a file.");
@@ -199,15 +218,10 @@ public class AdminController {
 
             while ((line = reader.readLine()) != null) {
                 if (rowNum++ == 0) continue; // Skip Header
-
-                // Regex to split by comma ONLY if not inside quotes
                 String[] data = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
-
                 if (data.length < 2) continue;
 
-                for(int i=0; i<data.length; i++) {
-                    data[i] = data[i].trim().replace("\"", "");
-                }
+                for(int i=0; i<data.length; i++) data[i] = data[i].trim().replace("\"", "");
 
                 String name = data[0];
                 String email = data[1];
@@ -231,7 +245,7 @@ public class AdminController {
         }
     }
 
-    // --- HELPER: Common Save Logic ---
+    // --- HELPER: Save Logic ---
     private void saveUserFromData(String name, String email, String role, String batchStr, String enroll,
                                   String company, String desig, String head, String skills,
                                   String git, String linked, String exp) {

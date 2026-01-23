@@ -12,19 +12,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // ✅ ALLOW ALL ORIGINS (Fixes the connection issue on Render)
+        // ✅ The main endpoint for connection
+        // setAllowedOriginPatterns("*") is critical for deployment (Render/Heroku)
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
     @Override
-    public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // "/topic" -> Public messages (Community Chat)
-        // "/user"  -> Private messages (Direct Chat)
-        registry.enableSimpleBroker("/topic", "/user");
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        // 1. Destinations the client can SUBSCRIBE to
+        // /topic -> Public/Broadcast
+        // /queue -> Private messages (standard convention)
+        // /user  -> User-specific events
+        config.enableSimpleBroker("/topic", "/queue", "/user");
 
-        // Messages sent FROM the client must start with "/app"
-        registry.setApplicationDestinationPrefixes("/app");
+        // 2. Destinations the client SENDS to (mapped to @MessageMapping in Controllers)
+        config.setApplicationDestinationPrefixes("/app");
+
+        // 3. Prefix for User-specific messaging (e.g. /user/queue/messages)
+        config.setUserDestinationPrefix("/user");
     }
 }

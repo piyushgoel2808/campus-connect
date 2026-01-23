@@ -1,80 +1,206 @@
-<div class="content-card p-4">
-    <h4 class="mb-4 border-bottom border-danger border-3 pb-2">Admin Dashboard (Updated)</h4>
+<div class="container-fluid p-4">
+    <h2 class="mb-4">Admin Dashboard</h2>
 
-    <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-users-btn" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">Manage Users</button>
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <button class="nav-link active" id="tab-users-btn" data-bs-toggle="tab" data-bs-target="#admin-users">Manage Users</button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link fw-bold text-primary" id="tab-feedback-btn" data-bs-toggle="tab" data-bs-target="#tab-feedback" type="button" role="tab" onclick="loadAdminFeedback()">
-                <i class="fas fa-comments"></i> User Feedback
-            </button>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-feedback-btn" data-bs-toggle="tab" data-bs-target="#admin-feedback">Feedback</button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-broadcast-btn" data-bs-toggle="tab" data-bs-target="#tab-broadcast" type="button" role="tab">Broadcast Email</button>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-broadcast-btn" data-bs-toggle="tab" data-bs-target="#admin-broadcast">Broadcast Email</button>
         </li>
     </ul>
 
-    <div class="tab-content" id="adminTabsContent">
-
-        <div class="tab-pane fade show active" id="tab-users" role="tabpanel">
-            <div class="d-flex justify-content-end mb-2">
-                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                    <i class="fas fa-user-plus"></i> Onboard New User
-                </button>
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="admin-users">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <button class="btn btn-primary" onclick="window.openCreateUserModal()">
+                        <i class="fas fa-plus"></i> Add New User
+                    </button>
+                </div>
+                <div class="col-md-6 text-end">
+                    <div class="input-group">
+                        <input type="file" class="form-control" id="bulkFileExcel" accept=".xlsx">
+                        <button class="btn btn-success" onclick="window.uploadBulkDataExcel()">Upload .xlsx</button>
+                    </div>
+                </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle">
-                    <thead class="table-light">
-                    <tr><th>ID</th><th>Name</th><th>Role</th><th>Email</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody id="adminUserTable">
-                    <tr><td colspan="5" class="text-center">Loading users...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
 
-        <div class="tab-pane fade" id="tab-feedback" role="tabpanel">
-            <div class="alert alert-info py-2 small"><i class="fas fa-info-circle me-1"></i> Showing all student and alumni feedback.</div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
+            <div class="table-responsive bg-white shadow-sm rounded">
+                <table class="table table-hover mb-0">
                     <thead class="table-light">
                     <tr>
-                        <th>Submitted By</th>
-                        <th>Rating</th>
-                        <th>Comments</th>
-                        <th>Date</th>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Email</th>
+                        <th>Actions</th>
                     </tr>
                     </thead>
-                    <tbody id="adminFeedbackTable">
-                    <tr><td colspan="4" class="text-center py-4 text-muted">Click the tab to load feedback...</td></tr>
+                    <tbody id="adminUserTable">
+                    <tr><td colspan="5" class="text-center p-3">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="card bg-success text-white border-0 p-3 mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold mb-0"><i class="fas fa-file-excel me-2"></i>Bulk Import (Excel)</h6>
-                <small class="text-white-50" style="font-size: 0.65rem;">
-                    Order: Name, Email, Role, Batch, Enrollment, Company, Designation, Headline, Skills, GitHub, LinkedIn, Exp
-                </small>
+
+        <div class="tab-pane fade" id="admin-feedback">
+            <div class="table-responsive bg-white shadow-sm rounded">
+                <table class="table table-striped mb-0">
+                    <thead><tr><th>User</th><th>Rating</th><th>Comment</th></tr></thead>
+                    <tbody id="adminFeedbackTable">
+                    <tr><td colspan="3" class="text-center p-3">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <div class="input-group">
-                <input type="file" id="bulkFileExcel" class="form-control" accept=".xlsx">
-                <button class="btn btn-dark" onclick="uploadBulkDataExcel()">
-                    <i class="fas fa-upload me-1"></i> Upload .xlsx
+        </div>
+
+        <div class="tab-pane fade" id="admin-broadcast">
+            <div class="card shadow-sm p-4" style="max-width: 600px;">
+                <div class="mb-3">
+                    <label class="form-label">Subject</label>
+                    <input type="text" class="form-control" id="broadcastSubject" placeholder="Important Announcement">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Message</label>
+                    <textarea class="form-control" id="broadcastMessage" rows="5" placeholder="Type your message..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="window.sendBroadcastEmail()">
+                    <i class="fas fa-paper-plane"></i> Send Broadcast
                 </button>
             </div>
         </div>
-        <div class="tab-pane fade" id="tab-broadcast" role="tabpanel">
-            <div class="card bg-light border-0 p-3">
-                <label class="fw-bold mb-2">Send Email to Everyone</label>
-                <input type="text" id="broadcastSubject" class="form-control mb-2" placeholder="Email Subject">
-                <textarea id="broadcastBody" class="form-control mb-2" rows="4" placeholder="Message content..."></textarea>
-                <button class="btn btn-dark w-100" onclick="sendBroadcast()">
-                    <i class="fas fa-paper-plane me-2"></i> Send Broadcast
+    </div>
+</div>
+
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label>Full Name</label>
+                    <input type="text" class="form-control" id="createName" required>
+                </div>
+                <div class="mb-3">
+                    <label>Email</label>
+                    <input type="email" class="form-control" id="createEmail" required>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label>Role</label>
+                        <select class="form-select" id="createRole">
+                            <option value="STUDENT">Student</option>
+                            <option value="ALUMNI">Alumni</option>
+                            <option value="ADMIN">Admin</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label>Batch Year</label>
+                        <input type="number" class="form-control" id="createBatch">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label>Enrollment / ID</label>
+                    <input type="text" class="form-control" id="createEnrollment">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="window.adminCreateUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">Edit User Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3">Identity & Role</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="editName">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="editEmail">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Role</label>
+                                <select class="form-select" id="editRole">
+                                    <option value="STUDENT">Student</option>
+                                    <option value="ALUMNI">Alumni</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Batch</label>
+                                <input type="number" class="form-control" id="editBatch">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Enrollment No</label>
+                            <input type="text" class="form-control" id="editEnrollment">
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-success mb-3">Professional Profile</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label">Headline</label>
+                            <input type="text" class="form-control" id="editHeadline">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Company</label>
+                            <input type="text" class="form-control" id="editCompany">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Designation</label>
+                            <input type="text" class="form-control" id="editDesignation">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Skills</label>
+                            <input type="text" class="form-control" id="editSkills">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">LinkedIn URL</label>
+                            <input type="url" class="form-control" id="editLinkedin">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3 mt-2">
+                    <label class="form-label">Past Experience / Bio</label>
+                    <textarea class="form-control" id="editBio" rows="3"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-danger" onclick="window.adminResetPassword()">
+                    <i class="fas fa-key"></i> Reset Password
                 </button>
+                <div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="window.adminSaveUser()">Save Changes</button>
+                </div>
             </div>
         </div>
     </div>

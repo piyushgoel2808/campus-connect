@@ -1,9 +1,100 @@
-<div class="d-flex justify-content-between mb-3">
-    <h4>📅 Upcoming Events</h4>
-    <button id="btnAddEvent" class="btn btn-primary d-none" data-bs-toggle="modal" data-bs-target="#eventModal">
-        <i class="fas fa-plus"></i> Add Event
-    </button>
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Upcoming Events</h2>
+        <button id="btnAddEvent" class="btn btn-primary d-none" data-bs-toggle="modal" data-bs-target="#eventModal">
+            <i class="fas fa-plus"></i> Post New Event
+        </button>
+    </div>
+
+    <div class="row" id="eventsContainer">
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    </div>
 </div>
-<div id="eventsList" class="row g-3">
-    <div class="text-center py-5 text-muted">Loading events...</div>
+
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Publish New Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Event Title</label>
+                    <input type="text" class="form-control" id="evtTitle" placeholder="e.g. Alumni Meetup 2026">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Date & Time</label>
+                    <input type="datetime-local" class="form-control" id="evtDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-control" id="evtLoc" placeholder="e.g. Main Auditorium / Zoom Link">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" id="evtDesc" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="window.publishNewEvent()">Publish Event</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editEventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editEventId">
+                <div class="mb-3">
+                    <label class="form-label">Event Title</label>
+                    <input type="text" class="form-control" id="editEventTitle">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Date & Time</label>
+                    <input type="datetime-local" class="form-control" id="editEventDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-control" id="editEventLoc">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-control" id="editEventDesc" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="window.submitEditEvent()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="participantsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-users"></i> Event Participants</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="list-group" id="participantsList">
+                    <li class="list-group-item text-center">Loading...</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
 </div>

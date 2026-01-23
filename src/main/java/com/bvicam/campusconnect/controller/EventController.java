@@ -1,19 +1,20 @@
 package com.bvicam.campusconnect.controller;
 
+import com.bvicam.campusconnect.dto.EventDTO;
 import com.bvicam.campusconnect.entity.Event;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.EventRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/events")
@@ -22,48 +23,97 @@ public class EventController {
     @Autowired private EventRepository eventRepository;
     @Autowired private UserRepository userRepository;
 
-    // 1. Get All Events (With RSVP Status)
+    // =========================================================
+    // 1. GET ALL EVENTS (Response uses DTO)
+    // =========================================================
     @GetMapping
-    public List<Event> getAllEvents(Principal principal) {
-        List<Event> events = eventRepository.findAll();
-
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<EventDTO>> getAllEvents(Principal principal) {
+        // A. Get current user safely
+        User currentUser = null;
         if (principal != null) {
-            User currentUser = userRepository.findByEmail(principal.getName()).orElse(null);
-            if (currentUser != null) {
-                // Calculate status for each event
-                for (Event e : events) {
-                    e.setAttending(e.getParticipants().contains(currentUser));
-                    e.setParticipantCount(e.getParticipants().size());
+            currentUser = userRepository.findByEmail(principal.getName()).orElse(null);
+        }
+
+        // B. Get all raw events from DB
+        List<Event> events = eventRepository.findAll();
+        List<EventDTO> dtos = new ArrayList<>();
+
+        // C. Convert Entity -> DTO
+        for (Event event : events) {
+            boolean isAttending = false;
+            int count = 0;
+
+            // Safe check for null participants
+            if (event.getParticipants() != null) {
+                count = event.getParticipants().size(); // Calculate Count
+
+                if (currentUser != null) {
+                    isAttending = event.getParticipants().contains(currentUser); // Calculate Boolean
                 }
             }
+
+            // Add to list using the DTO constructor
+            dtos.add(new EventDTO(
+                    event.getId(),
+                    event.getTitle(),
+                    event.getDescription(),
+                    event.getLocation(),
+                    event.getDateTime(),
+                    isAttending,
+                    count
+            ));
         }
-        return events;
+
+        return ResponseEntity.ok(dtos);
     }
 
-    // 2. Create Event
+    // =========================================================
+    // 2. CREATE EVENT (Request uses Entity)
+    // =========================================================
     @PostMapping
-    public Event createEvent(@RequestBody Event event) {
-        return eventRepository.save(event);
+    public ResponseEntity<?> createEvent(@RequestBody Event event) {
+        try {
+            // Prevent NullPointer if participants list is missing in JSON
+            if(event.getParticipants() == null) {
+                event.setParticipants(new HashSet<>());
+            }
+
+            Event savedEvent = eventRepository.save(event);
+            return ResponseEntity.ok(savedEvent);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body("Error creating event: " + e.getMessage());
+        }
     }
 
-    // 3. ✅ NEW: Edit Event
+    // =========================================================
+    // 3. UPDATE EVENT (Request uses Entity)
+    // =========================================================
     @PutMapping("/{id}")
     public ResponseEntity<?> updateEvent(@PathVariable Long id, @RequestBody Event updatedData) {
         return eventRepository.findById(id).map(event -> {
-            event.setTitle(updatedData.getTitle());
-            event.setDescription(updatedData.getDescription());
-            event.setLocation(updatedData.getLocation());
-            event.setDateTime(updatedData.getDateTime());
+            // Only update fields that are NOT null (Prevents accidental data loss)
+            if (updatedData.getTitle() != null) event.setTitle(updatedData.getTitle());
+            if (updatedData.getDescription() != null) event.setDescription(updatedData.getDescription());
+            if (updatedData.getLocation() != null) event.setLocation(updatedData.getLocation());
+
+            // This works because Event.java now has @JsonFormat
+            if (updatedData.getDateTime() != null) event.setDateTime(updatedData.getDateTime());
+
             eventRepository.save(event);
-            return ResponseEntity.ok("Event updated!");
+            return ResponseEntity.ok("Event updated successfully!");
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // 4. ✅ NEW: Toggle RSVP (Join/Leave)
+    // =========================================================
+    // 4. RSVP LOGIC
+    // =========================================================
     @PostMapping("/{id}/rsvp")
     public ResponseEntity<?> toggleRsvp(@PathVariable Long id, Principal principal) {
-        Event event = eventRepository.findById(id).orElseThrow();
-        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
+        Event event = eventRepository.findById(id).orElseThrow(() -> new RuntimeException("Event not found"));
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow(() -> new RuntimeException("User not found"));
 
         if (event.getParticipants().contains(user)) {
             event.getParticipants().remove(user); // Leave
@@ -75,19 +125,26 @@ public class EventController {
         return ResponseEntity.ok().build();
     }
 
-    // 5. ✅ NEW: Get Participants List (Admin Only)
+    // =========================================================
+    // 5. VIEW PARTICIPANTS
+    // =========================================================
     @GetMapping("/{id}/participants")
-    public ResponseEntity<?> getParticipants(@PathVariable Long id) {
-        Event event = eventRepository.findById(id).orElseThrow();
-        // Return simple list of maps to avoid password leaks
-        List<String> names = event.getParticipants().stream()
-                .map(u -> u.getName() + " (" + u.getEmail() + ")")
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(names);
+    public ResponseEntity<Set<User>> getEventParticipants(@PathVariable Long id) {
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        return ResponseEntity.ok(event.getParticipants());
     }
 
+    // =========================================================
+    // 6. DELETE EVENT
+    // =========================================================
     @DeleteMapping("/{id}")
-    public void deleteEvent(@PathVariable Long id) {
+    public ResponseEntity<?> deleteEvent(@PathVariable Long id) {
+        if (!eventRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
         eventRepository.deleteById(id);
+        return ResponseEntity.ok("Event deleted");
     }
 }

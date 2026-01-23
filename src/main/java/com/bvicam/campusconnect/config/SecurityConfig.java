@@ -11,7 +11,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter; // Import this!
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -22,7 +22,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Autowired
-    private JwtAuthenticationFilter jwtAuthenticationFilter; // Inject our new filter
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -32,8 +32,21 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // ✅ ADD "/components/**" to this list!
-                        .requestMatchers("/", "/index.html", "/login.html", "/dashboard.html", "/app.js", "/dashboard.js", "/components/**", "/css/**", "/js/**", "/ws/**").permitAll()
+                        // ✅ ADDED "/favicon.ico" here to fix the 403 error
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/login.html",
+                                "/dashboard.html",
+                                "/app.js",
+                                "/dashboard.js",
+                                "/components/**",
+                                "/css/**",
+                                "/js/**",
+                                "/ws/**",
+                                "/favicon.ico",
+                                "/ws/**"
+                        ).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
@@ -43,13 +56,11 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // ✅ FIX: Use allowedOriginPatterns instead of allowedOrigins
     @Bean
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // OLD: config.setAllowedOrigins(List.of("*"));  <-- This caused the error
-        // NEW: Allow specific patterns + Credentials
+        // Allow specific patterns + Credentials
         config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowCredentials(true);
 
