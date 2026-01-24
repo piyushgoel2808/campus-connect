@@ -1,8 +1,14 @@
 <div class="card p-3 mb-3 shadow-sm">
-    <textarea id="postContent" class="form-control border-0 bg-light mb-2" placeholder="Share update..."></textarea>
+    <textarea id="postContent" class="form-control border-0 bg-light mb-2" placeholder="Share an update..."></textarea>
+
     <input type="text" id="postImage" class="form-control form-control-sm mb-2" placeholder="Image URL (Optional)">
-    <button class="btn btn-primary btn-sm float-end" onclick="createPost()">Post</button>
+
+    <div class="d-flex justify-content-end">
+        <button id="btnPost" class="btn btn-primary btn-sm" onclick="window.createPost()">
+            <i class="fas fa-paper-plane"></i> Post
+        </button>
+    </div>
 </div>
-<div id="feedArea">
-    <div class="text-center py-5 text-muted">Loading feed...</div>
+
+<div id="postsContainer"> <div class="text-center py-5 text-muted">Loading feed...</div>
 </div>

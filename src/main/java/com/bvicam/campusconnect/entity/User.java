@@ -14,8 +14,8 @@ import java.util.Set;
 
 @Entity
 @Table(name = "users")
-@Getter // Replaces part of @Data
-@Setter // Replaces part of @Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
@@ -27,6 +27,7 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
 
+    @JsonIgnore // Security Fix: Never send passwords in JSON responses
     @Column(nullable = false)
     private String passwordHash;
 
@@ -39,14 +40,12 @@ public class User {
     private String enrollmentNumber;
     private Integer batchYear;
 
-    // Use Boolean (Wrapper) to handle nulls safely
     @Column(columnDefinition = "boolean default false")
     private Boolean passwordChanged = false;
 
     private String linkedinUrl;
     private String githubUrl;
     private String skills;
-
     private String headline;
     private String currentCompany;
     private String designation;
@@ -54,32 +53,31 @@ public class User {
     @Column(length = 2000)
     private String pastExperience;
 
-    // --- RELATIONSHIPS ---
+    // --- RELATIONSHIPS WITH JSON FIXES ---
 
-    // Automatically delete user's data when user is deleted
     @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore // FIX: Prevents recursion when fetching chat history
     private List<ChatMessage> sentMessages = new ArrayList<>();
 
     @OneToMany(mappedBy = "recipient", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore // FIX: Prevents recursion when fetching chat history
     private List<ChatMessage> receivedMessages = new ArrayList<>();
 
     @ManyToMany(mappedBy = "participants")
     @JsonIgnore // Prevents Infinite JSON Recursion
     private Set<Event> events;
 
-    // --- CRITICAL FIX: Custom equals and hashCode (ONLY ID) ---
-    // This prevents StackOverflowError when User is inside a Set/List in Event
-
+    // --- CRITICAL FIX: Custom equals and hashCode ---
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         User user = (User) o;
-        return Objects.equals(id, user.id); // Only check ID!
+        return Objects.equals(id, user.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id); // Only hash ID!
+        return Objects.hash(id);
     }
 }
