@@ -98,3 +98,17 @@ window.switchTab = async function(tab) {
         container.innerHTML = `<div class="alert alert-danger">Error loading module: ${e.message}</div>`;
     }
 };
+// =========================================================
+// GLOBAL LOGOUT FUNCTION
+// =========================================================
+window.logout = function() {
+    // 1. Clear Security Token
+    localStorage.removeItem("jwt_token");
+
+    // 2. Clear User Data
+    localStorage.removeItem("campus_user");
+
+    // 3. Redirect to Login Page
+    alert("Logged out successfully.");
+    window.location.href = "index.html"; // Change to 'login.html' if that's your file name
+};

@@ -1,16 +1,14 @@
 // Configuration
-const API_AUTH_URL = "/api/auth";
+const API_URL = "/api/auth";
 
 document.addEventListener("DOMContentLoaded", () => {
+    const loginForm = document.getElementById("loginForm");
 
-    // 1. Check if already logged in
+    // Check if user is already logged in (Optional)
     if (localStorage.getItem("jwt_token")) {
-        // Optional: Auto-redirect if token exists
         // window.location.href = "dashboard.html";
     }
 
-    // 2. Attach Login Listener
-    const loginForm = document.getElementById("loginForm");
     if (loginForm) {
         loginForm.addEventListener("submit", handleLogin);
     }
@@ -22,63 +20,67 @@ async function handleLogin(e) {
     const emailInput = document.getElementById("email");
     const passwordInput = document.getElementById("password");
     const alertBox = document.getElementById("alertBox");
-    const submitBtn = document.querySelector("button[type='submit']");
+    const submitBtn = e.target.querySelector("button[type='submit']");
 
-    // Reset UI
+    // 1. Reset UI and prevent multiple clicks
     alertBox.classList.add("d-none");
     alertBox.innerText = "";
-    submitBtn.disabled = true;
-    submitBtn.innerText = "Signing in...";
-
-    const payload = {
-        email: emailInput.value,
-        password: passwordInput.value
-    };
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = "Signing in...";
+    }
 
     try {
-        const response = await fetch(`${API_AUTH_URL}/login`, {
+        const response = await fetch(`${API_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                email: emailInput.value,
+                password: passwordInput.value
+            })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            // ✅ SUCCESS: Save Session Data
+            // 2. Save Session Data to LocalStorage
             localStorage.setItem("jwt_token", data.token);
-            localStorage.setItem("user_email", data.email || payload.email);
             localStorage.setItem("user_name", data.name);
             localStorage.setItem("user_role", data.role);
+            localStorage.setItem("user_email", emailInput.value);
 
-            // IMPORTANT: Save ID for Chat/Profile modules
+            // Save user ID (Essential for Chat & Profile modules)
             if (data.id) {
                 localStorage.setItem("user_id", data.id);
             }
 
-            // Show success message
+            // 3. Show Success Message
             alertBox.className = "alert alert-success";
             alertBox.innerText = "✅ Login Successful! Redirecting...";
             alertBox.classList.remove("d-none");
 
-            // Redirect
+            // 4. Redirect to Dashboard after 1 second
             setTimeout(() => {
                 window.location.href = "dashboard.html";
             }, 1000);
 
         } else {
-            // ❌ FAIL: Show Error
-            throw new Error(data.message || "Invalid credentials");
+            // Server returned an error (e.g., 401 Unauthorized)
+            throw new Error(data.message || "Invalid Email or Password");
         }
 
     } catch (error) {
         console.error("Login Error:", error);
+
+        // Show error message to user
         alertBox.className = "alert alert-danger";
-        alertBox.innerText = `❌ ${error.message || "Server Error"}`;
+        alertBox.innerText = `❌ ${error.message || "Server Error. Is the backend running?"}`;
         alertBox.classList.remove("d-none");
 
-        // Reset Button
-        submitBtn.disabled = false;
-        submitBtn.innerText = "Login";
+        // 5. Re-enable button so user can try again
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Login";
+        }
     }
 }

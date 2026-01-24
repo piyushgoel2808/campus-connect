@@ -59,7 +59,7 @@ public class DataSeeder {
             // 3. Create STUDENT
             if (!userRepo.existsByEmail("student@bvicam.in")) {
                 User student = new User();
-                student.setName("Rahul Sharma");
+                student.setName("Aadish Goel");
                 student.setEmail("student@bvicam.in");
                 student.setPasswordHash(passwordEncoder.encode("1234")); // Password: 1234
                 student.setRole("STUDENT");
