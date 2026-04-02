@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+
+
+
 @Entity
 @Table(name = "users")
 @Getter
@@ -35,7 +38,8 @@ public class User {
     private String name;
 
     @Column(nullable = false)
-    private String role;
+    @Enumerated(EnumType.STRING) // Stores "STUDENT", "ADMIN" in DB
+    private Role role;
 
     private String enrollmentNumber;
     private Integer batchYear;
@@ -66,6 +70,15 @@ public class User {
     @ManyToMany(mappedBy = "participants")
     @JsonIgnore // Prevents Infinite JSON Recursion
     private Set<Event> events;
+
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    // Helper method to get course code easily (e.g., user.getDepartmentCode())
+    public String getDepartmentCode() {
+        return department != null ? department.getCode() : "UNKNOWN";
+    }
 
     // --- CRITICAL FIX: Custom equals and hashCode ---
     @Override

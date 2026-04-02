@@ -2,14 +2,15 @@ package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.RegisterRequest;
 import com.bvicam.campusconnect.entity.User;
+import com.bvicam.campusconnect.entity.Role;
 import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
 import com.bvicam.campusconnect.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize; // Added for safety
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -45,16 +46,13 @@ public class AdminController {
     // 1. USER MANAGEMENT (CRUD)
     // =========================================================
 
-    // GET ALL USERS (Matches GET /api/admin/users)
-    // Used for the Admin Dashboard list
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
         return ResponseEntity.ok(userRepository.findAll());
     }
 
-    // CREATE USER (Matches POST /api/admin/users)
-    // RENAMED from '/create-user' to fix the 404 error
     @PostMapping("/users")
+    @Transactional
     public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
         try {
             if (userRepository.existsByEmail(request.getEmail())) {
@@ -64,27 +62,24 @@ public class AdminController {
             User user = new User();
             user.setName(request.getName());
             user.setEmail(request.getEmail());
-            user.setRole(request.getRole());
+            // Safe Enum assignment from Version 2
+            user.setRole(request.getRole() != null ? request.getRole() : Role.STUDENT);
             user.setEnrollmentNumber(request.getEnrollmentNumber());
+            user.setBatchYear(request.getBatchYear());
 
             String defaultPass = "Bvicam@2025";
             user.setPasswordHash(passwordEncoder.encode(defaultPass));
             user.setPasswordChanged(false);
 
-            if (request.getBatchYear() != null) {
-                user.setBatchYear(request.getBatchYear());
-            }
-
             userRepository.save(user);
             return ResponseEntity.ok("✅ User created successfully!");
-
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error creating user: " + e.getMessage());
         }
     }
 
-    // DELETE USER (Matches DELETE /api/admin/delete-user/{id})
     @DeleteMapping("/delete-user/{id}")
+    @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
@@ -93,33 +88,30 @@ public class AdminController {
         return ResponseEntity.ok("✅ User deleted successfully.");
     }
 
-    // UPDATE USER (Matches PUT /api/admin/users/{id})
     @PutMapping("/users/{id}")
+    @Transactional
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Update Standard Fields
-        if (updatedData.getName() != null) user.setName(updatedData.getName());
-        if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail());
-        if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
-        if (updatedData.getBatchYear() != null) user.setBatchYear(updatedData.getBatchYear());
-
-        // Update Professional Fields
-        if (updatedData.getEnrollmentNumber() != null) user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
-        if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
-        if (updatedData.getDesignation() != null) user.setDesignation(updatedData.getDesignation());
-        if (updatedData.getHeadline() != null) user.setHeadline(updatedData.getHeadline());
-        if (updatedData.getSkills() != null) user.setSkills(updatedData.getSkills());
-        if (updatedData.getGithubUrl() != null) user.setGithubUrl(updatedData.getGithubUrl());
-        if (updatedData.getLinkedinUrl() != null) user.setLinkedinUrl(updatedData.getLinkedinUrl());
-        if (updatedData.getPastExperience() != null) user.setPastExperience(updatedData.getPastExperience());
+        user.setName(updatedData.getName());
+        user.setEmail(updatedData.getEmail());
+        user.setRole(updatedData.getRole());
+        user.setBatchYear(updatedData.getBatchYear());
+        user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
+        user.setCurrentCompany(updatedData.getCurrentCompany());
+        user.setDesignation(updatedData.getDesignation());
+        user.setHeadline(updatedData.getHeadline());
+        user.setSkills(updatedData.getSkills());
+        user.setGithubUrl(updatedData.getGithubUrl());
+        user.setLinkedinUrl(updatedData.getLinkedinUrl());
+        user.setPastExperience(updatedData.getPastExperience());
 
         userRepository.save(user);
         return ResponseEntity.ok("✅ User updated successfully.");
     }
 
-    // RESET PASSWORD
     @PutMapping("/users/{id}/reset-password")
+    @Transactional
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
         user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
@@ -129,7 +121,7 @@ public class AdminController {
     }
 
     // =========================================================
-    // 2. MODERATION & BROADCAST
+    // 2. MODERATION & BROADCAST (Restored from Version 1)
     // =========================================================
 
     @PostMapping("/broadcast")
@@ -144,6 +136,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/delete-post/{id}")
+    @Transactional
     public ResponseEntity<?> deletePost(@PathVariable Long id) {
         if (!postRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
@@ -153,13 +146,13 @@ public class AdminController {
     }
 
     // =========================================================
-    // 3. BULK UPLOAD (CSV & EXCEL)
+    // 3. BULK UPLOAD (Optimized Logic)
     // =========================================================
 
     @PostMapping("/upload-users-excel")
+    @Transactional
     public ResponseEntity<?> uploadUsersUniversal(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) return ResponseEntity.badRequest().body("Please select a file.");
-
         String fileName = file.getOriginalFilename();
         if (fileName == null) return ResponseEntity.badRequest().body("Invalid file.");
 
@@ -172,36 +165,28 @@ public class AdminController {
                 return ResponseEntity.badRequest().body("❌ Unsupported format. Please upload .csv or .xlsx");
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+            return ResponseEntity.status(500).body("Error during upload: " + e.getMessage());
         }
     }
 
-    // --- HELPER: Process Excel (.xlsx) ---
     private ResponseEntity<?> processExcel(MultipartFile file) throws Exception {
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
             int count = 0;
-            int rowNum = 0;
-
-            for (Row row : sheet) {
-                if (rowNum++ == 0) continue; // Skip Header
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
 
                 String name = getCellValue(row.getCell(0));
                 String email = getCellValue(row.getCell(1));
                 if (name.isEmpty() || email.isEmpty()) continue;
 
                 saveUserFromData(name, email,
-                        getCellValue(row.getCell(2)), // Role
-                        getCellValue(row.getCell(3)), // Batch
-                        getCellValue(row.getCell(4)), // Enrollment
-                        getCellValue(row.getCell(5)), // Company
-                        getCellValue(row.getCell(6)), // Designation
-                        getCellValue(row.getCell(7)), // Headline
-                        getCellValue(row.getCell(8)), // Skills
-                        getCellValue(row.getCell(9)), // GitHub
-                        getCellValue(row.getCell(10)),// LinkedIn
-                        getCellValue(row.getCell(11)) // Experience
+                        getCellValue(row.getCell(2)), getCellValue(row.getCell(3)),
+                        getCellValue(row.getCell(4)), getCellValue(row.getCell(5)),
+                        getCellValue(row.getCell(6)), getCellValue(row.getCell(7)),
+                        getCellValue(row.getCell(8)), getCellValue(row.getCell(9)),
+                        getCellValue(row.getCell(10)), getCellValue(row.getCell(11))
                 );
                 count++;
             }
@@ -209,25 +194,17 @@ public class AdminController {
         }
     }
 
-    // --- HELPER: Process CSV (.csv) ---
     private ResponseEntity<?> processCSV(MultipartFile file) throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String line;
             int count = 0;
-            int rowNum = 0;
-
+            reader.readLine(); // Skip header
             while ((line = reader.readLine()) != null) {
-                if (rowNum++ == 0) continue; // Skip Header
+                // Regex handles commas inside quotes
                 String[] data = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
                 if (data.length < 2) continue;
 
-                for(int i=0; i<data.length; i++) data[i] = data[i].trim().replace("\"", "");
-
-                String name = data[0];
-                String email = data[1];
-                if (name.isEmpty() || email.isEmpty()) continue;
-
-                saveUserFromData(name, email,
+                saveUserFromData(data[0].trim().replace("\"", ""), data[1].trim().replace("\"", ""),
                         (data.length > 2) ? data[2] : "STUDENT",
                         (data.length > 3) ? data[3] : "",
                         (data.length > 4) ? data[4] : "",
@@ -245,8 +222,7 @@ public class AdminController {
         }
     }
 
-    // --- HELPER: Save Logic ---
-    private void saveUserFromData(String name, String email, String role, String batchStr, String enroll,
+    private void saveUserFromData(String name, String email, String roleStr, String batchStr, String enroll,
                                   String company, String desig, String head, String skills,
                                   String git, String linked, String exp) {
 
@@ -255,11 +231,21 @@ public class AdminController {
         User user = new User();
         user.setName(name);
         user.setEmail(email);
-        user.setRole(role.toUpperCase());
 
+        // Safe Enum Conversion
         try {
-            if (!batchStr.isEmpty()) user.setBatchYear((int) Double.parseDouble(batchStr));
-        } catch (Exception e) {}
+            user.setRole(Role.valueOf(roleStr.toUpperCase().trim()));
+        } catch (Exception e) {
+            user.setRole(Role.STUDENT);
+        }
+
+        // Clean Batch Year formatting (handles 2024.0 from Excel)
+        try {
+            if (!batchStr.isEmpty()) {
+                String cleanBatch = batchStr.contains(".") ? batchStr.split("\\.")[0] : batchStr;
+                user.setBatchYear(Integer.parseInt(cleanBatch));
+            }
+        } catch (Exception e) { /* Skip invalid years */ }
 
         user.setEnrollmentNumber(enroll);
         user.setCurrentCompany(company);
@@ -269,9 +255,9 @@ public class AdminController {
         user.setGithubUrl(git);
         user.setLinkedinUrl(linked);
         user.setPastExperience(exp);
-
         user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
         user.setPasswordChanged(false);
+
         userRepository.save(user);
     }
 
@@ -279,7 +265,8 @@ public class AdminController {
         if (cell == null) return "";
         switch (cell.getCellType()) {
             case STRING: return cell.getStringCellValue().trim();
-            case NUMERIC: return String.valueOf(cell.getNumericCellValue());
+            case NUMERIC: return String.valueOf((long)cell.getNumericCellValue());
+            case BOOLEAN: return String.valueOf(cell.getBooleanCellValue());
             default: return "";
         }
     }

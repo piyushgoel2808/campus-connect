@@ -108,7 +108,8 @@
             <div class="modal-body bg-light" id="dmMessagesArea" style="height: 350px; overflow-y: auto; display: flex; flex-direction: column;">
             </div>
 
-            <div class="modal-footer p-2">
+            <div class="modal-footer flex-column align-items-stretch p-2">
+                <div id="typingIndicator" class="text-muted small fst-italic px-2 mb-1 d-none"></div>
                 <div class="input-group">
                     <input type="text" id="dmInput" class="form-control" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.sendDirectMessage()">
                     <button class="btn btn-primary" onclick="window.sendDirectMessage()">

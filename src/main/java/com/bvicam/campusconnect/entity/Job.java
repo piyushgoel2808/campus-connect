@@ -31,4 +31,8 @@ public class Job {
     private User postedBy; // Links the job to the Alumnus who posted it
 
     private LocalDateTime postedAt = LocalDateTime.now();
+
+    @ManyToOne
+    @JoinColumn(name = "target_department_id")
+    private Department targetDepartment;
 }

@@ -33,6 +33,11 @@ export function connectChat() {
             onPrivateMessageReceived(JSON.parse(payload.body));
         });
 
+        // Subscribe to Typing Queue
+        stompClient.subscribe('/user/queue/typing', function (payload) {
+            onTypingMessageReceived(JSON.parse(payload.body));
+        });
+
         // 2. Subscribe to Public Chat (Global Chat)
         stompClient.subscribe('/topic/public', function (payload) {
             onPublicMessageReceived(JSON.parse(payload.body));
@@ -200,3 +205,54 @@ window.sendDirectMessage = function() {
         input.value = '';
     }
 };
+
+// =========================================================
+// 6. TYPING INDICATOR LOGIC
+// =========================================================
+let typingTimeout = null;
+let isTyping = false;
+
+window.handleTyping = function() {
+    if (!currentChatPartnerEmail || !stompClient) return;
+
+    if (!isTyping) {
+        isTyping = true;
+        stompClient.send("/app/chat.typing", {}, JSON.stringify({
+            senderEmail: getCurrentUser().email,
+            receiverEmail: currentChatPartnerEmail,
+            isTyping: true
+        }));
+    }
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        isTyping = false;
+        stompClient.send("/app/chat.typing", {}, JSON.stringify({
+            senderEmail: getCurrentUser().email,
+            receiverEmail: currentChatPartnerEmail,
+            isTyping: false
+        }));
+    }, 2000);
+}
+
+function onTypingMessageReceived(message) {
+    if (currentChatPartnerEmail && message.senderEmail && message.senderEmail.toLowerCase() === currentChatPartnerEmail.toLowerCase()) {
+        const indicator = document.getElementById("typingIndicator");
+        if (indicator) {
+            if (message.typing) { // handle both cases (getter for boolean is isTyping(), JSON might serialize as 'typing' or 'isTyping', Jackson depends on field name vs getter)
+                indicator.innerText = "User is typing...";
+                indicator.classList.remove("d-none");
+            } else {
+                indicator.classList.add("d-none");
+            }
+        }
+    }
+}
+
+// Attach event listener once DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("dmInput");
+    if (input) {
+        input.addEventListener("input", window.handleTyping);
+    }
+});

@@ -1,6 +1,7 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.ChatMessage;
+import com.bvicam.campusconnect.dto.TypingMessage;
 import com.bvicam.campusconnect.entity.PrivateMessage;
 import com.bvicam.campusconnect.entity.User; // Added Import
 import com.bvicam.campusconnect.repository.PrivateMessageRepository;
@@ -69,6 +70,16 @@ public class ChatController {
         messagingTemplate.convertAndSendToUser(
                 message.getSenderName(),
                 "/queue/messages",
+                message
+        );
+    }
+
+    // --- TYPING INDICATOR ---
+    @MessageMapping("/chat.typing")
+    public void typingIndicator(@Payload TypingMessage message) {
+        messagingTemplate.convertAndSendToUser(
+                message.getReceiverEmail(),
+                "/queue/typing",
                 message
         );
     }

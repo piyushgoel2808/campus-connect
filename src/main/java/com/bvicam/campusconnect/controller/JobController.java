@@ -38,7 +38,7 @@ public class JobController {
         User user = userRepository.findByEmail(email).orElseThrow();
 
         // Security Check: Is this user an ALUMNI or ADMIN?
-        if (!"ALUMNI".equalsIgnoreCase(user.getRole()) && !"ADMIN".equalsIgnoreCase(user.getRole())) {
+        if (!"ALUMNI".equalsIgnoreCase(user.getRole().name()) && !"ADMIN".equalsIgnoreCase(user.getRole().name())) {
             return ResponseEntity.status(403).body("Only Alumni can post jobs!");
         }
 
@@ -54,7 +54,7 @@ public class JobController {
         Job job = jobRepository.findById(id).orElseThrow();
 
         // Allow if ADMIN or if the user Posted it
-        if (user.getRole().equals("ADMIN") || job.getPostedBy().getId().equals(user.getId())) {
+        if (user.getRole().name().equals("ADMIN") || job.getPostedBy().getId().equals(user.getId())) {
             jobRepository.deleteById(id);
             return ResponseEntity.ok("Job deleted.");
         }

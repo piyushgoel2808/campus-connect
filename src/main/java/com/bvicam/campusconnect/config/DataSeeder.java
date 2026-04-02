@@ -1,8 +1,11 @@
 package com.bvicam.campusconnect.config;
 
+import com.bvicam.campusconnect.entity.Department;
 import com.bvicam.campusconnect.entity.Job;
 import com.bvicam.campusconnect.entity.Post;
+import com.bvicam.campusconnect.entity.Role;
 import com.bvicam.campusconnect.entity.User;
+import com.bvicam.campusconnect.repository.DepartmentRepository;
 import com.bvicam.campusconnect.repository.JobRepository;
 import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
@@ -20,7 +23,8 @@ public class DataSeeder {
     CommandLineRunner initDatabase(UserRepository userRepo,
                                    JobRepository jobRepo,
                                    PostRepository postRepo,
-                                   PasswordEncoder passwordEncoder) {
+                                   PasswordEncoder passwordEncoder,
+                                   DepartmentRepository deptRepo) {
         return args -> {
             // 1. Create ADMIN
             if (!userRepo.existsByEmail("admin@bvicam.in")) {
@@ -28,7 +32,7 @@ public class DataSeeder {
                 admin.setName("Super Admin");
                 admin.setEmail("admin@bvicam.in");
                 admin.setPasswordHash(passwordEncoder.encode("admin123")); // Password: admin123
-                admin.setRole("ADMIN");
+                admin.setRole(Role.ADMIN);
                 userRepo.save(admin);
                 System.out.println("✅ Created Admin: admin@bvicam.in / admin123");
             }
@@ -39,7 +43,7 @@ public class DataSeeder {
                 alumni.setName("Amit Verma");
                 alumni.setEmail("alumni@bvicam.in");
                 alumni.setPasswordHash(passwordEncoder.encode("1234")); // Password: 1234
-                alumni.setRole("ALUMNI");
+                alumni.setRole(Role.ALUMNI);
                 alumni.setBatchYear(2020);
                 alumni.setSkills("Java, Spring Boot, AWS");
                 userRepo.save(alumni);
@@ -62,7 +66,7 @@ public class DataSeeder {
                 student.setName("Aadish Goel");
                 student.setEmail("student@bvicam.in");
                 student.setPasswordHash(passwordEncoder.encode("1234")); // Password: 1234
-                student.setRole("STUDENT");
+                student.setRole(Role.STUDENT);
                 student.setEnrollmentNumber("0012024");
                 userRepo.save(student);
                 System.out.println("✅ Created Student: student@bvicam.in / 1234");
@@ -73,6 +77,16 @@ public class DataSeeder {
                 post.setAuthor(student);
                 post.setLikes(5);
                 postRepo.save(post);
+            }
+            if (deptRepo.findByCode("MCA").isEmpty()) {
+                deptRepo.save(new Department("Master of Computer Applications", "MCA"));
+                System.out.println("✅ Created Department: MCA");
+            }
+
+            // Check if BJMC exists, if not, create it
+            if (deptRepo.findByCode("BJMC").isEmpty()) {
+                deptRepo.save(new Department("Bachelors of Journalism", "BJMC"));
+                System.out.println("✅ Created Department: BJMC");
             }
         };
     }

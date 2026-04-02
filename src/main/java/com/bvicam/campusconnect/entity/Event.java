@@ -44,6 +44,9 @@ public class Event {
             joinColumns = @JoinColumn(name = "event_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
+    @ManyToOne
+    @JoinColumn(name = "target_department_id")
+    private Department targetDepartment;
     // Initialize to empty set to avoid NullPointerExceptions
     private Set<User> participants = new HashSet<>();
 
