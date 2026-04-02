@@ -30,10 +30,12 @@ function renderDirectoryTable(users) {
     users.forEach(u => {
         if (u.email === myEmail) return;
 
+        const deptDisplay = u.departmentName ? u.departmentName : (u.role || 'No Role');
+
         tbody.innerHTML += `
-            <tr onclick='window.openUserProfile(${JSON.stringify(u)})'>
+            <tr onclick='window.openUserProfile(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
                 <td><div class="fw-bold">${u.name}</div></td>
-                <td><span class="badge bg-primary">${u.role}</span></td>
+                <td><span class="badge bg-primary">${deptDisplay}</span></td>
                 <td class="text-end">
                     <button class="btn btn-sm btn-outline-primary"
                         onclick="event.stopPropagation(); window.startDirectChat('${u.id}', '${u.name}', '${u.email}')">

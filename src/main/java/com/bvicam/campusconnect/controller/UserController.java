@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -35,15 +36,33 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // Helper mapper
+    private UserProfileDto mapToDto(User user) {
+        UserProfileDto dto = new UserProfileDto();
+        dto.setId(user.getId());
+        dto.setName(user.getName());
+        dto.setEmail(user.getEmail());
+        dto.setRole(user.getRole() != null ? user.getRole().name() : null);
+        dto.setDepartmentName(user.getDepartment() != null ? user.getDepartment().getName() : null);
+        dto.setHeadline(user.getHeadline());
+        dto.setCurrentCompany(user.getCurrentCompany());
+        dto.setDesignation(user.getDesignation());
+        dto.setSkills(user.getSkills());
+        dto.setPastExperience(user.getPastExperience());
+        dto.setLinkedinUrl(user.getLinkedinUrl());
+        dto.setGithubUrl(user.getGithubUrl());
+        return dto;
+    }
+
     // 2. Get All Users (For Directory)
     @GetMapping
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserProfileDto> getAllUsers() {
+        return userRepository.findAll().stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
     // 3. Search Directory
     @GetMapping("/search")
-    public List<User> searchDirectory(
+    public List<UserProfileDto> searchDirectory(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) Integer batch,
             @RequestParam(required = false) String q) {
@@ -53,7 +72,7 @@ public class UserController {
         // Handle empty search strings
         if (q != null && q.trim().isEmpty()) q = null;
 
-        return userRepository.searchUsers(role, batch, q);
+        return userRepository.searchUsers(role, batch, q).stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
     // 4. Update Profile (LinkedIn Style)

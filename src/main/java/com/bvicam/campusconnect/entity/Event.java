@@ -38,15 +38,16 @@ public class Event {
     // Kept optional organizer name
     private String organizerName;
 
+    @ManyToOne
+    @JoinColumn(name = "target_department_id")
+    private Department targetDepartment;
+
     @ManyToMany
     @JoinTable(
             name = "event_participants",
             joinColumns = @JoinColumn(name = "event_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
-    @ManyToOne
-    @JoinColumn(name = "target_department_id")
-    private Department targetDepartment;
     // Initialize to empty set to avoid NullPointerExceptions
     private Set<User> participants = new HashSet<>();
 
