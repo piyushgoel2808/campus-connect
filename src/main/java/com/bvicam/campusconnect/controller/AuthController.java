@@ -97,7 +97,7 @@ public class AuthController {
             User user = userRepository.findByEmail(authRequest.getEmail())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            return ResponseEntity.ok(new AuthResponse(token, user.getName(), user.getRole().name()));
+            return ResponseEntity.ok(new AuthResponse(token, user.getId(), user.getName(), user.getRole().name()));
         } catch (Exception ex) {
             return ResponseEntity.status(401).body("Invalid email or password");
         }

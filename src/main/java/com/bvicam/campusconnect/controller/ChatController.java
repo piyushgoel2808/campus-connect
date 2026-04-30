@@ -12,12 +12,14 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -38,37 +40,53 @@ public class ChatController {
     // --- PUBLIC CHAT ---
     @MessageMapping("/chat.sendMessage")
     @SendTo("/topic/public")
-    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
+    public ChatMessage sendMessage(@Payload ChatMessage chatMessage, Principal principal) {
+        if (principal != null) {
+            chatMessage.setSenderName(principal.getName());
+        }
         return chatMessage;
     }
 
     @MessageMapping("/chat.addUser")
     @SendTo("/topic/public")
-    public ChatMessage addUser(@Payload ChatMessage chatMessage) {
+    public ChatMessage addUser(@Payload ChatMessage chatMessage, Principal principal) {
+        if (principal != null) {
+            chatMessage.setSenderName(principal.getName());
+        }
         return chatMessage;
     }
 
     // --- PRIVATE CHAT (Real-Time) ---
     @MessageMapping("/chat.private")
-    public void sendPrivateMessage(@Payload ChatMessage message) {
+    public void sendPrivateMessage(@Payload ChatMessage message, Principal principal) {
+        String senderEmail = principal != null ? principal.getName() : message.getSenderName();
+        String receiverEmail = message.getReceiverName();
+
+        if (senderEmail == null || receiverEmail == null) {
+            return;
+        }
+
+        message.setSenderName(senderEmail);
+        message.setReceiverName(receiverEmail);
+
         // 1. Save to Database
         PrivateMessage pm = new PrivateMessage();
-        pm.setSenderEmail(message.getSenderName()); // We use Email as ID for simplicity here
-        pm.setReceiverEmail(message.getReceiverName());
+        pm.setSenderEmail(senderEmail);
+        pm.setReceiverEmail(receiverEmail);
         pm.setContent(message.getContent());
         messageRepo.save(pm);
 
         // 2. Send to Receiver (Specific User Queue)
         // Format: /user/{email}/queue/messages
         messagingTemplate.convertAndSendToUser(
-                message.getReceiverName(),
+                receiverEmail,
                 "/queue/messages",
                 message
         );
 
         // 3. Send back to Sender (so they see their own message instantly)
         messagingTemplate.convertAndSendToUser(
-                message.getSenderName(),
+                senderEmail,
                 "/queue/messages",
                 message
         );
@@ -76,7 +94,11 @@ public class ChatController {
 
     // --- TYPING INDICATOR ---
     @MessageMapping("/chat.typing")
-    public void typingIndicator(@Payload TypingMessage message) {
+    public void typingIndicator(@Payload TypingMessage message, Principal principal) {
+        if (principal != null) {
+            message.setSenderEmail(principal.getName());
+        }
+
         messagingTemplate.convertAndSendToUser(
                 message.getReceiverEmail(),
                 "/queue/typing",
@@ -88,7 +110,12 @@ public class ChatController {
     @GetMapping("/api/messages/history")
     @ResponseBody
     public ResponseEntity<List<PrivateMessage>> getHistory(@RequestParam String partnerEmail) {
-        String myEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        String myEmail = authentication.getName();
         return ResponseEntity.ok(messageRepo.findConversation(myEmail, partnerEmail));
     }
 
@@ -96,7 +123,12 @@ public class ChatController {
     @GetMapping("/api/messages/partners")
     @ResponseBody
     public ResponseEntity<?> getChatPartners() {
-        String myEmail = SecurityContextHolder.getContext().getAuthentication().getName();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        String myEmail = authentication.getName();
 
         // 1. Fetch all messages involving ME
         List<PrivateMessage> allMyMessages = messageRepo.findAll().stream()

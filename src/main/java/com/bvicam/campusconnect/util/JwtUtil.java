@@ -4,6 +4,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -14,9 +15,8 @@ import java.util.Map;
 @Component
 public class JwtUtil {
 
-    // Ideally, store this in application.properties, but for now we hardcode a secure key
-    // This key is used to sign the digital badge so no one can fake it.
-    public static final String SECRET = "5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437";
+    @Value("${app.jwt.secret:5367566B59703373367639792B423F4528482B4D6251655468576D5A71347437}")
+    private String secret;
 
     public String generateToken(String userName) {
         Map<String, Object> claims = new HashMap<>();
@@ -34,7 +34,7 @@ public class JwtUtil {
     }
 
     public Key getSignKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(SECRET);
+        byte[] keyBytes = Decoders.BASE64.decode(secret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
