@@ -97,13 +97,15 @@ public class ChatController {
         );
 
         // 4. Create in-app notification for receiver
-        notificationService.createAndDispatch(
-            receiverEmail,
-            NotificationType.MESSAGE,
-            "New message",
-            "You received a new message from " + senderEmail,
-            pm.getId()
-        );
+        if (notificationService != null) {
+            notificationService.createAndDispatch(
+                receiverEmail,
+                NotificationType.MESSAGE,
+                "New message",
+                "You received a new message from " + senderEmail,
+                pm.getId()
+            );
+        }
     }
 
     // --- TYPING INDICATOR ---
