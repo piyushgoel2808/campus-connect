@@ -47,7 +47,52 @@ function renderDirectoryTable(users) {
 }
 
 window.openUserProfile = function(user) {
-    document.getElementById("modalName").innerText = user.name;
-    // Populate other fields...
+    // Populate all profile fields in the modal
+    document.getElementById("modalUserId").value = user.id || "";
+    document.getElementById("modalName").innerText = user.name || "N/A";
+    document.getElementById("modalEmail").innerText = user.email || "N/A";
+    document.getElementById("modalRole").innerText = user.role || "N/A";
+    document.getElementById("modalDept").innerText = user.departmentName || "N/A";
+    document.getElementById("modalHeadline").innerText = user.headline || "N/A";
+    document.getElementById("modalCompany").innerText = user.currentCompany || "N/A";
+    document.getElementById("modalDesignation").innerText = user.designation || "N/A";
+    document.getElementById("modalSkills").innerText = user.skills || "N/A";
+    document.getElementById("modalBatch").innerText = user.batchYear || "N/A";
+    document.getElementById("modalEnrollment").innerText = user.enrollmentNumber || "N/A";
+    document.getElementById("modalBio").innerText = user.pastExperience || "N/A";
+    
+    // Set LinkedIn and GitHub URLs if available
+    const linkedinBtn = document.getElementById("linkedinBtn");
+    const githubBtn = document.getElementById("githubBtn");
+    
+    if(user.linkedinUrl) {
+        linkedinBtn.classList.remove("d-none");
+        linkedinBtn.href = user.linkedinUrl;
+    } else {
+        linkedinBtn.classList.add("d-none");
+    }
+    
+    if(user.githubUrl) {
+        githubBtn.classList.remove("d-none");
+        githubBtn.href = user.githubUrl;
+    } else {
+        githubBtn.classList.add("d-none");
+    }
+
+    // Store the user data in the modal for messaging
+    document.getElementById("modalUserId").dataset.userName = user.name;
+    document.getElementById("modalUserId").dataset.userEmail = user.email;
+    
     new bootstrap.Modal(document.getElementById('userProfileModal')).show();
+};
+
+window.startDirectChatFromModal = function() {
+    const userIdEl = document.getElementById("modalUserId");
+    const userId = userIdEl.value;
+    const userName = userIdEl.dataset.userName;
+    const userEmail = userIdEl.dataset.userEmail;
+    
+    if(window.startDirectChat) {
+        window.startDirectChat(userId, userName, userEmail);
+    }
 };

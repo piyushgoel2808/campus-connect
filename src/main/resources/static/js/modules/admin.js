@@ -74,11 +74,22 @@ window.deleteUser = async function(id) {
 
 window.openEditUserModal = function(user) {
     document.getElementById("editUserId").value = user.id;
+    
+    // Identity & Role fields
     document.getElementById("editName").value = user.name || "";
     document.getElementById("editEmail").value = user.email || "";
     document.getElementById("editRole").value = user.role || "STUDENT";
     document.getElementById("editBatch").value = user.batchYear || "";
     document.getElementById("editEnrollment").value = user.enrollmentNumber || "";
+    
+    // Professional Profile fields
+    document.getElementById("editHeadline").value = user.headline || "";
+    document.getElementById("editCompany").value = user.currentCompany || "";
+    document.getElementById("editDesignation").value = user.designation || "";
+    document.getElementById("editSkills").value = user.skills || "";
+    document.getElementById("editLinkedin").value = user.linkedinUrl || "";
+    const bioField = document.getElementById("editBio") || document.getElementById("editExperience");
+    if (bioField) bioField.value = user.pastExperience || "";
 
     new bootstrap.Modal(document.getElementById('editUserModal')).show();
 };
@@ -89,17 +100,51 @@ window.adminSaveUser = async function() {
         name: document.getElementById("editName").value,
         email: document.getElementById("editEmail").value,
         role: document.getElementById("editRole").value,
-        batchYear: document.getElementById("editBatch").value,
+        batchYear: parseInt(document.getElementById("editBatch").value) || null,
         enrollmentNumber: document.getElementById("editEnrollment").value,
+        headline: document.getElementById("editHeadline").value,
+        currentCompany: document.getElementById("editCompany").value,
+        designation: document.getElementById("editDesignation").value,
+        skills: document.getElementById("editSkills").value,
+        linkedinUrl: document.getElementById("editLinkedin").value,
+        pastExperience: (document.getElementById("editBio") || document.getElementById("editExperience"))?.value || ""
     };
 
-    const res = await send(`/admin/users/${id}`, 'PUT', data);
+    if (!data.name || !data.email) {
+        alert("Name and Email are required!");
+        return;
+    }
 
-    if(res.ok) {
-        bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
-        loadAdminUsers();
-    } else {
-        alert("Failed to update user.");
+    const btn = document.querySelector("button[onclick='window.adminSaveUser()']");
+    if(btn) { btn.innerHTML = "Saving..."; btn.disabled = true; }
+
+    try {
+        const token = localStorage.getItem("jwt_token");
+        const response = await fetch(`/api/admin/users/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        if(response.ok) {
+            alert("✅ User updated successfully!");
+            bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+            loadAdminUsers();
+        } else {
+            const text = await response.text();
+            alert("❌ Failed to update user: " + text);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Error: " + e.message);
+    } finally {
+        if(btn) {
+            btn.innerHTML = "Save Changes";
+            btn.disabled = false;
+        }
     }
 };
 
@@ -150,12 +195,18 @@ window.adminResetPassword = async function() {
 // =========================================================
 
 window.openCreateUserModal = function() {
-    // Clear the form fields first
+    // Clear all form fields
     document.getElementById("createName").value = "";
     document.getElementById("createEmail").value = "";
     document.getElementById("createRole").value = "STUDENT";
     document.getElementById("createBatch").value = "";
     document.getElementById("createEnrollment").value = "";
+    document.getElementById("createHeadline").value = "";
+    document.getElementById("createCompany").value = "";
+    document.getElementById("createDesignation").value = "";
+    document.getElementById("createSkills").value = "";
+    document.getElementById("createLinkedin").value = "";
+    document.getElementById("createBio").value = "";
 
     // Show the modal
     new bootstrap.Modal(document.getElementById('createUserModal')).show();
@@ -168,6 +219,12 @@ window.adminCreateUser = async function() {
         role: document.getElementById("createRole").value,
         batchYear: parseInt(document.getElementById("createBatch").value) || null,
         enrollmentNumber: document.getElementById("createEnrollment").value,
+        headline: document.getElementById("createHeadline").value,
+        currentCompany: document.getElementById("createCompany").value,
+        designation: document.getElementById("createDesignation").value,
+        skills: document.getElementById("createSkills").value,
+        linkedinUrl: document.getElementById("createLinkedin").value,
+        pastExperience: document.getElementById("createBio").value,
         password: "password123" // Default password
     };
 
@@ -197,6 +254,20 @@ window.adminCreateUser = async function() {
             const modalEl = document.getElementById('createUserModal');
             const modal = bootstrap.Modal.getInstance(modalEl);
             modal.hide();
+            
+            // Clear form
+            document.getElementById("createName").value = "";
+            document.getElementById("createEmail").value = "";
+            document.getElementById("createRole").value = "STUDENT";
+            document.getElementById("createBatch").value = "";
+            document.getElementById("createEnrollment").value = "";
+            document.getElementById("createHeadline").value = "";
+            document.getElementById("createCompany").value = "";
+            document.getElementById("createDesignation").value = "";
+            document.getElementById("createSkills").value = "";
+            document.getElementById("createLinkedin").value = "";
+            document.getElementById("createBio").value = "";
+            
             loadAdminUsers();
         } else {
             const errorText = await response.text();

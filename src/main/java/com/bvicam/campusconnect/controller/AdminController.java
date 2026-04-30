@@ -67,6 +67,15 @@ public class AdminController {
             user.setEnrollmentNumber(request.getEnrollmentNumber());
             user.setBatchYear(request.getBatchYear());
 
+            // Set Professional Profile Fields
+            user.setHeadline(request.getHeadline());
+            user.setCurrentCompany(request.getCurrentCompany());
+            user.setDesignation(request.getDesignation());
+            user.setSkills(request.getSkills());
+            user.setGithubUrl(request.getGithubUrl());
+            user.setLinkedinUrl(request.getLinkedinUrl());
+            user.setPastExperience(request.getPastExperience());
+
             String defaultPass = "Bvicam@2025";
             user.setPasswordHash(passwordEncoder.encode(defaultPass));
             user.setPasswordChanged(false);

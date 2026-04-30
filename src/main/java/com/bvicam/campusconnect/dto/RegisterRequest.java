@@ -10,8 +10,15 @@ public class RegisterRequest {
     private String password;
     private Role role; // STUDENT or ALUMNI
     private String enrollmentNumber;
-
-    // ✅ ADD THIS MISSING FIELD
     private Integer batchYear;
     private String departmentCode;
+    
+    // Professional Profile Fields
+    private String headline;
+    private String currentCompany;
+    private String designation;
+    private String skills;
+    private String githubUrl;
+    private String linkedinUrl;
+    private String pastExperience;
 }

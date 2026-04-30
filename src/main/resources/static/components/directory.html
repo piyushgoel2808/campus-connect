@@ -1,17 +1,17 @@
 <div class="card border-0 shadow-sm p-3">
     <div class="row g-2 mb-3">
         <div class="col-md-5">
-            <input type="text" id="dirSearch" class="form-control" placeholder="🔍 Search name, skill..." onkeyup="debouncedSearch()">
+            <input type="text" id="dirSearch" class="form-control" placeholder="🔍 Search name, skill..." aria-label="Search directory" onkeyup="debouncedSearch()">
         </div>
         <div class="col-md-3">
-            <select id="filterRole" class="form-select" onchange="runSearch()">
+            <select id="filterRole" class="form-select" aria-label="Filter by role" onchange="runSearch()">
                 <option value="ALL">All Roles</option>
                 <option value="STUDENT">Students</option>
                 <option value="ALUMNI">Alumni</option>
             </select>
         </div>
         <div class="col-md-2">
-            <select id="filterBatch" class="form-select" onchange="runSearch()">
+            <select id="filterBatch" class="form-select" aria-label="Filter by batch year" onchange="runSearch()">
                 <option value="">Year</option>
                 <option value="2025">2025</option>
                 <option value="2024">2024</option>
@@ -25,5 +25,100 @@
     </div>
     <div class="table-responsive">
         <table class="table align-middle table-hover"><tbody id="tableBody"></tbody></table>
+    </div>
+</div>
+
+<!-- User Profile Modal -->
+<div class="modal fade" id="userProfileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Profile</h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close profile modal" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalUserId">
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-user-circle"></i> Identity
+                        </h6>
+                        <div class="mb-3">
+                            <label class="text-muted small">Name</label>
+                            <p id="modalName" class="fw-bold fs-5">-</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small">Email</label>
+                            <p id="modalEmail" class="text-truncate">-</p>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="text-muted small">Role</label>
+                                <p id="modalRole" class="badge bg-info">-</p>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="text-muted small">Department</label>
+                                <p id="modalDept" class="badge bg-secondary">-</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="text-muted small">Batch Year</label>
+                                <p id="modalBatch">-</p>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="text-muted small">Enrollment No</label>
+                                <p id="modalEnrollment" class="text-break">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-briefcase"></i> Professional
+                        </h6>
+                        <div class="mb-3">
+                            <label class="text-muted small">Headline</label>
+                            <p id="modalHeadline">-</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small">Company</label>
+                            <p id="modalCompany">-</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small">Designation</label>
+                            <p id="modalDesignation">-</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small">Skills</label>
+                            <p id="modalSkills">-</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-muted small">Social Links</label>
+                            <div>
+                                <a id="linkedinBtn" href="#" target="_blank" class="btn btn-sm btn-primary me-2 d-none">
+                                    <i class="fab fa-linkedin"></i> LinkedIn
+                                </a>
+                                <a id="githubBtn" href="#" target="_blank" class="btn btn-sm btn-dark d-none">
+                                    <i class="fab fa-github"></i> GitHub
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <label class="text-muted small">Bio / Experience</label>
+                    <p id="modalBio" class="text-break border-start ps-3">-</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="startDirectChatFromModal()" data-bs-dismiss="modal">
+                    <i class="fas fa-envelope"></i> Send Message
+                </button>
+            </div>
+        </div>
     </div>
 </div>
