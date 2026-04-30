@@ -6,6 +6,13 @@ import { get, getCurrentUser } from '../utils/api.js';
 const WS_URL = "/ws";
 let stompClient = null;
 let currentChatPartnerEmail = null;
+const notificationListeners = [];
+
+export function onRealtimeNotification(handler) {
+    if (typeof handler === 'function') {
+        notificationListeners.push(handler);
+    }
+}
 
 // =========================================================
 // 1. CONNECT (SECURED WITH JWT)
@@ -36,6 +43,18 @@ export function connectChat() {
         // Subscribe to Typing Queue
         stompClient.subscribe('/user/queue/typing', function (payload) {
             onTypingMessageReceived(JSON.parse(payload.body));
+        });
+
+        // Subscribe to Notification Queue
+        stompClient.subscribe('/user/queue/notifications', function (payload) {
+            const notification = JSON.parse(payload.body);
+            notificationListeners.forEach(listener => {
+                try {
+                    listener(notification);
+                } catch (e) {
+                    console.error('Notification listener error:', e);
+                }
+            });
         });
 
         // 2. Subscribe to Public Chat (Global Chat)

@@ -3,9 +3,11 @@ package com.bvicam.campusconnect.controller;
 import com.bvicam.campusconnect.dto.ChatMessage;
 import com.bvicam.campusconnect.dto.TypingMessage;
 import com.bvicam.campusconnect.entity.PrivateMessage;
+import com.bvicam.campusconnect.entity.NotificationType;
 import com.bvicam.campusconnect.entity.User; // Added Import
 import com.bvicam.campusconnect.repository.PrivateMessageRepository;
 import com.bvicam.campusconnect.repository.UserRepository; // Added Import
+import com.bvicam.campusconnect.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -36,6 +38,9 @@ public class ChatController {
 
     @Autowired
     private UserRepository userRepository; // Added missing repository
+
+    @Autowired
+    private NotificationService notificationService;
 
     // --- PUBLIC CHAT ---
     @MessageMapping("/chat.sendMessage")
@@ -89,6 +94,15 @@ public class ChatController {
                 senderEmail,
                 "/queue/messages",
                 message
+        );
+
+        // 4. Create in-app notification for receiver
+        notificationService.createAndDispatch(
+            receiverEmail,
+            NotificationType.MESSAGE,
+            "New message",
+            "You received a new message from " + senderEmail,
+            pm.getId()
         );
     }
 

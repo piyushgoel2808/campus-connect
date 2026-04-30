@@ -5,6 +5,7 @@ import { getCurrentUser } from './utils/api.js';
 import { fetchJobs } from './modules/jobs.js';
 import { fetchEvents } from './modules/events.js';
 import { connectChat, fetchRecentChats } from './modules/chat.js';
+import { initNotifications } from './modules/notifications.js';
 import { fetchPosts } from './modules/wall.js'; //
 import './modules/feedback.js';
 // =========================================================
@@ -29,6 +30,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // D. Connect WebSocket
     connectChat();
+    initNotifications();
 
     // E. Load Default Tab (Wall or Messages)
     await window.switchTab('wall'); // changed default to wall, you can set to 'messages'

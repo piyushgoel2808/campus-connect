@@ -23,8 +23,8 @@
 
         .navbar {
             background: var(--cc-surface);
-            backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
             border-bottom: 1px solid var(--cc-border);
         }
@@ -99,6 +99,54 @@
             border-top: 1px solid var(--cc-border);
         }
 
+        .shell-sticky-nav {
+            top: 90px;
+        }
+
+        .dm-messages-area {
+            height: 350px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .rating-stars {
+            font-size: 2rem;
+            cursor: pointer;
+            color: #ffc107;
+        }
+
+        .feedback-comment-box {
+            height: 100px;
+        }
+
+        .bot-messages {
+            overflow-y: auto;
+            height: 340px;
+            padding: 10px;
+        }
+
+        .shell-toast-container {
+            z-index: 1050;
+        }
+
+        .icon-only-btn {
+            min-width: 2.25rem;
+            min-height: 2.25rem;
+        }
+
+        .notification-btn {
+            position: relative;
+        }
+
+        .notification-dropdown {
+            width: 340px;
+            max-height: 420px;
+            overflow-y: auto;
+            border-radius: 14px;
+            border: 1px solid var(--cc-border);
+        }
+
         /* Bot Widget */
         #botIcon { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: #0d6efd; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; transition: transform 0.2s; }
         #botIcon:hover { transform: scale(1.1); }
@@ -111,6 +159,21 @@
     <div class="container-fluid px-4">
         <a class="navbar-brand fw-bold text-primary" href="#"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</a>
         <div class="d-flex align-items-center">
+            <div class="dropdown me-2">
+                <button class="btn btn-light border notification-btn" id="notificationMenuBtn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open notifications">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-0 notification-dropdown" aria-labelledby="notificationMenuBtn">
+                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                        <strong class="small">Notifications</strong>
+                        <button class="btn btn-sm btn-link text-decoration-none p-0" id="markAllNotificationsRead" type="button">Mark all read</button>
+                    </div>
+                    <div id="notificationList" class="py-1">
+                        <div class="small text-muted px-3 py-2">Loading notifications...</div>
+                    </div>
+                </div>
+            </div>
             <span class="fw-bold me-2 d-none d-md-block" id="welcomeUser">...</span>
             <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="logout()">Logout</button>
         </div>
@@ -121,7 +184,7 @@
     <div class="row g-4">
 
         <div class="col-lg-2 d-none d-lg-block">
-            <div class="nav flex-column nav-pills sticky-top" style="top: 90px;">
+            <div class="nav flex-column nav-pills sticky-top shell-sticky-nav">
                 <button class="nav-link active" id="tab-messages" aria-label="Open messages" onclick="switchTab('messages')"><i class="fas fa-comment-dots me-2"></i> Messages <span id="msgBadge" class="badge bg-danger ms-2 d-none">New</span></button>
                 <button class="nav-link" id="tab-directory" aria-label="Open directory" onclick="switchTab('directory')"><i class="fas fa-users me-2"></i> Directory</button>
                 <button class="nav-link" id="tab-events" aria-label="Open events" onclick="switchTab('events')"><i class="fas fa-calendar-alt me-2"></i> Events</button>
@@ -171,10 +234,10 @@
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="dmModalTitle">Chat</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close direct message modal" data-bs-dismiss="modal"></button>
             </div>
 
-            <div class="modal-body bg-light" id="dmMessagesArea" style="height: 350px; overflow-y: auto; display: flex; flex-direction: column;">
+            <div class="modal-body bg-light dm-messages-area" id="dmMessagesArea">
             </div>
 
             <div class="modal-footer flex-column align-items-stretch p-2">
@@ -193,7 +256,7 @@
 <div class="modal fade" id="postJobModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Post Job</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h5 class="modal-title">Post Job</h5><button type="button" class="btn-close" aria-label="Close post job modal" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <input type="text" id="jobTitle" class="form-control mb-2" placeholder="Job Title">
                 <input type="text" id="jobCompany" class="form-control mb-2" placeholder="Company Name">
@@ -206,34 +269,18 @@
     </div>
 </div>
 
-<div class="modal fade" id="eventModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Add New Event</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <input type="text" id="evtTitle" class="form-control mb-2" placeholder="Event Title">
-                <textarea id="evtDesc" class="form-control mb-2" placeholder="Description"></textarea>
-                <input type="text" id="evtLoc" class="form-control mb-2" placeholder="Location">
-                <label class="small text-muted">Date & Time</label>
-                <input type="datetime-local" id="evtDate" class="form-control">
-            </div>
-            <div class="modal-footer"><button class="btn btn-primary" onclick="publishNewEvent()">Publish Event</button></div>
-        </div>
-    </div>
-</div>
-
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title"><i class="fas fa-star"></i> Rate Your Experience</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" aria-label="Close feedback modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center">
                 <p class="text-muted">How likely are you to recommend Campus Connect?</p>
 
                 <div class="mb-3">
-                    <div class="rating-stars" style="font-size: 2rem; cursor: pointer; color: #ffc107;">
+                    <div class="rating-stars">
                         <i class="far fa-star" onclick="setRating(1)" id="star1"></i>
                         <i class="far fa-star" onclick="setRating(2)" id="star2"></i>
                         <i class="far fa-star" onclick="setRating(3)" id="star3"></i>
@@ -244,7 +291,7 @@
                 </div>
 
                 <div class="form-floating">
-                    <textarea class="form-control" placeholder="Leave a comment here" id="feedbackComment" style="height: 100px"></textarea>
+                    <textarea class="form-control feedback-comment-box" placeholder="Leave a comment here" id="feedbackComment"></textarea>
                     <label for="feedbackComment">Tell us what we can improve...</label>
                 </div>
             </div>
@@ -259,9 +306,9 @@
 <div id="botIcon" onclick="toggleBot()"><i class="fas fa-robot fa-lg"></i></div>
 <div id="botWindow" class="card shadow">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <span>🤖 CampusBot</span><button class="btn btn-sm text-white" onclick="toggleBot()"><i class="fas fa-times"></i></button>
+        <span>🤖 CampusBot</span><button class="btn btn-sm text-white icon-only-btn" aria-label="Close bot window" onclick="toggleBot()"><i class="fas fa-times"></i></button>
     </div>
-    <div id="botMessages" class="card-body bg-light" style="overflow-y: auto; height: 340px; padding: 10px;">
+    <div id="botMessages" class="card-body bg-light bot-messages">
         <div class="system-message text-center text-muted small mt-2">Ask about batch 2024 or placements!</div>
     </div>
     <div class="card-footer p-2 bg-white">
@@ -272,57 +319,13 @@
     </div>
 </div>
 
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+<div class="toast-container position-fixed bottom-0 end-0 p-3 shell-toast-container">
     <div id="liveToast" class="toast" role="alert">
         <div class="toast-header bg-primary text-white">
             <strong class="me-auto">New Message</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close toast" data-bs-dismiss="toast"></button>
         </div>
         <div class="toast-body bg-white" id="toastBody"></div>
-    </div>
-</div>
-
-<div class="modal fade" id="editEventModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title">Edit Event</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="editEventId">
-                <label>Title</label>
-                <input type="text" id="editEventTitle" class="form-control mb-2">
-                <label>Description</label>
-                <textarea id="editEventDesc" class="form-control mb-2"></textarea>
-                <label>Location</label>
-                <input type="text" id="editEventLoc" class="form-control mb-2">
-                <label>Date & Time</label>
-                <input type="datetime-local" id="editEventDate" class="form-control mb-2">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="submitEditEvent()">Save Changes</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="participantsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="fas fa-users"></i> Event Participants</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <ul class="list-group" id="participantsList">
-                    <li class="list-group-item text-center">Loading...</li>
-                </ul>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
     </div>
 </div>
 

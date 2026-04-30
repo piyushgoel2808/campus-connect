@@ -1,9 +1,12 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.entity.Job;
+import com.bvicam.campusconnect.entity.NotificationType;
+import com.bvicam.campusconnect.entity.Role;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.JobRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
+import com.bvicam.campusconnect.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -21,6 +24,9 @@ public class JobController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     // 1. Get All Jobs (Everyone)
     @GetMapping
@@ -43,7 +49,21 @@ public class JobController {
         }
 
         job.setPostedBy(user);
-        jobRepository.save(job);
+        Job savedJob = jobRepository.save(job);
+
+        List<User> users = userRepository.findAll();
+        for (User target : users) {
+            if (target.getRole() == Role.STUDENT) {
+                notificationService.createAndDispatch(
+                        target.getEmail(),
+                        NotificationType.JOB,
+                        "New job opportunity",
+                        savedJob.getTitle() + " at " + savedJob.getCompany(),
+                        savedJob.getId()
+                );
+            }
+        }
+
         return ResponseEntity.ok("Job posted successfully!");
     }
     @DeleteMapping("/{id}")

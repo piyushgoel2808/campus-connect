@@ -2,9 +2,11 @@ package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.EventDTO;
 import com.bvicam.campusconnect.entity.Event;
+import com.bvicam.campusconnect.entity.NotificationType;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.EventRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
+import com.bvicam.campusconnect.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ public class EventController {
 
     @Autowired private EventRepository eventRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private NotificationService notificationService;
 
     // =========================================================
     // 1. GET ALL EVENTS (Response uses DTO)
@@ -72,7 +75,7 @@ public class EventController {
     // 2. CREATE EVENT (Request uses Entity)
     // =========================================================
     @PostMapping
-    public ResponseEntity<?> createEvent(@RequestBody Event event) {
+    public ResponseEntity<?> createEvent(@RequestBody Event event, Principal principal) {
         try {
             // Prevent NullPointer if participants list is missing in JSON
             if(event.getParticipants() == null) {
@@ -80,6 +83,21 @@ public class EventController {
             }
 
             Event savedEvent = eventRepository.save(event);
+
+            String creatorEmail = principal != null ? principal.getName() : null;
+            for (User user : userRepository.findAll()) {
+                if (creatorEmail != null && creatorEmail.equalsIgnoreCase(user.getEmail())) {
+                    continue;
+                }
+                notificationService.createAndDispatch(
+                        user.getEmail(),
+                        NotificationType.EVENT,
+                        "New event posted",
+                        savedEvent.getTitle() + " is now available.",
+                        savedEvent.getId()
+                );
+            }
+
             return ResponseEntity.ok(savedEvent);
 
         } catch (Exception e) {
@@ -122,6 +140,15 @@ public class EventController {
         }
 
         eventRepository.save(event);
+
+        notificationService.createAndDispatch(
+            user.getEmail(),
+            NotificationType.EVENT,
+            "RSVP updated",
+            "Your RSVP for \"" + event.getTitle() + "\" has been updated.",
+            event.getId()
+        );
+
         return ResponseEntity.ok().build();
     }
 
