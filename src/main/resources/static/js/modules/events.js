@@ -39,16 +39,24 @@ function renderEvents(events) {
     const { role } = getCurrentUser();
 
     if (events.length === 0) {
-        container.innerHTML = "<div class='col-12 text-center text-muted'>No upcoming events found.</div>";
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="cc-empty-state cc-panel">
+                    <i class="fas fa-calendar-alt fa-lg"></i>
+                    <h5 class="mb-2">No upcoming events</h5>
+                    <p class="mb-0">New events will appear here when admins post them.</p>
+                </div>
+            </div>`;
         return;
     }
 
     events.forEach(e => {
         const dateStr = new Date(e.dateTime).toDateString();
+        const timeStr = new Date(e.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         // 1. Participant Count Badge
         const count = e.participantCount || 0;
-        const countBadge = `<span class="badge bg-secondary mb-2"><i class="fas fa-user-check"></i> ${count} Going</span>`;
+        const countBadge = `<span class="badge rounded-pill text-bg-light border mb-2"><i class="fas fa-user-check me-1"></i> ${count} Going</span>`;
 
         // 2. Admin Controls
         let adminControls = "";
@@ -72,27 +80,31 @@ function renderEvents(events) {
 
         // 3. RSVP Button
         let rsvpBtn = e.attending
-            ? `<button class="btn btn-success w-100" onclick="window.toggleRSVP(${e.id})"><i class="fas fa-check"></i> Going</button>`
+            ? `<button class="btn btn-success w-100" onclick="window.toggleRSVP(${e.id})"><i class="fas fa-check me-1"></i> Going</button>`
             : `<button class="btn btn-outline-primary w-100" onclick="window.toggleRSVP(${e.id})">RSVP</button>`;
 
         // 4. Build Card
         container.innerHTML += `
             <div class="col-md-4 mb-4">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between mb-2">
-                            <h5 class="card-title text-primary mb-0">${e.title}</h5>
-                            <small class="text-muted">${dateStr}</small>
+                <article class="cc-feature-card cc-hover-lift h-100 d-flex flex-column">
+                    <div class="cc-feature-card-header">
+                        <div>
+                            <h5 class="cc-feature-title mb-1">${e.title}</h5>
+                            <div class="cc-feature-meta"><i class="fas fa-map-marker-alt me-1"></i> ${e.location}</div>
                         </div>
-                        <h6 class="text-muted small mb-3"><i class="fas fa-map-marker-alt"></i> ${e.location}</h6>
-                        <p class="card-text flex-grow-1">${e.description}</p>
-
+                        <div class="text-end">
+                            <span class="cc-pill">${dateStr}</span>
+                            <div class="small text-muted mt-2">${timeStr}</div>
+                        </div>
+                    </div>
+                    <div class="cc-feature-card-body d-flex flex-column flex-grow-1">
+                        <p class="cc-feature-meta flex-grow-1">${e.description}</p>
                         <div>${countBadge}</div>
 
-                        <div class="mt-auto pt-2">${rsvpBtn}</div>
+                        <div class="mt-3">${rsvpBtn}</div>
                         ${adminControls}
                     </div>
-                </div>
+                </article>
             </div>`;
     });
 }

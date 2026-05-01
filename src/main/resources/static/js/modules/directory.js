@@ -27,20 +27,54 @@ function renderDirectoryTable(users) {
     tbody.innerHTML = "";
     const { email: myEmail } = getCurrentUser();
 
+    if (!users || users.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3">
+                    <div class="cc-empty-state">
+                        <i class="fas fa-search fa-lg"></i>
+                        <h5 class="mb-2">No people found</h5>
+                        <p class="mb-0">Try a different role, batch, or keyword.</p>
+                    </div>
+                </td>
+            </tr>`;
+        return;
+    }
+
     users.forEach(u => {
         if (u.email === myEmail) return;
 
         const deptDisplay = u.departmentName ? u.departmentName : (u.role || 'No Role');
+        const batchDisplay = u.batchYear ? `Batch ${u.batchYear}` : 'Batch N/A';
+        const skillsDisplay = u.skills ? u.skills.split(',').slice(0, 3).map(s => s.trim()).filter(Boolean) : [];
 
         tbody.innerHTML += `
-            <tr onclick='window.openUserProfile(${JSON.stringify(u).replace(/'/g, "&#39;")})'>
-                <td><div class="fw-bold">${u.name}</div></td>
-                <td><span class="badge bg-primary">${deptDisplay}</span></td>
-                <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary"
-                        onclick="event.stopPropagation(); window.startDirectChat('${u.id}', '${u.name}', '${u.email}')">
-                        Message
-                    </button>
+            <tr class="cc-directory-row" onclick='window.openUserProfile(${JSON.stringify(u).replace(/'/g, "&#39;")})' role="button">
+                <td>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-circle">${(u.name || 'U').charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div class="fw-bold">${u.name}</div>
+                            <div class="small text-muted">${u.email}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="cc-stack gap-2">
+                        <span class="cc-pill">${deptDisplay}</span>
+                        <span class="small text-muted">${batchDisplay}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="cc-stack gap-2">
+                        <div class="d-flex flex-wrap gap-1">
+                            ${skillsDisplay.map(skill => `<span class="badge rounded-pill text-bg-light border">${skill}</span>`).join('') || '<span class="text-muted small">No skills listed</span>'}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary align-self-start"
+                            onclick="event.stopPropagation(); window.startDirectChat('${u.id}', '${u.name}', '${u.email}')">
+                            Message
+                        </button>
+                    </div>
                 </td>
             </tr>`;
     });

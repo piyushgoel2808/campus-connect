@@ -165,6 +165,20 @@
     box-shadow: var(--cc-shadow-sm);
 }
 
+.cc-directory-row {
+    cursor: pointer;
+}
+
+.cc-feed-image {
+    max-height: 400px;
+    object-fit: cover;
+}
+
+.cc-feed-content {
+    white-space: pre-wrap;
+    color: #333;
+}
+
 .admin-broadcast-card {
     max-width: 600px;
 }

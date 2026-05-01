@@ -8,7 +8,7 @@ export async function fetchPosts() {
     if (!container) return;
 
     container.innerHTML = `
-        <div class="text-center py-5">
+        <div class="cc-empty-state cc-panel">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2 text-muted">Loading your feed...</p>
         </div>`;
@@ -28,7 +28,12 @@ function renderPosts(posts) {
     const currentUser = getCurrentUser();
 
     if (!posts || posts.length === 0) {
-        container.innerHTML = `<div class="text-center text-muted py-5">No posts yet. Be the first to share!</div>`;
+        container.innerHTML = `
+            <div class="cc-empty-state cc-panel">
+                <i class="fas fa-newspaper fa-lg"></i>
+                <h5 class="mb-2">No posts yet</h5>
+                <p class="mb-0">Be the first to share something with the campus.</p>
+            </div>`;
         return;
     }
 
@@ -40,11 +45,11 @@ function renderPosts(posts) {
 
         // 1. PINNED LOGIC & STYLING
         let pinnedBadge = "";
-        let cardClass = "card shadow-sm mb-4 border-0";
+        let cardClass = "cc-feature-card cc-hover-lift";
 
         if (p.isPinned) {
             pinnedBadge = `<span class="badge bg-warning text-dark me-2"><i class="fas fa-thumbtack"></i> Pinned</span>`;
-            cardClass = "card shadow-sm mb-4 border border-warning border-2"; // Highlight border
+            cardClass = "cc-feature-card cc-hover-lift border border-warning border-2";
         }
 
         // 2. ADMIN & AUTHOR CONTROLS
@@ -81,16 +86,14 @@ function renderPosts(posts) {
         }
 
         const imageHtml = p.imageUrl ? `
-            <img src="${p.imageUrl}" class="img-fluid rounded mb-3 w-100 border"
-                 style="max-height: 400px; object-fit: cover;"
+            <img src="${p.imageUrl}" class="img-fluid rounded mb-3 w-100 border cc-feed-image"
                  onerror="this.style.display='none'">` : "";
 
         const card = `
         <div class="${cardClass}">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <div class="cc-feature-card-header">
                 <div class="d-flex align-items-center">
-                    <div class="bg-primary text-white rounded-circle d-flex justify-content-center align-items-center me-2 shadow-sm"
-                         style="width: 42px; height: 42px; font-weight: bold;">
+                    <div class="avatar-circle me-2 shadow-sm">
                         ${authorName.charAt(0).toUpperCase()}
                     </div>
                     <div>
@@ -98,16 +101,16 @@ function renderPosts(posts) {
                             ${pinnedBadge}
                             <h6 class="mb-0 fw-bold">${authorName}</h6>
                         </div>
-                        <small class="text-muted" style="font-size: 0.75rem;">
-                            <span class="badge bg-light text-dark border me-1" style="font-size: 0.6rem">${authorRole}</span>
+                        <small class="text-muted small">
+                            <span class="badge bg-light text-dark border me-1">${authorRole}</span>
                             • ${dateDisplay}
                         </small>
                     </div>
                 </div>
                 ${actionControls}
             </div>
-            <div class="card-body">
-                <p class="card-text mb-3" style="white-space: pre-wrap; color: #333;">${p.content}</p>
+            <div class="cc-feature-card-body">
+                <p class="card-text mb-3 cc-feed-content">${p.content}</p>
                 ${imageHtml}
                 <hr class="text-muted opacity-25">
                 <div class="d-flex align-items-center">
