@@ -1,18 +1,22 @@
-<div class="card border-0 shadow-sm p-3">
-    <div class="row g-2 mb-3">
-        <div class="col-md-5">
-            <input type="text" id="dirSearch" class="form-control" placeholder="🔍 Search name, skill..." aria-label="Search directory" onkeyup="debouncedSearch()">
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-users"></i> Directory</span>
+            <h2 class="cc-page-title mt-2 mb-1">Find people faster</h2>
+            <p class="cc-page-subtitle">Search alumni, students, and mentors by role, batch, or skill with a cleaner discovery flow.</p>
         </div>
-        <div class="col-md-3">
+    </div>
+
+    <div class="cc-panel p-3 p-lg-4">
+        <div class="cc-filter-bar">
+            <input type="text" id="dirSearch" class="form-control" placeholder="Search name, skill, company" aria-label="Search directory" onkeyup="debouncedSearch()">
             <select id="filterRole" class="form-select" aria-label="Filter by role" onchange="runSearch()">
                 <option value="ALL">All Roles</option>
                 <option value="STUDENT">Students</option>
                 <option value="ALUMNI">Alumni</option>
             </select>
-        </div>
-        <div class="col-md-2">
             <select id="filterBatch" class="form-select" aria-label="Filter by batch year" onchange="runSearch()">
-                <option value="">Year</option>
+                <option value="">Any Batch</option>
                 <option value="2025">2025</option>
                 <option value="2024">2024</option>
                 <option value="2023">2023</option>
@@ -20,20 +24,23 @@
                 <option value="2021">2021</option>
                 <option value="2020">2020</option>
             </select>
+            <button class="btn btn-primary px-4" onclick="runSearch()">Search</button>
         </div>
-        <div class="col-md-2"><button class="btn btn-primary w-100" onclick="runSearch()">Go</button></div>
     </div>
-    <div class="table-responsive">
-        <table class="table align-middle table-hover"><tbody id="tableBody"></tbody></table>
+
+    <div class="cc-panel p-2 p-lg-3">
+        <div class="table-responsive">
+            <table class="table align-middle table-hover mb-0"><tbody id="tableBody"></tbody></table>
+        </div>
     </div>
 </div>
 
 <!-- User Profile Modal -->
-<div class="modal fade" id="userProfileModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade cc-profile-modal" id="userProfileModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">Profile</h5>
+            <div class="modal-header">
+                <h5 class="modal-title">Profile preview</h5>
                 <button type="button" class="btn-close btn-close-white" aria-label="Close profile modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -41,60 +48,68 @@
                 
                 <div class="row">
                     <div class="col-md-6">
-                        <h6 class="text-primary mb-3">
+                        <div class="cc-divider-title">
                             <i class="fas fa-user-circle"></i> Identity
-                        </h6>
-                        <div class="mb-3">
-                            <label class="text-muted small">Name</label>
-                            <p id="modalName" class="fw-bold fs-5">-</p>
                         </div>
-                        <div class="mb-3">
+                        <div class="cc-profile-section mb-3">
+                            <label class="text-muted small">Name</label>
+                            <p id="modalName" class="cc-profile-value fs-5">-</p>
+                        </div>
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Email</label>
-                            <p id="modalEmail" class="text-truncate">-</p>
+                            <p id="modalEmail" class="cc-profile-value text-truncate">-</p>
                         </div>
                         <div class="row">
                             <div class="col-6 mb-3">
+                                <div class="cc-profile-section h-100">
                                 <label class="text-muted small">Role</label>
                                 <p id="modalRole" class="badge bg-info">-</p>
+                                </div>
                             </div>
                             <div class="col-6 mb-3">
+                                <div class="cc-profile-section h-100">
                                 <label class="text-muted small">Department</label>
                                 <p id="modalDept" class="badge bg-secondary">-</p>
+                                </div>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-6 mb-3">
+                                <div class="cc-profile-section h-100">
                                 <label class="text-muted small">Batch Year</label>
-                                <p id="modalBatch">-</p>
+                                <p id="modalBatch" class="cc-profile-value">-</p>
+                                </div>
                             </div>
                             <div class="col-6 mb-3">
+                                <div class="cc-profile-section h-100">
                                 <label class="text-muted small">Enrollment No</label>
-                                <p id="modalEnrollment" class="text-break">-</p>
+                                <p id="modalEnrollment" class="cc-profile-value text-break">-</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="col-md-6">
-                        <h6 class="text-success mb-3">
+                        <div class="cc-divider-title">
                             <i class="fas fa-briefcase"></i> Professional
-                        </h6>
-                        <div class="mb-3">
+                        </div>
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Headline</label>
-                            <p id="modalHeadline">-</p>
+                            <p id="modalHeadline" class="cc-profile-value">-</p>
                         </div>
-                        <div class="mb-3">
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Company</label>
-                            <p id="modalCompany">-</p>
+                            <p id="modalCompany" class="cc-profile-value">-</p>
                         </div>
-                        <div class="mb-3">
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Designation</label>
-                            <p id="modalDesignation">-</p>
+                            <p id="modalDesignation" class="cc-profile-value">-</p>
                         </div>
-                        <div class="mb-3">
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Skills</label>
-                            <p id="modalSkills">-</p>
+                            <p id="modalSkills" class="cc-profile-value">-</p>
                         </div>
-                        <div class="mb-3">
+                        <div class="cc-profile-section mb-3">
                             <label class="text-muted small">Social Links</label>
                             <div>
                                 <a id="linkedinBtn" href="#" target="_blank" class="btn btn-sm btn-primary me-2 d-none">
@@ -108,9 +123,9 @@
                     </div>
                 </div>
 
-                <div class="mt-3">
+                <div class="cc-profile-section mt-2">
                     <label class="text-muted small">Bio / Experience</label>
-                    <p id="modalBio" class="text-break border-start ps-3">-</p>
+                    <p id="modalBio" class="cc-profile-value text-break mt-2">-</p>
                 </div>
             </div>
             <div class="modal-footer">

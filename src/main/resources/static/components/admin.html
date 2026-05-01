@@ -1,13 +1,13 @@
-<style>
-    .admin-broadcast-card {
-        max-width: 600px;
-    }
-</style>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-shield-halved"></i> Admin</span>
+            <h2 class="cc-page-title mt-2 mb-1">Admin workspace</h2>
+            <p class="cc-page-subtitle">A clearer workspace for user management, feedback review, and broadcast messages.</p>
+        </div>
+    </div>
 
-<div class="container-fluid p-4">
-    <h2 class="mb-4">Admin Dashboard</h2>
-
-    <ul class="nav nav-tabs mb-4">
+    <ul class="nav nav-pills cc-admin-tabs gap-2 mb-3">
         <li class="nav-item">
             <button class="nav-link active" id="tab-users-btn" data-bs-toggle="tab" data-bs-target="#admin-users">Manage Users</button>
         </li>
@@ -19,7 +19,7 @@
         </li>
     </ul>
 
-    <div class="tab-content">
+    <div class="tab-content cc-panel p-3 p-lg-4">
         <div class="tab-pane fade show active" id="admin-users">
             <div class="row mb-3">
                 <div class="col-md-6">
@@ -35,7 +35,7 @@
                 </div>
             </div>
 
-            <div class="table-responsive bg-white shadow-sm rounded">
+            <div class="table-responsive cc-table-card">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                     <tr>
@@ -54,7 +54,7 @@
         </div>
 
         <div class="tab-pane fade" id="admin-feedback">
-            <div class="table-responsive bg-white shadow-sm rounded">
+            <div class="table-responsive cc-table-card">
                 <table class="table table-striped mb-0">
                     <thead><tr><th>User</th><th>Rating</th><th>Comment</th></tr></thead>
                     <tbody id="adminFeedbackTable">
@@ -65,7 +65,7 @@
         </div>
 
         <div class="tab-pane fade" id="admin-broadcast">
-            <div class="card shadow-sm p-4 mx-auto admin-broadcast-card">
+            <div class="cc-panel p-4 mx-auto admin-broadcast-card">
                 <div class="mb-3">
                     <label class="form-label">Subject</label>
                     <input type="text" class="form-control" id="broadcastSubject" placeholder="Important Announcement">
@@ -82,7 +82,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="createUserModal" tabindex="-1">
+<div class="modal fade cc-profile-modal" id="createUserModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
@@ -158,7 +158,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade cc-profile-modal" id="editUserModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">

@@ -1,6 +1,22 @@
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-white py-3"><h5 class="mb-0">Recent Conversations</h5></div>
-    <div id="recentChatsList">
-        <div class="text-center py-5 text-muted">Loading conversations...</div>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-comments"></i> Messages</span>
+            <h2 class="cc-page-title mt-2 mb-1">Recent conversations</h2>
+            <p class="cc-page-subtitle">Keep the conversation list lightweight, readable, and easy to scan.</p>
+        </div>
+    </div>
+
+    <div class="cc-panel">
+        <div class="cc-panel-header">
+            <h5 class="mb-0 fw-bold">Recent conversations</h5>
+        </div>
+        <div id="recentChatsList" class="cc-list-grid cc-panel-body">
+            <div class="cc-empty-state">
+                <i class="fas fa-comments fa-lg"></i>
+                <h5 class="mb-2">Loading conversations</h5>
+                <p class="mb-0">Fetching your recent messages...</p>
+            </div>
+        </div>
     </div>
 </div>

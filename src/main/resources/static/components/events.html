@@ -1,24 +1,32 @@
-<div class="container-fluid p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Upcoming Events</h2>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-calendar-alt"></i> Events</span>
+            <h2 class="cc-page-title mt-2 mb-1">Upcoming events</h2>
+            <p class="cc-page-subtitle">Make events feel like highlights, not plain listings, with cleaner spacing and stronger cards.</p>
+        </div>
         <button id="btnAddEvent" class="btn btn-primary d-none" data-bs-toggle="modal" data-bs-target="#eventModal">
-            <i class="fas fa-plus"></i> Post New Event
+            <i class="fas fa-plus me-1"></i> Post New Event
         </button>
     </div>
 
-    <div class="row" id="eventsContainer">
-        <div class="col-12 text-center py-5">
-            <div class="spinner-border text-primary"></div>
+    <div id="eventsContainer" class="row g-4">
+        <div class="col-12">
+            <div class="cc-empty-state cc-panel">
+                <div class="spinner-border text-primary mb-3"></div>
+                <h5 class="mb-2">Loading events</h5>
+                <p class="mb-0">Fetching upcoming events and RSVPs...</p>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="eventModal" tabindex="-1">
+<div class="modal fade cc-profile-modal" id="eventModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Publish New Event</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title">Create event</h5>
+                <button type="button" class="btn-close" aria-label="Close publish event modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
@@ -27,7 +35,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Date & Time</label>
-                    <input type="datetime-local" class="form-control" id="evtDate">
+                    <input type="datetime-local" class="form-control" id="evtDate" aria-label="Event date and time">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Location</label>
@@ -35,7 +43,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Description</label>
-                    <textarea class="form-control" id="evtDesc" rows="3"></textarea>
+                    <textarea class="form-control" id="evtDesc" rows="3" placeholder="Describe the event"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -46,30 +54,30 @@
     </div>
 </div>
 
-<div class="modal fade" id="editEventModal" tabindex="-1">
+<div class="modal fade cc-profile-modal" id="editEventModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Event</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title">Edit event</h5>
+                <button type="button" class="btn-close" aria-label="Close edit event modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editEventId">
                 <div class="mb-3">
                     <label class="form-label">Event Title</label>
-                    <input type="text" class="form-control" id="editEventTitle">
+                    <input type="text" class="form-control" id="editEventTitle" placeholder="Event title">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Date & Time</label>
-                    <input type="datetime-local" class="form-control" id="editEventDate">
+                    <input type="datetime-local" class="form-control" id="editEventDate" aria-label="Edit event date and time">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Location</label>
-                    <input type="text" class="form-control" id="editEventLoc">
+                    <input type="text" class="form-control" id="editEventLoc" placeholder="Location">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Description</label>
-                    <textarea class="form-control" id="editEventDesc" rows="3"></textarea>
+                    <textarea class="form-control" id="editEventDesc" rows="3" placeholder="Describe the event"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -80,12 +88,12 @@
     </div>
 </div>
 
-<div class="modal fade" id="participantsModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade cc-profile-modal" id="participantsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title"><i class="fas fa-users"></i> Event Participants</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" aria-label="Close participants modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <ul class="list-group" id="participantsList">

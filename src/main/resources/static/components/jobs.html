@@ -1,7 +1,18 @@
-<div class="d-flex justify-content-between mb-3">
-    <h4>Jobs</h4>
-    <button id="btnPostJob" class="btn btn-success d-none" data-bs-toggle="modal" data-bs-target="#postJobModal">Post Job</button>
-</div>
-<div id="jobList">
-    <div class="text-center py-5 text-muted">Loading jobs...</div>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-briefcase"></i> Careers</span>
+            <h2 class="cc-page-title mt-2 mb-1">Job opportunities</h2>
+            <p class="cc-page-subtitle">A more scannable job board with stronger hierarchy for company, role, and application actions.</p>
+        </div>
+        <button id="btnPostJob" class="btn btn-primary d-none" data-bs-toggle="modal" data-bs-target="#postJobModal">Post Job</button>
+    </div>
+
+    <div id="jobList" class="cc-list-grid">
+        <div class="cc-empty-state cc-panel">
+            <i class="fas fa-briefcase fa-lg"></i>
+            <h5 class="mb-2">Loading jobs</h5>
+            <p class="mb-0">Fetching the latest opportunities...</p>
+        </div>
+    </div>
 </div>

@@ -1,4 +1,5 @@
-<div class="card p-3 mb-3 shadow-sm">
+<div class="cc-post-card mb-3">
+    <div class="cc-divider-title mb-3"><i class="fas fa-pen-nib"></i> Share something</div>
     <textarea id="postContent" class="form-control border-0 bg-light mb-2" placeholder="Share an update..."></textarea>
 
     <input type="text" id="postImage" class="form-control form-control-sm mb-2" placeholder="Image URL (Optional)">
@@ -10,5 +11,10 @@
     </div>
 </div>
 
-<div id="postsContainer"> <div class="text-center py-5 text-muted">Loading feed...</div>
+<div id="postsContainer" class="cc-stack">
+    <div class="cc-empty-state cc-panel">
+        <i class="fas fa-newspaper fa-lg"></i>
+        <h5 class="mb-2">Loading feed</h5>
+        <p class="mb-0">Fetching the latest updates from your campus network...</p>
+    </div>
 </div>
