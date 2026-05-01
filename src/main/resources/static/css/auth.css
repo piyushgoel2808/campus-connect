@@ -1,0 +1,102 @@
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background:
+        radial-gradient(circle at top left, rgba(13, 110, 253, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(255, 183, 3, 0.16), transparent 25%),
+        linear-gradient(180deg, #f7faff 0%, #eaf1fb 100%);
+}
+
+.auth-page::before,
+.auth-page::after {
+    content: "";
+    position: fixed;
+    width: 22rem;
+    height: 22rem;
+    border-radius: 50%;
+    filter: blur(18px);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.auth-page::before {
+    top: -6rem;
+    left: -5rem;
+    background: rgba(13, 110, 253, 0.22);
+}
+
+.auth-page::after {
+    right: -5rem;
+    bottom: -6rem;
+    background: rgba(255, 183, 3, 0.18);
+}
+
+.auth-page .container {
+    position: relative;
+    z-index: 1;
+}
+
+.login-card {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 2rem;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, 0.90);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 26px 70px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+.login-card .brand-header {
+    margin-bottom: 0.75rem;
+    font-weight: 900;
+    color: var(--cc-secondary);
+    letter-spacing: -0.04em;
+    text-align: center;
+}
+
+.login-card .auth-subtitle {
+    color: var(--cc-muted);
+    text-align: center;
+    margin-bottom: 1.75rem;
+}
+
+.login-card .form-label {
+    color: var(--cc-muted) !important;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.login-card .form-control {
+    box-shadow: none;
+}
+
+.login-card .btn-primary {
+    width: 100%;
+    padding: 0.95rem 1rem;
+    font-size: 1rem;
+}
+
+.login-card .auth-footer-link {
+    color: var(--cc-muted);
+    transition: color 0.2s ease;
+}
+
+.login-card .auth-footer-link:hover {
+    color: var(--cc-primary-strong);
+}
+
+.login-card .alert {
+    border-radius: 16px;
+}
+
+@media (max-width: 575.98px) {
+    .login-card {
+        padding: 1.4rem;
+        border-radius: 22px;
+    }
+}

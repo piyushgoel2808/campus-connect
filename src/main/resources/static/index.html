@@ -6,142 +6,11 @@
     <title>Campus Connect | BVICAM</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --primary-color: #0d6efd;
-            --secondary-color: #0a2647;
-            --accent-color: #ffc107;
-        }
-
-        body { 
-            font-family: 'Poppins', sans-serif; 
-            overflow-x: hidden;
-            scroll-behavior: smooth; /* Smooth scrolling for the About link */
-        }
-        
-        /* Top Bar for College Name */
-        .top-bar {
-            background-color: var(--secondary-color);
-            color: white;
-            font-size: 1.1rem; /* Increased size */
-            font-weight: 700;  /* Bold */
-            padding: 12px 0;   /* More breathing room */
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 1031;
-            position: relative;
-        }
-
-        /* Navbar */
-        .navbar {
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-            padding: 10px 0;
-        }
-        .navbar-brand {
-            font-weight: 700;
-            color: var(--secondary-color) !important;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-        }
-        /* Logo styling */
-        .navbar-brand img {
-            height: 50px; /* Adjust logo size */
-            margin-right: 10px;
-        }
-
-        /* Hero Section */
-        .hero-section {
-            background: linear-gradient(rgba(10, 38, 71, 0.85), rgba(13, 110, 253, 0.75)), url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
-            background-size: cover;
-            background-position: center;
-            color: white;
-            padding: 120px 0;
-            position: relative;
-        }
-        .hero-content {
-            z-index: 2;
-            position: relative;
-        }
-
-        /* Stats Section */
-        .stats-section {
-            background-color: #f8f9fa;
-            padding: 60px 0;
-        }
-        .stat-card h3 {
-            color: var(--primary-color);
-            font-weight: 700;
-            font-size: 2.5rem;
-        }
-
-        /* Feature Cards */
-        .feature-card {
-            border: none;
-            transition: all 0.3s ease;
-            background: #fff;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            border-radius: 12px;
-            padding: 40px 30px;
-            height: 100%;
-            border-bottom: 4px solid transparent;
-        }
-        .feature-card:hover { 
-            transform: translateY(-10px); 
-            border-bottom: 4px solid var(--primary-color);
-        }
-        .feature-icon { 
-            font-size: 3rem; 
-            color: var(--primary-color); 
-            margin-bottom: 25px; 
-            background: rgba(13, 110, 253, 0.1);
-            width: 80px;
-            height: 80px;
-            line-height: 80px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        /* Call to Action */
-        .cta-section {
-            background: var(--secondary-color);
-            color: white;
-            padding: 80px 0;
-        }
-
-        /* Footer */
-        footer { 
-            background: #212529; 
-            color: #adb5bd; 
-            padding-top: 60px; 
-            font-size: 0.9rem;
-        }
-        footer h5 {
-            color: white;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-        footer a { 
-            color: #adb5bd; 
-            text-decoration: none; 
-            transition: 0.3s;
-        }
-        footer a:hover { 
-            color: white; 
-            padding-left: 5px;
-        }
-        .developer-tag {
-            background: #1a1e21;
-            padding: 40px 0;
-            margin-top: 40px;
-            border-top: 3px solid var(--primary-color); /* Highlight the dev section */
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link href="css/tokens.css" rel="stylesheet">
+    <link href="css/landing.css" rel="stylesheet">
 </head>
-<body>
+<body class="landing-page">
 
     <div class="top-bar">
         <div class="container text-center text-md-start">
@@ -159,7 +28,7 @@
                 <img src="https://bvicam.in/Content/ForntEnd/images/logo.png" alt="BVICAM Logo">
                 Campus Connect
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
@@ -171,7 +40,7 @@
                         <a class="nav-link" href="#about">About</a>
                     </li>
                     <li class="nav-item ms-lg-3">
-                        <a href="https://bvicam.in" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">Official Website</a>
+                        <a href="https://bvicam.in" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm rounded-pill px-3">Official Website</a>
                     </li>
                     <li class="nav-item ms-2">
                         <a href="login.html" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm">Login / Sign Up</a>
@@ -185,7 +54,7 @@
         <div class="container hero-content">
             <span class="badge bg-warning text-dark mb-3 px-3 py-2 rounded-pill">Exclusive for BVICAM Students & Alumni</span>
             <h1 class="display-3 fw-bold mb-4">Bridging the Gap Between<br>Talent & Opportunity</h1>
-            <p class="lead mb-5 opacity-90 mx-auto" style="max-width: 700px;">
+            <p class="lead mb-5 opacity-90 mx-auto cc-max-w-700">
                 Connect with distinguished Alumni, discover exclusive career opportunities, and engage with the vibrant BVICAM community in real-time.
             </p>
             <div class="d-flex justify-content-center gap-3">
@@ -225,7 +94,7 @@
             <div class="text-center mb-5">
                 <h6 class="text-primary fw-bold text-uppercase ls-2">Key Features</h6>
                 <h2 class="fw-bold display-6">Why Join Campus Connect?</h2>
-                <p class="text-muted mx-auto" style="max-width: 600px;">Everything you need to grow your professional network within the BVICAM ecosystem.</p>
+                <p class="text-muted mx-auto cc-max-w-600">Everything you need to grow your professional network within the BVICAM ecosystem.</p>
             </div>
             
             <div class="row g-4">
@@ -275,9 +144,9 @@
                     <h5 class="text-white"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</h5>
                     <p>An exclusive platform for Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM) to foster relationships between students and alumni.</p>
                     <div class="mt-4">
-                        <a href="#" class="me-3"><i class="fab fa-linkedin fa-lg"></i></a>
-                        <a href="#" class="me-3"><i class="fab fa-twitter fa-lg"></i></a>
-                        <a href="#" class="me-3"><i class="fab fa-instagram fa-lg"></i></a>
+                        <a href="#" class="me-3" aria-label="Campus Connect LinkedIn" title="LinkedIn"><i class="fab fa-linkedin fa-lg"></i></a>
+                        <a href="#" class="me-3" aria-label="Campus Connect Twitter" title="Twitter"><i class="fab fa-twitter fa-lg"></i></a>
+                        <a href="#" class="me-3" aria-label="Campus Connect Instagram" title="Instagram"><i class="fab fa-instagram fa-lg"></i></a>
                     </div>
                 </div>
                 
@@ -309,14 +178,14 @@
                         &copy; 2025 BVICAM Campus Connect. All rights reserved.
                     </div>
                     <div class="col-md-6 text-md-end">
-                        <small style="font-size: 1rem;">
+                        <small class="footer-credit">
                             Designed & Developed with <i class="fas fa-heart text-danger"></i> by 
                             <br>
-                            <span class="text-white fw-bold" style="font-size: 1.2rem; text-decoration: underline;">Piyush Goel</span>
+                            <span class="text-white fw-bold footer-name">Piyush Goel</span>
                             <br>
                             <a href="mailto:piyushgoel2808@gmail.com" class="text-white"><i class="fas fa-envelope me-1"></i> piyushgoel2808@gmail.com</a>
                             <span class="mx-2">|</span>
-                            <a href="https://www.linkedin.com/in/piyush-goel-26548b142" target="_blank" class="text-white">
+                            <a href="https://www.linkedin.com/in/piyush-goel-26548b142" target="_blank" rel="noopener noreferrer" class="text-white">
                                 <i class="fab fa-linkedin fa-lg"></i> Connect on LinkedIn
                             </a>
                         </small>
