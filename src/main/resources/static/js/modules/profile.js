@@ -24,6 +24,15 @@ export async function loadProfile() {
         setVal("pLinkedin", user.linkedinUrl);
         setVal("pGithub", user.githubUrl);
 
+        const setChecked = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = val !== false;
+        };
+
+        setChecked("pNotifyMessages", user.notifyMessages);
+        setChecked("pNotifyEvents", user.notifyEvents);
+        setChecked("pNotifyJobs", user.notifyJobs);
+
     } catch (e) {
         console.error("Failed to load profile data", e);
     }
@@ -47,7 +56,10 @@ window.saveProfile = async function() {
         skills: getVal("pSkills"),
         pastExperience: getVal("pExperience"),
         linkedinUrl: getVal("pLinkedin"),
-        githubUrl: getVal("pGithub")
+        githubUrl: getVal("pGithub"),
+        notifyMessages: !!document.getElementById("pNotifyMessages")?.checked,
+        notifyEvents: !!document.getElementById("pNotifyEvents")?.checked,
+        notifyJobs: !!document.getElementById("pNotifyJobs")?.checked
     };
 
     const btn = document.querySelector("button[onclick='saveProfile()']");

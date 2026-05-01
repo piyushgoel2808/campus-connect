@@ -3,7 +3,9 @@ package com.bvicam.campusconnect.service;
 import com.bvicam.campusconnect.dto.NotificationDto;
 import com.bvicam.campusconnect.entity.Notification;
 import com.bvicam.campusconnect.entity.NotificationType;
+import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.NotificationRepository;
+import com.bvicam.campusconnect.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,9 @@ public class NotificationService {
     private NotificationRepository notificationRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     public NotificationDto createAndDispatch(String recipientEmail,
@@ -24,6 +29,10 @@ public class NotificationService {
                                              String title,
                                              String body,
                                              Long relatedEntityId) {
+        if (!shouldDeliver(recipientEmail, type)) {
+            return null;
+        }
+
         Notification notification = new Notification();
         notification.setRecipientEmail(recipientEmail);
         notification.setType(type);
@@ -37,6 +46,25 @@ public class NotificationService {
 
         messagingTemplate.convertAndSendToUser(recipientEmail, "/queue/notifications", dto);
         return dto;
+    }
+
+    private boolean shouldDeliver(String recipientEmail, NotificationType type) {
+        return userRepository.findByEmail(recipientEmail)
+                .map(user -> isEnabledForType(user, type))
+                .orElse(true);
+    }
+
+    private boolean isEnabledForType(User user, NotificationType type) {
+        if (type == NotificationType.MESSAGE) {
+            return user.getNotifyMessages() == null || user.getNotifyMessages();
+        }
+        if (type == NotificationType.EVENT) {
+            return user.getNotifyEvents() == null || user.getNotifyEvents();
+        }
+        if (type == NotificationType.JOB) {
+            return user.getNotifyJobs() == null || user.getNotifyJobs();
+        }
+        return true;
     }
 
     public List<NotificationDto> getRecent(String recipientEmail, Integer limit) {

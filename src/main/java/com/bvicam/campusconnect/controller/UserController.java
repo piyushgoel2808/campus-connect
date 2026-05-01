@@ -51,6 +51,9 @@ public class UserController {
         dto.setPastExperience(user.getPastExperience());
         dto.setLinkedinUrl(user.getLinkedinUrl());
         dto.setGithubUrl(user.getGithubUrl());
+        dto.setNotifyMessages(user.getNotifyMessages());
+        dto.setNotifyEvents(user.getNotifyEvents());
+        dto.setNotifyJobs(user.getNotifyJobs());
         return dto;
     }
 
@@ -99,6 +102,9 @@ public class UserController {
             if (profileDto.getPastExperience() != null) user.setPastExperience(profileDto.getPastExperience());
             if (profileDto.getLinkedinUrl() != null) user.setLinkedinUrl(profileDto.getLinkedinUrl());
             if (profileDto.getGithubUrl() != null) user.setGithubUrl(profileDto.getGithubUrl());
+            if (profileDto.getNotifyMessages() != null) user.setNotifyMessages(profileDto.getNotifyMessages());
+            if (profileDto.getNotifyEvents() != null) user.setNotifyEvents(profileDto.getNotifyEvents());
+            if (profileDto.getNotifyJobs() != null) user.setNotifyJobs(profileDto.getNotifyJobs());
 
             userRepository.save(user);
             return ResponseEntity.ok("Profile Updated Successfully!");

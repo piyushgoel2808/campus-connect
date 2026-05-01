@@ -57,6 +57,15 @@ public class User {
     @Column(length = 2000)
     private String pastExperience;
 
+    @Column(nullable = false)
+    private Boolean notifyMessages = true;
+
+    @Column(nullable = false)
+    private Boolean notifyEvents = true;
+
+    @Column(nullable = false)
+    private Boolean notifyJobs = true;
+
     // --- RELATIONSHIPS WITH JSON FIXES ---
 
     @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -4,12 +4,35 @@
         <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
     </div>
     <div class="row g-3">
-        <div class="col-12"><label class="small text-muted">Headline</label><input type="text" id="pHeadline" class="form-control"></div>
-        <div class="col-6"><label class="small text-muted">Current Company</label><input type="text" id="pCompany" class="form-control"></div>
-        <div class="col-6"><label class="small text-muted">Designation</label><input type="text" id="pDesignation" class="form-control"></div>
-        <div class="col-12"><label class="small text-muted">Skills</label><input type="text" id="pSkills" class="form-control"></div>
-        <div class="col-12"><label class="small text-muted">Experience</label><textarea id="pExperience" class="form-control" rows="3"></textarea></div>
-        <div class="col-6"><label class="small text-muted">LinkedIn</label><input type="text" id="pLinkedin" class="form-control"></div>
-        <div class="col-6"><label class="small text-muted">GitHub</label><input type="text" id="pGithub" class="form-control"></div>
+        <div class="col-12"><label class="small text-muted">Headline</label><input type="text" id="pHeadline" class="form-control" placeholder="Short professional summary"></div>
+        <div class="col-6"><label class="small text-muted">Current Company</label><input type="text" id="pCompany" class="form-control" placeholder="Company name"></div>
+        <div class="col-6"><label class="small text-muted">Designation</label><input type="text" id="pDesignation" class="form-control" placeholder="Role or title"></div>
+        <div class="col-12"><label class="small text-muted">Skills</label><input type="text" id="pSkills" class="form-control" placeholder="Java, React, SQL"></div>
+        <div class="col-12"><label class="small text-muted">Experience</label><textarea id="pExperience" class="form-control" rows="3" placeholder="Summarize your experience"></textarea></div>
+        <div class="col-6"><label class="small text-muted">LinkedIn</label><input type="text" id="pLinkedin" class="form-control" placeholder="https://linkedin.com/in/..."></div>
+        <div class="col-6"><label class="small text-muted">GitHub</label><input type="text" id="pGithub" class="form-control" placeholder="https://github.com/..."></div>
+        <div class="col-12 mt-2">
+            <label class="small text-muted d-block mb-2">Notification Preferences</label>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="pNotifyMessages" checked>
+                        <label class="form-check-label" for="pNotifyMessages">Messages</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="pNotifyEvents" checked>
+                        <label class="form-check-label" for="pNotifyEvents">Events</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="pNotifyJobs" checked>
+                        <label class="form-check-label" for="pNotifyJobs">Jobs</label>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

@@ -17,4 +17,8 @@ public class UserProfileDto {
     private String pastExperience;
     private String linkedinUrl;
     private String githubUrl;
+
+    private Boolean notifyMessages;
+    private Boolean notifyEvents;
+    private Boolean notifyJobs;
 }
