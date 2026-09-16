@@ -54,6 +54,8 @@ public class UserController {
         dto.setNotifyMessages(user.getNotifyMessages());
         dto.setNotifyEvents(user.getNotifyEvents());
         dto.setNotifyJobs(user.getNotifyJobs());
+        dto.setIsFlagged(user.getIsFlagged() != null ? user.getIsFlagged() : false);
+        dto.setFlagCount(user.getFlagCount() != null ? user.getFlagCount() : 0);
         return dto;
     }
 

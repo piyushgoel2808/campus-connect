@@ -40,7 +40,13 @@ async function handleLogin(e) {
             })
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data = {};
+        try {
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            data = { message: text };
+        }
 
         if (response.ok) {
             // 2. Save Session Data to LocalStorage

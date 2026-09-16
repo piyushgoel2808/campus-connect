@@ -21,4 +21,7 @@ public class UserProfileDto {
     private Boolean notifyMessages;
     private Boolean notifyEvents;
     private Boolean notifyJobs;
+
+    private Boolean isFlagged;
+    private Integer flagCount;
 }

@@ -66,6 +66,12 @@ public class User {
     @Column(nullable = false)
     private Boolean notifyJobs = true;
 
+    @Column(nullable = false)
+    private Boolean isFlagged = false;
+
+    @Column(nullable = false)
+    private Integer flagCount = 0;
+
     // --- RELATIONSHIPS WITH JSON FIXES ---
 
     @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -87,6 +93,16 @@ public class User {
     // Helper method to get course code easily (e.g., user.getDepartmentCode())
     public String getDepartmentCode() {
         return department != null ? department.getCode() : "UNKNOWN";
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.isFlagged == null) {
+            this.isFlagged = false;
+        }
+        if (this.flagCount == null) {
+            this.flagCount = 0;
+        }
     }
 
     // --- CRITICAL FIX: Custom equals and hashCode ---

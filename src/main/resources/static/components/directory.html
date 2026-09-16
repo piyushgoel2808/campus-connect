@@ -2,14 +2,18 @@
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-users"></i> Directory</span>
-            <h2 class="cc-page-title mt-2 mb-1">Find people faster</h2>
-            <p class="cc-page-subtitle">Search alumni, students, and mentors by role, batch, or skill with a cleaner discovery flow.</p>
+            <h2 class="cc-page-title">Find BVICAM Peers & Alumni</h2>
+            <p class="cc-page-subtitle">Search alumni, students, and mentors by role, batch, skills, or company with live filters.</p>
         </div>
     </div>
 
+    <!-- Filter Toolbar -->
     <div class="cc-panel p-3 p-lg-4">
         <div class="cc-filter-bar">
-            <input type="text" id="dirSearch" class="form-control" placeholder="Search name, skill, company" aria-label="Search directory" onkeyup="debouncedSearch()">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="dirSearch" class="form-control border-start-0" placeholder="Search by name, company, or skill..." aria-label="Search directory" onkeyup="debouncedSearch()">
+            </div>
             <select id="filterRole" class="form-select" aria-label="Filter by role" onchange="runSearch()">
                 <option value="ALL">All Roles</option>
                 <option value="STUDENT">Students</option>
@@ -17,73 +21,82 @@
             </select>
             <select id="filterBatch" class="form-select" aria-label="Filter by batch year" onchange="runSearch()">
                 <option value="">Any Batch</option>
-                <option value="2025">2025</option>
-                <option value="2024">2024</option>
-                <option value="2023">2023</option>
-                <option value="2022">2022</option>
-                <option value="2021">2021</option>
-                <option value="2020">2020</option>
+                <option value="2025">Batch 2025</option>
+                <option value="2024">Batch 2024</option>
+                <option value="2023">Batch 2023</option>
+                <option value="2022">Batch 2022</option>
+                <option value="2021">Batch 2021</option>
+                <option value="2020">Batch 2020</option>
             </select>
-            <button class="btn btn-primary px-4" onclick="runSearch()">Search</button>
+            <button class="btn btn-primary px-4" onclick="runSearch()">
+                <i class="fas fa-filter me-1"></i> Search
+            </button>
         </div>
     </div>
 
+    <!-- Directory Table Card -->
     <div class="cc-panel p-2 p-lg-3">
         <div class="table-responsive">
-            <table class="table align-middle table-hover mb-0"><tbody id="tableBody"></tbody></table>
+            <table class="table align-middle table-hover mb-0">
+                <tbody id="tableBody">
+                    <tr><td class="text-center py-4 text-muted">Loading directory...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
 <!-- User Profile Modal -->
 <div class="modal fade cc-profile-modal" id="userProfileModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Profile preview</h5>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="fas fa-id-badge"></i> Member Profile
+                </h5>
                 <button type="button" class="btn-close btn-close-white" aria-label="Close profile modal" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <input type="hidden" id="modalUserId">
                 
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-6">
                         <div class="cc-divider-title">
-                            <i class="fas fa-user-circle"></i> Identity
+                            <i class="fas fa-user-circle text-primary"></i> Personal Identity
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Name</label>
+                            <label class="text-muted small fw-bold">Full Name</label>
                             <p id="modalName" class="cc-profile-value fs-5">-</p>
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Email</label>
+                            <label class="text-muted small fw-bold">Email</label>
                             <p id="modalEmail" class="cc-profile-value text-truncate">-</p>
                         </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
                                 <div class="cc-profile-section h-100">
-                                <label class="text-muted small">Role</label>
-                                <p id="modalRole" class="badge bg-info">-</p>
+                                    <label class="text-muted small fw-bold d-block">Role</label>
+                                    <span id="modalRole" class="badge bg-primary-subtle text-primary">-</span>
                                 </div>
                             </div>
-                            <div class="col-6 mb-3">
+                            <div class="col-6 mb-2">
                                 <div class="cc-profile-section h-100">
-                                <label class="text-muted small">Department</label>
-                                <p id="modalDept" class="badge bg-secondary">-</p>
+                                    <label class="text-muted small fw-bold d-block">Department</label>
+                                    <span id="modalDept" class="badge bg-secondary">-</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
                                 <div class="cc-profile-section h-100">
-                                <label class="text-muted small">Batch Year</label>
-                                <p id="modalBatch" class="cc-profile-value">-</p>
+                                    <label class="text-muted small fw-bold">Graduation Batch</label>
+                                    <p id="modalBatch" class="cc-profile-value">-</p>
                                 </div>
                             </div>
-                            <div class="col-6 mb-3">
+                            <div class="col-6 mb-2">
                                 <div class="cc-profile-section h-100">
-                                <label class="text-muted small">Enrollment No</label>
-                                <p id="modalEnrollment" class="cc-profile-value text-break">-</p>
+                                    <label class="text-muted small fw-bold">Enrollment No</label>
+                                    <p id="modalEnrollment" class="cc-profile-value text-break">-</p>
                                 </div>
                             </div>
                         </div>
@@ -91,47 +104,47 @@
 
                     <div class="col-md-6">
                         <div class="cc-divider-title">
-                            <i class="fas fa-briefcase"></i> Professional
+                            <i class="fas fa-briefcase text-primary"></i> Professional Career
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Headline</label>
+                            <label class="text-muted small fw-bold">Professional Headline</label>
                             <p id="modalHeadline" class="cc-profile-value">-</p>
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Company</label>
+                            <label class="text-muted small fw-bold">Current Company / Organization</label>
                             <p id="modalCompany" class="cc-profile-value">-</p>
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Designation</label>
+                            <label class="text-muted small fw-bold">Role / Designation</label>
                             <p id="modalDesignation" class="cc-profile-value">-</p>
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Skills</label>
+                            <label class="text-muted small fw-bold">Skills & Expertise</label>
                             <p id="modalSkills" class="cc-profile-value">-</p>
                         </div>
                         <div class="cc-profile-section mb-3">
-                            <label class="text-muted small">Social Links</label>
-                            <div>
-                                <a id="linkedinBtn" href="#" target="_blank" class="btn btn-sm btn-primary me-2 d-none">
-                                    <i class="fab fa-linkedin"></i> LinkedIn
+                            <label class="text-muted small fw-bold d-block mb-2">Professional Profiles</label>
+                            <div class="d-flex gap-2">
+                                <a id="linkedinBtn" href="#" target="_blank" class="btn btn-sm btn-primary d-none">
+                                    <i class="fab fa-linkedin me-1"></i> LinkedIn
                                 </a>
                                 <a id="githubBtn" href="#" target="_blank" class="btn btn-sm btn-dark d-none">
-                                    <i class="fab fa-github"></i> GitHub
+                                    <i class="fab fa-github me-1"></i> GitHub
                                 </a>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="cc-profile-section mt-2">
-                    <label class="text-muted small">Bio / Experience</label>
-                    <p id="modalBio" class="cc-profile-value text-break mt-2">-</p>
+                <div class="cc-profile-section mt-3">
+                    <label class="text-muted small fw-bold">Bio / Experience Summary</label>
+                    <p id="modalBio" class="cc-profile-value text-break mt-1">-</p>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-primary" onclick="startDirectChatFromModal()" data-bs-dismiss="modal">
-                    <i class="fas fa-envelope"></i> Send Message
+                    <i class="fas fa-paper-plane me-1"></i> Send Direct Message
                 </button>
             </div>
         </div>

@@ -119,6 +119,17 @@ public class AdminController {
         return ResponseEntity.ok("✅ User updated successfully.");
     }
 
+    @PostMapping("/users/{id}/unflag")
+    @Transactional
+    public ResponseEntity<?> unflagUser(@PathVariable Long id) {
+        return userRepository.findById(id).map(user -> {
+            user.setIsFlagged(false);
+            user.setFlagCount(0);
+            userRepository.save(user);
+            return ResponseEntity.ok(Map.of("message", "User flags successfully cleared."));
+        }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found")));
+    }
+
     @PutMapping("/users/{id}/reset-password")
     @Transactional
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {

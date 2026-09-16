@@ -1,20 +1,57 @@
-<div class="cc-post-card mb-3">
-    <div class="cc-divider-title mb-3"><i class="fas fa-pen-nib"></i> Share something</div>
-    <textarea id="postContent" class="form-control border-0 bg-light mb-2" placeholder="Share an update..."></textarea>
-
-    <input type="text" id="postImage" class="form-control form-control-sm mb-2" placeholder="Image URL (Optional)">
-
-    <div class="d-flex justify-content-end">
-        <button id="btnPost" class="btn btn-primary btn-sm" onclick="window.createPost()">
-            <i class="fas fa-paper-plane"></i> Post
-        </button>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-newspaper"></i> Community Wall</span>
+            <h2 class="cc-page-title">GradLink Feed</h2>
+            <p class="cc-page-subtitle">Share achievements, career updates, announcements, and thoughts with the entire BVICAM network.</p>
+        </div>
     </div>
-</div>
 
-<div id="postsContainer" class="cc-stack">
-    <div class="cc-empty-state cc-panel">
-        <i class="fas fa-newspaper fa-lg"></i>
-        <h5 class="mb-2">Loading feed</h5>
-        <p class="mb-0">Fetching the latest updates from your campus network...</p>
+    <!-- Moderation & Error Alert -->
+    <div id="postAlert" class="alert alert-danger d-none mb-3 shadow-sm border-danger" role="alert"></div>
+
+    <!-- Post Creator Card -->
+    <div class="cc-post-card">
+        <div class="cc-divider-title"><i class="fas fa-feather-alt text-primary"></i> Share an update</div>
+        <textarea id="postContent" class="form-control mb-3" rows="3" placeholder="What's on your mind? Share a project, announcement, or question with GradLink..."></textarea>
+
+        <!-- Image Preview Container -->
+        <div id="postImagePreviewContainer" class="cc-image-preview-container d-none">
+            <img id="postImagePreview" class="cc-image-preview-img" src="" alt="Selected Preview">
+            <button type="button" class="cc-image-preview-remove" onclick="window.clearSelectedImage()" title="Remove image">✕</button>
+        </div>
+
+        <!-- Hidden local file input -->
+        <input type="file" id="postImageFile" accept="image/png, image/jpeg, image/gif, image/webp" class="d-none" onchange="window.handleImageFileSelect(this)">
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <!-- Local device upload button -->
+                <button type="button" class="btn btn-light border btn-sm" onclick="document.getElementById('postImageFile').click()">
+                    <i class="fas fa-cloud-upload-alt text-primary me-1"></i> Upload Photo
+                </button>
+
+                <!-- Optional URL Input -->
+                <div class="input-group input-group-sm" style="min-width: 260px;">
+                    <span class="input-group-text bg-light border-end-0"><i class="fas fa-link text-muted"></i></span>
+                    <input type="text" id="postImage" class="form-control border-start-0" placeholder="Or paste image URL" oninput="window.handleImageUrlInput(this)">
+                </div>
+            </div>
+
+            <div>
+                <button id="btnPost" class="btn btn-primary btn-sm px-4" onclick="window.createPost()">
+                    <i class="fas fa-paper-plane me-1"></i> Publish Post
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feed Container -->
+    <div id="postsContainer" class="cc-stack">
+        <div class="cc-empty-state cc-panel">
+            <i class="fas fa-newspaper"></i>
+            <h5 class="mb-2">Loading feed</h5>
+            <p class="mb-0">Fetching the latest updates from your GradLink community...</p>
+        </div>
     </div>
 </div>

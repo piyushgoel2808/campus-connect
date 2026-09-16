@@ -8,6 +8,7 @@ import { connectChat, fetchRecentChats } from './modules/chat.js';
 import { initNotifications } from './modules/notifications.js';
 import { fetchPosts } from './modules/wall.js'; //
 import './modules/feedback.js';
+import { initBot } from './modules/bot.js';
 // =========================================================
 // 2. MAIN INITIALIZATION
 // =========================================================
@@ -23,14 +24,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // B. Set UI Elements
     const welcomeEl = document.getElementById("welcomeUser");
-    if(welcomeEl) welcomeEl.innerText = user.name;
+    if(welcomeEl) welcomeEl.innerText = user.name || "User";
+    const avatarInitialEl = document.getElementById("userAvatarInitial");
+    if (avatarInitialEl && user.name) {
+        avatarInitialEl.innerText = user.name.charAt(0).toUpperCase();
+    }
 
     // C. Setup Admin/Role Visibility
     setupRoleBasedVisibility(user.role);
 
-    // D. Connect WebSocket
+    // D. Connect WebSocket & Assistants
     connectChat();
     initNotifications();
+    initBot();
 
     // E. Load Default Tab (Wall or Messages)
     await window.switchTab('wall'); // changed default to wall, you can set to 'messages'
@@ -108,9 +114,13 @@ window.logout = function() {
     localStorage.removeItem("jwt_token");
 
     // 2. Clear User Data
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_role");
+    localStorage.removeItem("user_email");
+    localStorage.removeItem("user_id");
     localStorage.removeItem("campus_user");
 
     // 3. Redirect to Login Page
     alert("Logged out successfully.");
-    window.location.href = "index.html"; // Change to 'login.html' if that's your file name
+    window.location.href = "login.html";
 };

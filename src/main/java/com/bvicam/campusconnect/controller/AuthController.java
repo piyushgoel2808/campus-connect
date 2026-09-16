@@ -99,7 +99,7 @@ public class AuthController {
 
             return ResponseEntity.ok(new AuthResponse(token, user.getId(), user.getName(), user.getRole().name()));
         } catch (Exception ex) {
-            return ResponseEntity.status(401).body("Invalid email or password");
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid email or password"));
         }
     }
 

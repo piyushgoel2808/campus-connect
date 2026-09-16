@@ -3,84 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Connect</title>
+    <title>GradLink | BVICAM Dashboard</title>
+    <meta name="description" content="GradLink - The official BVICAM campus, student, and alumni networking dashboard.">
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap 5.3 & FontAwesome -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Custom Theme Tokens & Component Styles -->
     <link href="css/tokens.css" rel="stylesheet">
     <link href="css/components.css" rel="stylesheet">
     <link href="css/shell.css" rel="stylesheet">
 </head>
 <body class="shell-page">
 
+<!-- Modern Glassmorphic Top Navbar -->
 <nav class="navbar navbar-expand-lg sticky-top">
-    <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold text-primary" href="#"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</a>
-        <div class="d-flex align-items-center">
-            <div class="dropdown me-2">
-                <button class="btn btn-light border notification-btn" id="notificationMenuBtn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open notifications">
+    <div class="container-fluid px-3 px-lg-4">
+        <a class="navbar-brand" href="#">
+            <span class="brand-icon-chip">
+                <i class="fas fa-graduation-cap"></i>
+            </span>
+            <span>GradLink</span>
+            <span class="brand-badge">BVICAM</span>
+        </a>
+        
+        <div class="d-flex align-items-center gap-2">
+            <!-- Notifications Dropdown -->
+            <div class="dropdown me-1">
+                <button class="notification-btn" id="notificationMenuBtn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open notifications">
                     <i class="fas fa-bell"></i>
                     <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
                 </button>
-                <div class="dropdown-menu dropdown-menu-end p-0 notification-dropdown" aria-labelledby="notificationMenuBtn">
-                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-                        <strong class="small">Notifications</strong>
-                        <button class="btn btn-sm btn-link text-decoration-none p-0" id="markAllNotificationsRead" type="button">Mark all read</button>
+                <div class="dropdown-menu dropdown-menu-end notification-dropdown" aria-labelledby="notificationMenuBtn">
+                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+                        <strong class="small"><i class="fas fa-bell text-primary me-1"></i> Notifications</strong>
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 text-primary small" id="markAllNotificationsRead" type="button">Mark all read</button>
                     </div>
                     <div id="notificationList" class="py-1">
-                        <div class="small text-muted px-3 py-2">Loading notifications...</div>
+                        <div class="small text-muted px-3 py-3 text-center">Loading notifications...</div>
                     </div>
                 </div>
             </div>
-            <span class="fw-bold me-2 d-none d-md-block" id="welcomeUser">...</span>
-            <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="logout()">Logout</button>
+            
+            <!-- User Pill -->
+            <div class="user-profile-badge d-none d-md-flex align-items-center me-1">
+                <span class="user-avatar-sm" id="userAvatarInitial"><i class="fas fa-user small"></i></span>
+                <span class="fw-semibold text-secondary small" id="welcomeUser">Loading...</span>
+            </div>
+            
+            <!-- Logout Button -->
+            <button class="btn btn-logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-1"></i>
+                <span class="d-none d-sm-inline">Logout</span>
+            </button>
         </div>
     </div>
 </nav>
 
-<div class="container-fluid mt-4 px-4">
+<!-- Main Container -->
+<div class="container-fluid mt-4 px-3 px-lg-4">
     <div class="row g-4">
 
+        <!-- Desktop Sidebar Navigation -->
         <div class="col-lg-2 d-none d-lg-block">
-            <div class="nav flex-column nav-pills sticky-top shell-sticky-nav cc-shell-panel p-2">
-                <button class="nav-link active" id="tab-messages" aria-label="Open messages" onclick="switchTab('messages')"><i class="fas fa-comment-dots me-2"></i> Messages <span id="msgBadge" class="badge bg-danger ms-2 d-none">New</span></button>
-                <button class="nav-link" id="tab-directory" aria-label="Open directory" onclick="switchTab('directory')"><i class="fas fa-users me-2"></i> Directory</button>
-                <button class="nav-link" id="tab-events" aria-label="Open events" onclick="switchTab('events')"><i class="fas fa-calendar-alt me-2"></i> Events</button>
-                <button class="nav-link" id="tab-jobs" aria-label="Open jobs" onclick="switchTab('jobs')"><i class="fas fa-briefcase me-2"></i> Jobs</button>
-                <button class="nav-link" id="tab-wall" aria-label="Open wall" onclick="switchTab('wall')"><i class="fas fa-newspaper me-2"></i> Wall</button>
-                <button class="nav-link" id="tab-profile" aria-label="Open profile" onclick="switchTab('profile')"><i class="fas fa-user-circle me-2"></i> Profile</button>
-                <button class="nav-link d-none" id="tab-admin" aria-label="Open admin dashboard" onclick="switchTab('admin')"><i class="fas fa-shield-alt me-2"></i> Admin</button>
+            <div class="nav flex-column nav-pills sticky-top shell-sticky-nav">
+                <button class="nav-link active" id="tab-wall" aria-label="Open wall" onclick="switchTab('wall')">
+                    <i class="fas fa-newspaper me-2"></i> Campus Wall
+                </button>
+                <button class="nav-link" id="tab-messages" aria-label="Open messages" onclick="switchTab('messages')">
+                    <i class="fas fa-comment-dots me-2"></i> Messages <span id="msgBadge" class="badge bg-danger ms-auto d-none">New</span>
+                </button>
+                <button class="nav-link" id="tab-directory" aria-label="Open directory" onclick="switchTab('directory')">
+                    <i class="fas fa-users me-2"></i> Directory
+                </button>
+                <button class="nav-link" id="tab-events" aria-label="Open events" onclick="switchTab('events')">
+                    <i class="fas fa-calendar-alt me-2"></i> Events
+                </button>
+                <button class="nav-link" id="tab-jobs" aria-label="Open jobs" onclick="switchTab('jobs')">
+                    <i class="fas fa-briefcase me-2"></i> Jobs & Referrals
+                </button>
+                <button class="nav-link" id="tab-profile" aria-label="Open profile" onclick="switchTab('profile')">
+                    <i class="fas fa-user-circle me-2"></i> Profile Settings
+                </button>
+                <button class="nav-link d-none" id="tab-admin" aria-label="Open admin dashboard" onclick="switchTab('admin')">
+                    <i class="fas fa-shield-alt me-2 text-danger"></i> Admin Workspace
+                </button>
 
-                <button class="nav-link text-warning" onclick="openFeedbackModal()">
-                    <i class="fas fa-star me-2"></i> Rate Us
+                <div class="pt-3 mt-2 border-top">
+                    <button class="nav-link text-warning w-100" onclick="openFeedbackModal()">
+                        <i class="fas fa-star me-2"></i> Rate GradLink
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Horizontal Nav Pills -->
+        <div class="col-12 d-lg-none mb-2">
+            <div class="nav nav-pills nav-fill mobile-nav-surface p-2 rounded-4 overflow-auto flex-nowrap gap-2">
+                <button class="nav-link active" aria-label="Open wall" onclick="switchTab('wall')">
+                    <i class="fas fa-newspaper"></i>
+                    <span class="mobile-nav-label">Wall</span>
+                </button>
+                <button class="nav-link" aria-label="Open messages" onclick="switchTab('messages')">
+                    <i class="fas fa-comment"></i>
+                    <span class="mobile-nav-label">Messages</span>
+                </button>
+                <button class="nav-link" aria-label="Open directory" onclick="switchTab('directory')">
+                    <i class="fas fa-users"></i>
+                    <span class="mobile-nav-label">Directory</span>
+                </button>
+                <button class="nav-link" aria-label="Open events" onclick="switchTab('events')">
+                    <i class="fas fa-calendar"></i>
+                    <span class="mobile-nav-label">Events</span>
+                </button>
+                <button class="nav-link" aria-label="Open jobs" onclick="switchTab('jobs')">
+                    <i class="fas fa-briefcase"></i>
+                    <span class="mobile-nav-label">Jobs</span>
+                </button>
+                <button class="nav-link" aria-label="Open profile" onclick="switchTab('profile')">
+                    <i class="fas fa-user"></i>
+                    <span class="mobile-nav-label">Profile</span>
                 </button>
             </div>
         </div>
 
-        <div class="col-12 d-lg-none mb-3">
-            <div class="nav nav-pills nav-fill mobile-nav-surface p-2 rounded-4 overflow-auto flex-nowrap gap-2">
-                <button class="nav-link active" aria-label="Open messages" onclick="switchTab('messages')"><i class="fas fa-comment"></i><span class="mobile-nav-label">Messages</span></button>
-                <button class="nav-link" aria-label="Open directory" onclick="switchTab('directory')"><i class="fas fa-users"></i><span class="mobile-nav-label">Directory</span></button>
-                <button class="nav-link" aria-label="Open events" onclick="switchTab('events')"><i class="fas fa-calendar"></i><span class="mobile-nav-label">Events</span></button>
-                <button class="nav-link" aria-label="Open jobs" onclick="switchTab('jobs')"><i class="fas fa-briefcase"></i><span class="mobile-nav-label">Jobs</span></button>
-                <button class="nav-link" aria-label="Open profile" onclick="switchTab('profile')"><i class="fas fa-user"></i><span class="mobile-nav-label">Profile</span></button>
-            </div>
-        </div>
-
+        <!-- Center Content Area -->
         <div class="col-lg-7">
-            <div id="main-content" class="cc-shell-panel p-3 p-lg-4">
-                <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+            <div id="main-content" class="p-3 p-lg-4">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="text-muted mt-2 small">Loading GradLink module...</p>
+                </div>
             </div>
         </div>
 
+        <!-- Right Side Global Chat Column -->
         <div class="col-lg-3 chat-column d-none d-lg-block">
-            <div class="card chat-card">
-                <div class="card-header bg-white fw-bold border-bottom">💬 Global Chat <span id="chatStatus" class="badge bg-secondary ms-2">...</span></div>
-                <div id="chatArea" class="chat-box d-flex flex-column"></div>
+            <div class="chat-card">
+                <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-comments text-primary me-2"></i>Global Chat</span>
+                    <span id="chatStatus" class="badge bg-secondary">Connecting...</span>
+                </div>
+                <div id="chatArea" class="chat-box"></div>
                 <div class="p-2 border-top bg-white">
                     <div class="input-group">
-                        <input type="text" id="messageInput" class="form-control" placeholder="Type..." onkeypress="if(event.key==='Enter') sendMessage()">
-                        <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+                        <input type="text" id="messageInput" class="form-control" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+                        <button class="btn btn-primary" onclick="sendMessage()" aria-label="Send message">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -88,22 +164,24 @@
     </div>
 </div>
 
+<!-- Direct Message Modal -->
 <div class="modal fade" id="dmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="dmModalTitle">Chat</h5>
+                <h5 class="modal-title d-flex align-items-center gap-2" id="dmModalTitle">
+                    <i class="fas fa-comment"></i> Chat
+                </h5>
                 <button type="button" class="btn-close btn-close-white" aria-label="Close direct message modal" data-bs-dismiss="modal"></button>
             </div>
 
-            <div class="modal-body bg-light dm-messages-area" id="dmMessagesArea">
-            </div>
+            <div class="modal-body dm-messages-area" id="dmMessagesArea"></div>
 
-            <div class="modal-footer flex-column align-items-stretch p-2">
+            <div class="modal-footer flex-column align-items-stretch p-2 bg-white">
                 <div id="typingIndicator" class="text-muted small fst-italic px-2 mb-1 d-none"></div>
                 <div class="input-group">
                     <input type="text" id="dmInput" class="form-control" placeholder="Type a message..." onkeypress="if(event.key==='Enter') window.sendDirectMessage()">
-                    <button class="btn btn-primary" onclick="window.sendDirectMessage()">
+                    <button class="btn btn-primary" onclick="window.sendDirectMessage()" aria-label="Send direct message">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
@@ -112,33 +190,56 @@
     </div>
 </div>
 
+<!-- Post Job Modal -->
 <div class="modal fade" id="postJobModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Post Job</h5><button type="button" class="btn-close" aria-label="Close post job modal" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <input type="text" id="jobTitle" class="form-control mb-2" placeholder="Job Title">
-                <input type="text" id="jobCompany" class="form-control mb-2" placeholder="Company Name">
-                <input type="text" id="jobLocation" class="form-control mb-2" placeholder="Location">
-                <textarea id="jobDesc" class="form-control mb-2" placeholder="Job Description"></textarea>
-                <input type="text" id="jobLink" class="form-control" placeholder="Application Link/Email">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-briefcase me-2"></i>Post Career Opportunity</h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close post job modal" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-footer"><button class="btn btn-primary w-100" onclick="postJob()">Post Job</button></div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Job Title</label>
+                    <input type="text" id="jobTitle" class="form-control" placeholder="e.g. Software Engineer / Data Analyst">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Company Name</label>
+                    <input type="text" id="jobCompany" class="form-control" placeholder="e.g. Google, Microsoft, Amazon">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Location / Remote</label>
+                    <input type="text" id="jobLocation" class="form-control" placeholder="e.g. New Delhi / Hybrid / Remote">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Job Description & Requirements</label>
+                    <textarea id="jobDesc" class="form-control" rows="3" placeholder="Summary of responsibilities and qualifications..."></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label text-muted small fw-bold">Application URL or Referral Email</label>
+                    <input type="text" id="jobLink" class="form-control" placeholder="https://... or email@company.com">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary px-4" onclick="postJob()">Publish Opportunity</button>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- Feedback Modal -->
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="fas fa-star"></i> Rate Your Experience</h5>
-                <button type="button" class="btn-close" aria-label="Close feedback modal" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-star me-2 text-warning"></i>Rate Your Experience</h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close feedback modal" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body text-center">
-                <p class="text-muted">How likely are you to recommend Campus Connect?</p>
+            <div class="modal-body text-center p-4">
+                <p class="text-secondary fw-semibold mb-3">How likely are you to recommend GradLink?</p>
 
-                <div class="mb-3">
+                <div class="mb-4">
                     <div class="rating-stars">
                         <i class="far fa-star" onclick="setRating(1)" id="star1"></i>
                         <i class="far fa-star" onclick="setRating(2)" id="star2"></i>
@@ -149,45 +250,69 @@
                     <input type="hidden" id="feedbackRating" value="0">
                 </div>
 
-                <div class="form-floating">
-                    <textarea class="form-control feedback-comment-box" placeholder="Leave a comment here" id="feedbackComment"></textarea>
-                    <label for="feedbackComment">Tell us what we can improve...</label>
+                <div class="form-floating text-start">
+                    <textarea class="form-control" placeholder="Leave your feedback here" id="feedbackComment" style="height: 120px;"></textarea>
+                    <label for="feedbackComment">Tell us what you love or how we can improve GradLink...</label>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-info text-white" onclick="window.submitFeedback()">Submit Feedback</button>
+                <button type="button" class="btn btn-primary px-4" onclick="window.submitFeedback()">Submit Feedback</button>
             </div>
         </div>
     </div>
 </div>
 
-<div id="botIcon" onclick="toggleBot()"><i class="fas fa-robot fa-lg"></i></div>
-<div id="botWindow" class="card shadow">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <span>🤖 CampusBot</span><button class="btn btn-sm text-white icon-only-btn" aria-label="Close bot window" onclick="toggleBot()"><i class="fas fa-times"></i></button>
+<!-- Floating GradBot Assistant -->
+<div id="botIcon" onclick="toggleBot()" title="Chat with GradBot" aria-label="Open GradBot Assistant">
+    <i class="fas fa-robot fa-lg"></i>
+</div>
+
+<div id="botWindow" class="card shadow-lg">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="d-flex align-items-center gap-2">
+            <i class="fas fa-robot"></i>
+            <strong>GradBot</strong>
+            <span class="badge bg-light text-primary small">Assistant</span>
+        </span>
+        <button class="btn btn-sm text-white icon-only-btn p-0" aria-label="Close GradBot window" onclick="toggleBot()">
+            <i class="fas fa-times"></i>
+        </button>
     </div>
-    <div id="botMessages" class="card-body bg-light bot-messages">
-        <div class="system-message text-center text-muted small mt-2">Ask about batch 2024 or placements!</div>
+    <div id="botMessages" class="card-body bot-messages">
+        <div class="system-placeholder text-center p-3 my-auto text-muted small">
+            <i class="fas fa-lightbulb text-warning fa-2x mb-2 d-block"></i>
+            Ask GradBot about batch 2024, placements, alumni mentors, or events!
+            <div class="d-flex flex-wrap gap-1 justify-content-center mt-3">
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Placement stats 2024')">Placement Stats</button>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Who is in 2024 batch?')">2024 Batch</button>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Upcoming events')">Events</button>
+            </div>
+        </div>
     </div>
-    <div class="card-footer p-2 bg-white">
+    <div class="card-footer p-2 bg-white border-top">
         <div class="input-group">
-            <input type="text" id="botInput" class="form-control form-control-sm" placeholder="Ask..." onkeypress="if(event.key==='Enter') askBot()">
-            <button class="btn btn-primary btn-sm" onclick="askBot()" aria-label="Send bot message" title="Send bot message"><i class="fas fa-paper-plane"></i></button>
+            <input type="text" id="botInput" class="form-control form-control-sm border-0" placeholder="Ask GradBot anything..." onkeypress="if(event.key==='Enter') askBot()">
+            <button class="btn btn-primary btn-sm rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;" onclick="askBot()" aria-label="Send message to GradBot">
+                <i class="fas fa-paper-plane small"></i>
+            </button>
         </div>
     </div>
 </div>
 
-<div class="toast-container position-fixed bottom-0 end-0 p-3 shell-toast-container">
-    <div id="liveToast" class="toast" role="alert">
-        <div class="toast-header bg-primary text-white">
-            <strong class="me-auto">New Message</strong>
-                <button type="button" class="btn-close btn-close-white" aria-label="Close toast" data-bs-dismiss="toast"></button>
+<!-- Toast Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+    <div id="liveToast" class="toast cc-glass-panel border-0" role="alert">
+        <div class="toast-header bg-primary text-white border-0">
+            <i class="fas fa-envelope-open-text me-2"></i>
+            <strong class="me-auto">New Notification</strong>
+            <button type="button" class="btn-close btn-close-white" aria-label="Close toast" data-bs-dismiss="toast"></button>
         </div>
-        <div class="toast-body bg-white" id="toastBody"></div>
+        <div class="toast-body bg-white rounded-bottom" id="toastBody"></div>
     </div>
 </div>
 
+<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>

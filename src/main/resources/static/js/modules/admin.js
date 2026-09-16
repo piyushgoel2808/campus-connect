@@ -35,13 +35,26 @@ async function loadAdminUsers() {
         const tbody = document.getElementById("adminUserTable");
         if (!tbody) return;
 
-        tbody.innerHTML = users.map(u => `
+        tbody.innerHTML = users.map(u => {
+            const statusBadge = u.isFlagged 
+                ? `<span class="cc-flag-badge"><i class="fas fa-flag"></i> Flagged (${u.flagCount || 1}x)</span>`
+                : `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fas fa-check-circle me-1"></i> Clean</span>`;
+
+            const unflagBtn = u.isFlagged
+                ? `<button class="btn btn-sm btn-outline-warning me-1" title="Clear Profanity Flags" onclick="window.unflagUser(${u.id})">
+                     <i class="fas fa-flag-checkered me-1"></i> Unflag
+                   </button>`
+                : "";
+
+            return `
             <tr>
                 <td>${u.id}</td>
                 <td>${u.name}</td>
-                <td>${u.role}</td>
+                <td><span class="badge bg-light text-dark border">${u.role}</span></td>
                 <td>${u.email}</td>
-                <td>
+                <td>${statusBadge}</td>
+                <td class="text-end">
+                    ${unflagBtn}
                     <button class="btn btn-sm btn-outline-primary me-1"
                         onclick='window.openEditUserModal(${JSON.stringify(u)})'>
                         <i class="fas fa-edit"></i>
@@ -51,13 +64,28 @@ async function loadAdminUsers() {
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
     } catch (e) {
         console.error("Failed to load users", e);
         const tbody = document.getElementById("adminUserTable");
-        if(tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Error loading users</td></tr>`;
+        if(tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error loading users</td></tr>`;
     }
 }
+
+window.unflagUser = async function(id) {
+    if (!confirm("Clear flagged status for this user?")) return;
+    try {
+        const res = await send(`/admin/users/${id}/unflag`, 'POST');
+        if (res.ok) {
+            loadAdminUsers();
+        } else {
+            alert("Failed to unflag user.");
+        }
+    } catch(e) {
+        console.error("Unflag error:", e);
+    }
+};
 
 window.deleteUser = async function(id) {
     if(!confirm("Are you sure? This cannot be undone.")) return;

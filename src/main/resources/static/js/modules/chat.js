@@ -34,6 +34,24 @@ export function connectChat() {
         const userEmail = getCurrentUser().email;
         console.log('✅ WebSocket Connected as ' + userEmail);
 
+        // Update UI status badge to Online
+        const statusBadge = document.getElementById("chatStatus");
+        if (statusBadge) {
+            statusBadge.className = "badge bg-success";
+            statusBadge.innerHTML = `<i class="fas fa-circle me-1" style="font-size: 0.55rem;"></i>Online`;
+        }
+
+        // Add welcome message if chat area is empty
+        const chatArea = document.getElementById("chatArea");
+        if (chatArea && !chatArea.hasChildNodes()) {
+            chatArea.innerHTML = `
+                <div class="chat-placeholder text-center text-muted small py-4 my-auto">
+                    <i class="fas fa-comments text-primary fa-2x mb-2 d-block" style="opacity: 0.45;"></i>
+                    <strong>Welcome to Global Chat!</strong><br>
+                    Messages sent here are visible to the entire GradLink community.
+                </div>`;
+        }
+
         // 1. Subscribe to YOUR private queue
         stompClient.subscribe('/user/queue/messages', function (payload) {
             console.log("📩 Private Message Received");
@@ -64,6 +82,11 @@ export function connectChat() {
 
     }, function (err) {
         console.error('❌ WebSocket Error:', err);
+        const statusBadge = document.getElementById("chatStatus");
+        if (statusBadge) {
+            statusBadge.className = "badge bg-danger";
+            statusBadge.innerText = "Offline";
+        }
     });
 }
 
@@ -142,11 +165,17 @@ function onPublicMessageReceived(message) {
     const messageArea = document.getElementById("chatArea"); // Matches Global Chat container
     if (!messageArea) return;
 
+    // Remove empty placeholder
+    const placeholder = messageArea.querySelector(".chat-placeholder");
+    if (placeholder) placeholder.remove();
+
     const div = document.createElement('div');
-    const isMe = message.senderName === getCurrentUser().email;
+    const currentUser = getCurrentUser();
+    const isMe = (message.senderName === currentUser.email) || (message.senderName === currentUser.name);
 
     div.className = `message ${isMe ? 'my-message' : 'other-message'}`;
-    div.innerHTML = `<strong>${isMe ? 'Me' : message.senderName}</strong><br>${message.content}`;
+    const displayName = isMe ? 'You' : (message.senderName || 'Anonymous');
+    div.innerHTML = `<strong class="small d-block mb-1" style="opacity: 0.85; font-size: 0.78rem;">${displayName}</strong><div>${message.content}</div>`;
 
     messageArea.appendChild(div);
     messageArea.scrollTop = messageArea.scrollHeight;
@@ -154,15 +183,22 @@ function onPublicMessageReceived(message) {
 
 window.sendMessage = function() {
     const input = document.getElementById("messageInput");
+    if (!input) return;
     const content = input.value.trim();
-    if(content && stompClient) {
-        stompClient.send("/app/chat.sendMessage", {}, JSON.stringify({
-            senderName: getCurrentUser().email,
-            content: content,
-            type: 'CHAT'
-        }));
-        input.value = '';
+    if (!content) return;
+
+    if (!stompClient || !stompClient.connected) {
+        alert("Global chat is currently connecting to the server. Please wait a moment.");
+        return;
     }
+
+    const currentUser = getCurrentUser();
+    stompClient.send("/app/chat.sendMessage", {}, JSON.stringify({
+        senderName: currentUser.name || currentUser.email || "Community Member",
+        content: content,
+        type: 'CHAT'
+    }));
+    input.value = '';
 };
 
 // =========================================================

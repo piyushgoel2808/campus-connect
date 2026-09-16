@@ -30,7 +30,7 @@ function renderJobs(jobs) {
             ? `<button class="btn btn-sm btn-outline-danger" onclick="window.deleteJob(${j.id})" aria-label="Delete job"><i class="fas fa-trash"></i></button>`
             : "";
 
-        const postedBy = j.postedBy?.name || 'Campus Connect';
+        const postedBy = j.postedBy?.name || 'GradLink';
         const titleInitial = (j.company || 'J').charAt(0).toUpperCase();
 
         list.innerHTML += `

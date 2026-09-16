@@ -45,7 +45,7 @@ public class SecurityConfig {
                                 "/js/**",
                                 "/ws/**",
                                 "/favicon.ico",
-                                "/ws/**"
+                                "/uploads/**"
                         ).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()

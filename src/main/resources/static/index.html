@@ -3,150 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Connect | BVICAM</title>
+    <title>GradLink | BVICAM Alumni & Student Network</title>
+    <meta name="description" content="GradLink is the exclusive alumni and student networking platform for Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM).">
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap 5.3 & FontAwesome -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom Theme Tokens & Landing Styles -->
     <link href="css/tokens.css" rel="stylesheet">
     <link href="css/landing.css" rel="stylesheet">
 </head>
 <body class="landing-page">
 
+    <!-- Top Announcement Bar -->
     <div class="top-bar">
         <div class="container text-center text-md-start">
             <div class="row align-items-center">
-                <div class="col-md-12 text-center">
-                    <i class="fas fa-university me-2"></i> Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM)
+                <div class="col-md-8 text-center text-md-start mb-1 mb-md-0">
+                    <i class="fas fa-university me-2 text-info"></i>
+                    Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM)
+                </div>
+                <div class="col-md-4 text-center text-md-end">
+                    <span>✨ Welcome to <strong>GradLink</strong> Community</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+    <!-- Glass Navbar -->
+    <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container">
-            <a class="navbar-brand" href="#">
-                <img src="https://bvicam.in/Content/ForntEnd/images/logo.png" alt="BVICAM Logo">
-                Campus Connect
+            <a class="navbar-brand" href="index.html">
+                <span class="d-inline-flex align-items-center justify-content-center bg-primary text-white rounded-3 shadow-sm" style="width: 40px; height: 40px;">
+                    <i class="fas fa-graduation-cap"></i>
+                </span>
+                <span>GradLink</span>
+                <span class="brand-badge">BVICAM</span>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
+            <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-label="Toggle navigation">
+                <i class="fas fa-bars fs-5"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto align-items-center">
+                <ul class="navbar-nav ms-auto align-items-center gap-1">
                     <li class="nav-item">
                         <a class="nav-link" href="#features">Features</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#stats">Network Stats</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#about">About</a>
                     </li>
                     <li class="nav-item ms-lg-3">
-                        <a href="https://bvicam.in" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm rounded-pill px-3">Official Website</a>
+                        <a href="https://bvicam.in" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm px-3">
+                            <i class="fas fa-external-link-alt me-1 small"></i> Official Portal
+                        </a>
                     </li>
-                    <li class="nav-item ms-2">
-                        <a href="login.html" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm">Login / Sign Up</a>
+                    <li class="nav-item ms-lg-2 mt-2 mt-lg-0">
+                        <a href="login.html" class="btn btn-primary btn-sm px-4">
+                            <i class="fas fa-sign-in-alt me-1"></i> Sign In / Register
+                        </a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
 
+    <!-- Modern Hero Section -->
     <section class="hero-section text-center d-flex align-items-center">
         <div class="container hero-content">
-            <span class="badge bg-warning text-dark mb-3 px-3 py-2 rounded-pill">Exclusive for BVICAM Students & Alumni</span>
-            <h1 class="display-3 fw-bold mb-4">Bridging the Gap Between<br>Talent & Opportunity</h1>
-            <p class="lead mb-5 opacity-90 mx-auto cc-max-w-700">
-                Connect with distinguished Alumni, discover exclusive career opportunities, and engage with the vibrant BVICAM community in real-time.
+            <div class="hero-badge animate-fade-in">
+                <span class="pulse-dot"></span>
+                <span>Exclusive for BVICAM Students & Distinguished Alumni</span>
+            </div>
+            <h1 class="display-3 fw-bold mb-4">
+                Bridging the Gap Between<br>
+                <span class="hero-gradient-text">Talent & Opportunity</span>
+            </h1>
+            <p class="hero-lead">
+                Connect directly with experienced seniors, discover curated career opportunities, collaborate on projects, and engage with the vibrant BVICAM community in real-time.
             </p>
-            <div class="d-flex justify-content-center gap-3">
-                <a href="login.html" class="btn btn-primary btn-lg px-5 py-3 fw-bold rounded-pill shadow hover-effect">Get Started</a>
-                <a href="#features" class="btn btn-outline-light btn-lg px-5 py-3 fw-bold rounded-pill">Learn More</a>
+            <div class="hero-cta-group">
+                <a href="login.html" class="btn btn-primary btn-lg hero-cta-btn shadow-lg">
+                    Launch GradLink <i class="fas fa-arrow-right ms-2"></i>
+                </a>
+                <a href="#features" class="btn btn-outline-light btn-lg hero-cta-btn">
+                    Explore Platform
+                </a>
             </div>
         </div>
     </section>
 
-    <section class="stats-section">
+    <!-- Floating Statistics Card -->
+    <section class="stats-section" id="stats">
         <div class="container">
-            <div class="row text-center g-4">
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <h3>100+</h3>
-                        <p class="text-muted mb-0">Active Alumni</p>
+            <div class="stats-card-wrapper">
+                <div class="row text-center g-4">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-number">500+</div>
+                            <p class="stat-label"><i class="fas fa-user-graduate text-primary me-2"></i>Active Alumni</p>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <h3>100+</h3>
-                        <p class="text-muted mb-0">Job Opportunities</p>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-number">150+</div>
+                            <p class="stat-label"><i class="fas fa-briefcase text-primary me-2"></i>Job & Internship Openings</p>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <h3>24/7</h3>
-                        <p class="text-muted mb-0">Community Support</p>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-number">100%</div>
+                            <p class="stat-label"><i class="fas fa-handshake text-primary me-2"></i>Verified BVICAM Community</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section id="features" class="py-5">
-        <div class="container py-5">
-            <div class="text-center mb-5">
-                <h6 class="text-primary fw-bold text-uppercase ls-2">Key Features</h6>
-                <h2 class="fw-bold display-6">Why Join Campus Connect?</h2>
-                <p class="text-muted mx-auto cc-max-w-600">Everything you need to grow your professional network within the BVICAM ecosystem.</p>
+    <!-- Key Features Section -->
+    <section id="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-kicker">Key Features</span>
+                <h2 class="section-title">Why Join GradLink?</h2>
+                <p class="text-muted fs-6">
+                    A purpose-built ecosystem crafted to empower students and connect alumni across industries and batches.
+                </p>
             </div>
             
             <div class="row g-4">
                 <div class="col-md-4">
-                    <div class="feature-card text-center">
-                        <div class="feature-icon">
-                            <i class="fas fa-user-graduate"></i>
+                    <div class="feature-card">
+                        <div class="feature-icon-wrapper">
+                            <i class="fas fa-users-viewfinder"></i>
                         </div>
                         <h4>Alumni Directory</h4>
-                        <p class="text-muted">Search and connect with seniors working in top MNCs like Amazon, Google, TCS, and more.</p>
+                        <p>Search and filter alumni by company, role, skills, and graduation batch. Connect with professionals working at leading tech enterprises.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="feature-card text-center">
-                        <div class="feature-icon">
+                    <div class="feature-card">
+                        <div class="feature-icon-wrapper">
                             <i class="fas fa-briefcase"></i>
                         </div>
-                        <h4>Job Board</h4>
-                        <p class="text-muted">Access exclusive job and internship openings posted directly by our trusted Alumni network.</p>
+                        <h4>Exclusive Job Board</h4>
+                        <p>Discover high-impact opportunities and internships posted directly by trusted alumni who can also offer internal referrals.</p>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="feature-card text-center">
-                        <div class="feature-icon">
+                    <div class="feature-card">
+                        <div class="feature-icon-wrapper">
                             <i class="fas fa-comments"></i>
                         </div>
-                        <h4>Real-Time Chat</h4>
-                        <p class="text-muted">Engage in instant messaging for mentorship, project discussions, and guidance.</p>
+                        <h4>Real-Time Collaboration</h4>
+                        <p>Engage in direct messaging, participate in public discussions on the campus wall, and attend virtual mentorship sessions.</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="cta-section text-center">
+    <!-- Call to Action Banner -->
+    <section class="cta-section">
         <div class="container">
-            <h2 class="mb-4 fw-bold">Ready to Accelerate Your Career?</h2>
-            <p class="mb-5 lead opacity-75">Join the fastest-growing network of BVICAM professionals today.</p>
-            <a href="login.html" class="btn btn-light text-primary btn-lg px-5 py-3 rounded-pill fw-bold shadow">Join Now</a>
+            <div class="cta-content">
+                <h2>Ready to Accelerate Your Career?</h2>
+                <p>Join hundreds of BVICAM professionals and scholars shaping the future of technology together.</p>
+                <a href="login.html" class="btn btn-light text-primary btn-lg px-5 py-3 rounded-pill fw-bold shadow-lg">
+                    Join GradLink Now <i class="fas fa-sparkles ms-2 text-warning"></i>
+                </a>
+            </div>
         </div>
     </section>
 
+    <!-- Luxury Dark Footer -->
     <footer>
         <div class="container">
             <div class="row g-4">
                 <div class="col-lg-5 col-md-12 mb-4">
-                    <h5 class="text-white"><i class="fas fa-graduation-cap me-2"></i>Campus Connect</h5>
-                    <p>An exclusive platform for Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM) to foster relationships between students and alumni.</p>
-                    <div class="mt-4">
-                        <a href="#" class="me-3" aria-label="Campus Connect LinkedIn" title="LinkedIn"><i class="fab fa-linkedin fa-lg"></i></a>
-                        <a href="#" class="me-3" aria-label="Campus Connect Twitter" title="Twitter"><i class="fab fa-twitter fa-lg"></i></a>
-                        <a href="#" class="me-3" aria-label="Campus Connect Instagram" title="Instagram"><i class="fab fa-instagram fa-lg"></i></a>
+                    <h5 class="d-flex align-items-center gap-2">
+                        <span class="bg-primary text-white rounded p-1 d-inline-flex" style="font-size: 0.9rem;">
+                            <i class="fas fa-graduation-cap"></i>
+                        </span>
+                        <span>GradLink</span>
+                    </h5>
+                    <p class="pe-lg-4 text-secondary">
+                        GradLink is the dedicated alumni and student network for Bharati Vidyapeeth's Institute of Computer Applications and Management (BVICAM). Empowering students with mentorship, industry insights, and career connections.
+                    </p>
+                    <div class="mt-4 d-flex">
+                        <a href="#" class="social-icon-link" aria-label="GradLink LinkedIn" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="#" class="social-icon-link" aria-label="GradLink Twitter" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="#" class="social-icon-link" aria-label="GradLink Instagram" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
                     </div>
                 </div>
                 
@@ -155,35 +216,40 @@
                     <ul class="list-unstyled">
                         <li class="mb-2"><a href="#">Home</a></li>
                         <li class="mb-2"><a href="#features">Features</a></li>
-                        <li class="mb-2"><a href="login.html">Login</a></li>
-                        <li class="mb-2"><a href="https://bvicam.in">BVICAM Official</a></li>
+                        <li class="mb-2"><a href="login.html">Login to Portal</a></li>
+                        <li class="mb-2"><a href="https://bvicam.in" target="_blank" rel="noopener noreferrer">BVICAM Official</a></li>
                     </ul>
                 </div>
 
-                <div class="col-lg-4 col-md-6 mb-4">
-                    <h5>Contact</h5>
+                <div class="col-lg-4 col-md-6 mb-4" id="about">
+                    <h5>Institute Contact</h5>
                     <ul class="list-unstyled">
-                        <li class="mb-2"><i class="fas fa-map-marker-alt me-2 text-primary"></i> A-4, Paschim Vihar, New Delhi - 110063</li>
-                        <li class="mb-2"><i class="fas fa-phone me-2 text-primary"></i> +91-11-25275055</li>
-                        <li class="mb-2"><i class="fas fa-envelope me-2 text-primary"></i> mca@bvicam.ac.in</li>
+                        <li class="mb-2 d-flex align-items-start gap-2">
+                            <i class="fas fa-map-marker-alt text-primary mt-1"></i>
+                            <span>A-4, Paschim Vihar, New Delhi - 110063</span>
+                        </li>
+                        <li class="mb-2 d-flex align-items-center gap-2">
+                            <i class="fas fa-phone text-primary"></i>
+                            <span>+91-11-25275055</span>
+                        </li>
+                        <li class="mb-2 d-flex align-items-center gap-2">
+                            <i class="fas fa-envelope text-primary"></i>
+                            <span>mca@bvicam.ac.in</span>
+                        </li>
                     </ul>
                 </div>
             </div>
         </div>
 
-        <div class="developer-tag text-center" id="about">
+        <div class="footer-bottom">
             <div class="container">
                 <div class="row align-items-center">
-                    <div class="col-md-6 text-md-start mb-2 mb-md-0">
-                        &copy; 2025 BVICAM Campus Connect. All rights reserved.
+                    <div class="col-md-6 text-center text-md-start mb-2 mb-md-0">
+                        &copy; 2025 BVICAM GradLink. All rights reserved.
                     </div>
-                    <div class="col-md-6 text-md-end">
-                        <small class="footer-credit">
-                            <a href="mailto:piyushgoel2808@gmail.com" class="text-white"><i class="fas fa-envelope me-1"></i> piyushgoel2808@gmail.com</a>
-                            <span class="mx-2">|</span>
-                            <a href="https://www.linkedin.com/in/piyush-goel-26548b142" target="_blank" rel="noopener noreferrer" class="text-white">
-                                <i class="fab fa-linkedin fa-lg"></i> Connect on LinkedIn
-                            </a>
+                    <div class="col-md-6 text-center text-md-end">
+                        <small class="text-secondary">
+                            GradLink Platform • Built for BVICAM Community
                         </small>
                     </div>
                 </div>
@@ -191,6 +257,7 @@
         </div>
     </footer>
 
+    <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

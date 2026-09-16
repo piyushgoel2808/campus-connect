@@ -36,6 +36,14 @@ public class Post {
     @Column(nullable = false)
     private Boolean isPinned = false;
 
+    // --- NEW FIELD: Comment Counter ---
+    @Column(nullable = false)
+    private Integer commentsCount = 0;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private java.util.List<Comment> comments = new java.util.ArrayList<>();
+
     @PrePersist
     protected void onCreate() {
         if (this.createdAt == null) {
@@ -47,6 +55,9 @@ public class Post {
         // Ensure isPinned is never null in the database
         if (this.isPinned == null) {
             this.isPinned = false;
+        }
+        if (this.commentsCount == null) {
+            this.commentsCount = 0;
         }
     }
 

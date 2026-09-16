@@ -1,35 +1,109 @@
-<div class="card p-4 shadow-sm border-0">
-    <div class="d-flex justify-content-between mb-4">
-        <h4>Edit Profile</h4>
-        <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
+<div class="cc-page-section">
+    <div class="cc-page-header">
+        <div>
+            <span class="cc-section-kicker"><i class="fas fa-user-gear"></i> Settings</span>
+            <h2 class="cc-page-title">Your Profile & Preferences</h2>
+            <p class="cc-page-subtitle">Keep your professional information and portfolio links updated so peers and recruiters can find you.</p>
+        </div>
+        <button class="btn btn-primary px-4" onclick="saveProfile()">
+            <i class="fas fa-save me-1"></i> Save Profile
+        </button>
     </div>
-    <div class="row g-3">
-        <div class="col-12"><label class="small text-muted">Headline</label><input type="text" id="pHeadline" class="form-control" placeholder="Short professional summary"></div>
-        <div class="col-6"><label class="small text-muted">Current Company</label><input type="text" id="pCompany" class="form-control" placeholder="Company name"></div>
-        <div class="col-6"><label class="small text-muted">Designation</label><input type="text" id="pDesignation" class="form-control" placeholder="Role or title"></div>
-        <div class="col-12"><label class="small text-muted">Skills</label><input type="text" id="pSkills" class="form-control" placeholder="Java, React, SQL"></div>
-        <div class="col-12"><label class="small text-muted">Experience</label><textarea id="pExperience" class="form-control" rows="3" placeholder="Summarize your experience"></textarea></div>
-        <div class="col-6"><label class="small text-muted">LinkedIn</label><input type="text" id="pLinkedin" class="form-control" placeholder="https://linkedin.com/in/..."></div>
-        <div class="col-6"><label class="small text-muted">GitHub</label><input type="text" id="pGithub" class="form-control" placeholder="https://github.com/..."></div>
-        <div class="col-12 mt-2">
-            <label class="small text-muted d-block mb-2">Notification Preferences</label>
-            <div class="row g-2">
-                <div class="col-md-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="pNotifyMessages" checked>
-                        <label class="form-check-label" for="pNotifyMessages">Messages</label>
-                    </div>
+
+    <div class="cc-panel p-4">
+        <div class="row g-4">
+            <!-- Professional Summary -->
+            <div class="col-12">
+                <div class="cc-divider-title">
+                    <i class="fas fa-briefcase text-primary"></i> Professional Headline
                 </div>
-                <div class="col-md-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="pNotifyEvents" checked>
-                        <label class="form-check-label" for="pNotifyEvents">Events</label>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold">Headline</label>
+                    <input type="text" id="pHeadline" class="form-control" placeholder="e.g. SDE at Microsoft | BVICAM MCA '24 | Cloud & Backend">
                 </div>
-                <div class="col-md-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="pNotifyJobs" checked>
-                        <label class="form-check-label" for="pNotifyJobs">Jobs</label>
+            </div>
+
+            <!-- Current Employment / Role -->
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">Current Company or Institution</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fas fa-building text-muted"></i></span>
+                    <input type="text" id="pCompany" class="form-control" placeholder="Company or College name">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">Role or Designation</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fas fa-id-badge text-muted"></i></span>
+                    <input type="text" id="pDesignation" class="form-control" placeholder="e.g. Associate Engineer / Student">
+                </div>
+            </div>
+
+            <!-- Skills & Experience -->
+            <div class="col-12">
+                <label class="form-label text-muted small fw-bold">Skills & Technologies</label>
+                <input type="text" id="pSkills" class="form-control" placeholder="e.g. Java, Spring Boot, React, AWS, Docker, Python">
+            </div>
+
+            <div class="col-12">
+                <label class="form-label text-muted small fw-bold">Bio & Career Experience</label>
+                <textarea id="pExperience" class="form-control" rows="3" placeholder="Briefly describe your career background, projects, or interests..."></textarea>
+            </div>
+
+            <!-- Social Links -->
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">LinkedIn Profile URL</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fab fa-linkedin text-primary"></i></span>
+                    <input type="text" id="pLinkedin" class="form-control" placeholder="https://linkedin.com/in/username">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label text-muted small fw-bold">GitHub Profile URL</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fab fa-github text-dark"></i></span>
+                    <input type="text" id="pGithub" class="form-control" placeholder="https://github.com/username">
+                </div>
+            </div>
+
+            <!-- Notification Preferences -->
+            <div class="col-12 pt-3 border-top">
+                <div class="cc-divider-title">
+                    <i class="fas fa-bell text-primary"></i> Notification Preferences
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong class="d-block text-secondary small">Direct Messages</strong>
+                                <small class="text-muted">Chat alerts</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="pNotifyMessages" checked>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong class="d-block text-secondary small">Campus Events</strong>
+                                <small class="text-muted">Upcoming talks & webinars</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="pNotifyEvents" checked>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong class="d-block text-secondary small">Career Alerts</strong>
+                                <small class="text-muted">New job postings</small>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="pNotifyJobs" checked>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
