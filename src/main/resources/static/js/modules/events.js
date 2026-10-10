@@ -1,5 +1,7 @@
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+const eventsMap = new Map();
+
 // =========================================================
 // 1. FETCH & RENDER
 // =========================================================
@@ -22,7 +24,7 @@ export async function fetchEvents() {
 
         // Show "Add Event" button only for ADMIN
         const { role } = getCurrentUser();
-        if (role === "ADMIN") {
+        if (role && role.toUpperCase() === "ADMIN") {
             document.getElementById("btnAddEvent")?.classList.remove("d-none");
         }
     } catch (e) {
@@ -35,8 +37,10 @@ function renderEvents(events) {
     const container = document.getElementById("eventsContainer");
     if(!container) return;
     container.innerHTML = "";
+    eventsMap.clear();
 
     const { role } = getCurrentUser();
+    const isAdmin = role && role.toUpperCase() === "ADMIN";
 
     if (events.length === 0) {
         container.innerHTML = `
@@ -51,8 +55,9 @@ function renderEvents(events) {
     }
 
     events.forEach(e => {
-        const dateStr = new Date(e.dateTime).toDateString();
-        const timeStr = new Date(e.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        eventsMap.set(e.id, e);
+        const dateStr = e.dateTime ? new Date(e.dateTime).toDateString() : "TBD";
+        const timeStr = e.dateTime ? new Date(e.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
 
         // 1. Participant Count Badge
         const count = e.participantCount || 0;
@@ -60,15 +65,14 @@ function renderEvents(events) {
 
         // 2. Admin Controls
         let adminControls = "";
-        if (role === "ADMIN") {
-            const safeEvent = encodeURIComponent(JSON.stringify(e));
+        if (isAdmin) {
             adminControls = `
                 <div class="mt-3 pt-2 border-top d-flex justify-content-between">
                     <div>
                         <button class="btn btn-sm btn-info text-white me-1" onclick="window.viewParticipants(${e.id})" title="View RSVPs">
                             <i class="fas fa-users"></i>
                         </button>
-                        <button class="btn btn-sm btn-warning" onclick="window.openEditEvent('${safeEvent}')" title="Edit">
+                        <button class="btn btn-sm btn-warning" onclick="window.openEditEvent(${e.id})" title="Edit">
                             <i class="fas fa-edit"></i>
                         </button>
                     </div>
@@ -89,8 +93,8 @@ function renderEvents(events) {
                 <article class="cc-feature-card cc-hover-lift h-100 d-flex flex-column">
                     <div class="cc-feature-card-header">
                         <div>
-                            <h5 class="cc-feature-title mb-1">${e.title}</h5>
-                            <div class="cc-feature-meta"><i class="fas fa-map-marker-alt me-1"></i> ${e.location}</div>
+                            <h5 class="cc-feature-title mb-1">${e.title || 'Untitled Event'}</h5>
+                            <div class="cc-feature-meta"><i class="fas fa-map-marker-alt me-1"></i> ${e.location || 'TBA'}</div>
                         </div>
                         <div class="text-end">
                             <span class="cc-pill">${dateStr}</span>
@@ -98,7 +102,7 @@ function renderEvents(events) {
                         </div>
                     </div>
                     <div class="cc-feature-card-body d-flex flex-column flex-grow-1">
-                        <p class="cc-feature-meta flex-grow-1">${e.description}</p>
+                        <p class="cc-feature-meta flex-grow-1">${e.description || ''}</p>
                         <div>${countBadge}</div>
 
                         <div class="mt-3">${rsvpBtn}</div>
@@ -113,18 +117,16 @@ function renderEvents(events) {
 // 2. EXPOSED FUNCTIONS (Attached to Window)
 // =========================================================
 
-// A. Create New Event (UPDATED: Clean Date Logic)
+// A. Create New Event
 window.publishNewEvent = async function() {
-    const rawDate = document.getElementById("evtDate").value; // e.g., "2026-01-23T14:30:00"
-
-    // Safety: Remove seconds if they exist, so it matches "yyyy-MM-dd'T'HH:mm"
+    const rawDate = document.getElementById("evtDate")?.value || "";
     const cleanDate = rawDate ? rawDate.slice(0, 16) : null;
 
     const data = {
-        title: document.getElementById("evtTitle").value,
-        description: document.getElementById("evtDesc").value,
-        location: document.getElementById("evtLoc").value,
-        dateTime: cleanDate // Send the clean version
+        title: document.getElementById("evtTitle")?.value.trim() || "",
+        description: document.getElementById("evtDesc")?.value.trim() || "",
+        location: document.getElementById("evtLoc")?.value.trim() || "",
+        dateTime: cleanDate
     };
 
     if(!data.title || !data.dateTime) return alert("Title and Date are required");
@@ -136,12 +138,15 @@ window.publishNewEvent = async function() {
 
         // Close Modal
         const modalEl = document.getElementById('eventModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        }
 
         // Reset Form
-        document.getElementById("evtTitle").value = "";
-        document.getElementById("evtDesc").value = "";
+        if (document.getElementById("evtTitle")) document.getElementById("evtTitle").value = "";
+        if (document.getElementById("evtDate")) document.getElementById("evtDate").value = "";
+        if (document.getElementById("evtLoc")) document.getElementById("evtLoc").value = "";
+        if (document.getElementById("evtDesc")) document.getElementById("evtDesc").value = "";
 
         fetchEvents();
 
@@ -159,7 +164,10 @@ window.viewParticipants = async function(eventId) {
     list.innerHTML = "<li class='list-group-item text-center'>Loading...</li>";
 
     // Open Modal
-    new bootstrap.Modal(document.getElementById('participantsModal')).show();
+    const modalEl = document.getElementById('participantsModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 
     try {
         const users = await get(`/events/${eventId}/participants`);
@@ -204,33 +212,37 @@ window.deleteEvent = async function(id) {
 };
 
 // E. Edit Event (Open Modal)
-window.openEditEvent = function(encodedEvent) {
-    const event = JSON.parse(decodeURIComponent(encodedEvent));
+window.openEditEvent = function(eventOrId) {
+    const event = (typeof eventOrId === 'object' && eventOrId !== null)
+        ? eventOrId
+        : (typeof eventOrId === 'string' && eventOrId.startsWith('%7B')
+            ? JSON.parse(decodeURIComponent(eventOrId))
+            : eventsMap.get(Number(eventOrId)));
+    if (!event) return;
 
     document.getElementById("editEventId").value = event.id;
-    document.getElementById("editEventTitle").value = event.title;
-    document.getElementById("editEventDesc").value = event.description;
-    document.getElementById("editEventLoc").value = event.location;
+    document.getElementById("editEventTitle").value = event.title || "";
+    document.getElementById("editEventDesc").value = event.description || "";
+    document.getElementById("editEventLoc").value = event.location || "";
 
     if(event.dateTime) {
-        const dt = new Date(event.dateTime);
-        const iso = dt.toISOString().slice(0, 16);
-        document.getElementById("editEventDate").value = iso;
+        const raw = String(event.dateTime);
+        document.getElementById("editEventDate").value = raw.length >= 16 ? raw.slice(0, 16) : raw;
     }
 
-    new bootstrap.Modal(document.getElementById('editEventModal')).show();
+    const modalEl = document.getElementById('editEventModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 };
 
-// F. Submit Edit (UPDATED: Clean Date Logic)
+// F. Submit Edit
 window.submitEditEvent = async function() {
     const id = document.getElementById("editEventId").value;
     const rawDate = document.getElementById("editEventDate").value;
-
-    // Safety: Remove seconds if they exist
     const cleanDate = rawDate ? rawDate.slice(0, 16) : null;
 
-    // Validation
-    const title = document.getElementById("editEventTitle").value;
+    const title = document.getElementById("editEventTitle").value.trim();
     if (!title || !cleanDate) {
         alert("Please provide at least a Title and a Date.");
         return;
@@ -238,8 +250,8 @@ window.submitEditEvent = async function() {
 
     const data = {
         title: title,
-        description: document.getElementById("editEventDesc").value,
-        location: document.getElementById("editEventLoc").value,
+        description: document.getElementById("editEventDesc").value.trim(),
+        location: document.getElementById("editEventLoc").value.trim(),
         dateTime: cleanDate
     };
 
@@ -247,7 +259,10 @@ window.submitEditEvent = async function() {
         await send(`/events/${id}`, 'PUT', data);
 
         alert("✅ Event Updated!");
-        bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
+        const modalEl = document.getElementById('editEventModal');
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        }
         fetchEvents();
 
     } catch (e) {

@@ -1,6 +1,7 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.UserProfileDto;
+import com.bvicam.campusconnect.entity.Role;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -44,6 +45,9 @@ public class UserController {
         dto.setEmail(user.getEmail());
         dto.setRole(user.getRole() != null ? user.getRole().name() : null);
         dto.setDepartmentName(user.getDepartment() != null ? user.getDepartment().getName() : null);
+        dto.setDepartmentCode(user.getDepartment() != null ? user.getDepartment().getCode() : null);
+        dto.setBatchYear(user.getBatchYear());
+        dto.setEnrollmentNumber(user.getEnrollmentNumber());
         dto.setHeadline(user.getHeadline());
         dto.setCurrentCompany(user.getCurrentCompany());
         dto.setDesignation(user.getDesignation());
@@ -72,12 +76,23 @@ public class UserController {
             @RequestParam(required = false) Integer batch,
             @RequestParam(required = false) String q) {
 
-        // Handle "ALL" as null to ignore the filter
-        if ("ALL".equals(role)) role = null;
-        // Handle empty search strings
-        if (q != null && q.trim().isEmpty()) q = null;
+        Role roleEnum = null;
+        if (role != null && !role.trim().isEmpty() && !"ALL".equalsIgnoreCase(role.trim())) {
+            try {
+                roleEnum = Role.valueOf(role.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                roleEnum = null;
+            }
+        }
 
-        return userRepository.searchUsers(role, batch, q).stream().map(this::mapToDto).collect(Collectors.toList());
+        // Handle empty search strings
+        if (q != null && q.trim().isEmpty()) {
+            q = null;
+        } else if (q != null) {
+            q = q.trim();
+        }
+
+        return userRepository.searchUsers(roleEnum, batch, q).stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
     // 4. Update Profile (LinkedIn Style)

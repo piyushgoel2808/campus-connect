@@ -1,8 +1,15 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.RegisterRequest;
+import com.bvicam.campusconnect.entity.Department;
+import com.bvicam.campusconnect.entity.Event;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.entity.Role;
+import com.bvicam.campusconnect.repository.CommentRepository;
+import com.bvicam.campusconnect.repository.DepartmentRepository;
+import com.bvicam.campusconnect.repository.EventRepository;
+import com.bvicam.campusconnect.repository.FeedbackRepository;
+import com.bvicam.campusconnect.repository.JobRepository;
 import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
 import com.bvicam.campusconnect.service.EmailService;
@@ -30,16 +37,42 @@ public class AdminController {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final PostRepository postRepository;
+    private final DepartmentRepository departmentRepository;
+    private final CommentRepository commentRepository;
+    private final JobRepository jobRepository;
+    private final FeedbackRepository feedbackRepository;
+    private final EventRepository eventRepository;
 
     @Autowired
     public AdminController(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
                            EmailService emailService,
-                           PostRepository postRepository) {
+                           PostRepository postRepository,
+                           DepartmentRepository departmentRepository,
+                           CommentRepository commentRepository,
+                           JobRepository jobRepository,
+                           FeedbackRepository feedbackRepository,
+                           EventRepository eventRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.postRepository = postRepository;
+        this.departmentRepository = departmentRepository;
+        this.commentRepository = commentRepository;
+        this.jobRepository = jobRepository;
+        this.feedbackRepository = feedbackRepository;
+        this.eventRepository = eventRepository;
+    }
+
+    private Department resolveDepartment(String code) {
+        if (code == null || code.trim().isEmpty()) return null;
+        String normalized = code.trim();
+        if ("BA(JMC)".equalsIgnoreCase(normalized)) {
+            normalized = "BJMC";
+        }
+        final String finalCode = normalized;
+        return departmentRepository.findByCode(finalCode)
+                .orElseGet(() -> departmentRepository.save(new Department(finalCode, finalCode)));
     }
 
     // =========================================================
@@ -55,17 +88,23 @@ public class AdminController {
     @Transactional
     public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
         try {
-            if (userRepository.existsByEmail(request.getEmail())) {
+            if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Error: Email is required!");
+            }
+            if (userRepository.existsByEmail(request.getEmail().trim())) {
                 return ResponseEntity.badRequest().body("Error: Email already exists!");
             }
 
             User user = new User();
             user.setName(request.getName());
-            user.setEmail(request.getEmail());
-            // Safe Enum assignment from Version 2
+            user.setEmail(request.getEmail().trim());
             user.setRole(request.getRole() != null ? request.getRole() : Role.STUDENT);
             user.setEnrollmentNumber(request.getEnrollmentNumber());
             user.setBatchYear(request.getBatchYear());
+
+            if (request.getDepartmentCode() != null && !request.getDepartmentCode().trim().isEmpty()) {
+                user.setDepartment(resolveDepartment(request.getDepartmentCode()));
+            }
 
             // Set Professional Profile Fields
             user.setHeadline(request.getHeadline());
@@ -76,8 +115,10 @@ public class AdminController {
             user.setLinkedinUrl(request.getLinkedinUrl());
             user.setPastExperience(request.getPastExperience());
 
-            String defaultPass = "Bvicam@2025";
-            user.setPasswordHash(passwordEncoder.encode(defaultPass));
+            String rawPass = (request.getPassword() != null && !request.getPassword().trim().isEmpty())
+                    ? request.getPassword().trim()
+                    : "Bvicam@2025";
+            user.setPasswordHash(passwordEncoder.encode(rawPass));
             user.setPasswordChanged(false);
 
             userRepository.save(user);
@@ -90,21 +131,44 @@ public class AdminController {
     @DeleteMapping("/delete-user/{id}")
     @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
-        if (!userRepository.existsById(id)) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
-        userRepository.deleteById(id);
+
+        // Remove user from event participants
+        for (Event event : eventRepository.findAll()) {
+            if (event.getParticipants() != null && event.getParticipants().remove(user)) {
+                eventRepository.save(event);
+            }
+        }
+
+        // Remove comments, posts, jobs, and feedback authored by this user
+        commentRepository.findAll().stream()
+                .filter(c -> c.getAuthor() != null && id.equals(c.getAuthor().getId()))
+                .forEach(commentRepository::delete);
+        postRepository.findAll().stream()
+                .filter(p -> p.getAuthor() != null && id.equals(p.getAuthor().getId()))
+                .forEach(postRepository::delete);
+        jobRepository.findAll().stream()
+                .filter(j -> j.getPostedBy() != null && id.equals(j.getPostedBy().getId()))
+                .forEach(jobRepository::delete);
+        feedbackRepository.findAll().stream()
+                .filter(f -> f.getSubmittedBy() != null && id.equals(f.getSubmittedBy().getId()))
+                .forEach(feedbackRepository::delete);
+
+        userRepository.delete(user);
         return ResponseEntity.ok("✅ User deleted successfully.");
     }
 
     @PutMapping("/users/{id}")
     @Transactional
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedData) {
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody RegisterRequest updatedData) {
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
 
-        user.setName(updatedData.getName());
-        user.setEmail(updatedData.getEmail());
-        user.setRole(updatedData.getRole());
+        if (updatedData.getName() != null) user.setName(updatedData.getName());
+        if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail().trim());
+        if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
         user.setBatchYear(updatedData.getBatchYear());
         user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
         user.setCurrentCompany(updatedData.getCurrentCompany());
@@ -114,6 +178,10 @@ public class AdminController {
         user.setGithubUrl(updatedData.getGithubUrl());
         user.setLinkedinUrl(updatedData.getLinkedinUrl());
         user.setPastExperience(updatedData.getPastExperience());
+
+        if (updatedData.getDepartmentCode() != null && !updatedData.getDepartmentCode().trim().isEmpty()) {
+            user.setDepartment(resolveDepartment(updatedData.getDepartmentCode()));
+        }
 
         userRepository.save(user);
         return ResponseEntity.ok("✅ User updated successfully.");

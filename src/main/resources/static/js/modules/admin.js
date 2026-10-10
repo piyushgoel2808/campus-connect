@@ -1,5 +1,17 @@
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+const adminUsersMap = new Map();
+
+const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val ?? "";
+};
+
+const getVal = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : "";
+};
+
 // =========================================================
 // 1. INITIALIZATION
 // =========================================================
@@ -7,21 +19,24 @@ import { get, send, getCurrentUser } from '../utils/api.js';
 export function loadAdminModule() {
     // 1. Check Permissions
     const { role } = getCurrentUser();
-    if (role !== 'ADMIN') {
+    if (!role || role.toUpperCase() !== 'ADMIN') {
         console.warn("Unauthorized access to Admin module");
         return;
     }
 
-    // 2. Load Initial Data (Users)
+    // 2. Load Initial Data (Users & Jobs)
     loadAdminUsers();
+    window.loadAdminJobs();
 
     // 3. Attach Event Listeners for Sub-tabs
     setTimeout(() => {
         const feedbackBtn = document.getElementById('tab-feedback-btn');
         const usersBtn = document.getElementById('tab-users-btn');
+        const jobsBtn = document.getElementById('tab-jobs-admin-btn');
 
-        if(feedbackBtn) feedbackBtn.onclick = loadAdminFeedback;
-        if(usersBtn) usersBtn.onclick = loadAdminUsers;
+        if (feedbackBtn) feedbackBtn.onclick = loadAdminFeedback;
+        if (usersBtn) usersBtn.onclick = loadAdminUsers;
+        if (jobsBtn) jobsBtn.onclick = window.loadAdminJobs;
     }, 100);
 }
 
@@ -34,6 +49,9 @@ async function loadAdminUsers() {
         const users = await get('/users');
         const tbody = document.getElementById("adminUserTable");
         if (!tbody) return;
+
+        adminUsersMap.clear();
+        users.forEach(u => adminUsersMap.set(u.id, u));
 
         tbody.innerHTML = users.map(u => {
             const statusBadge = u.isFlagged 
@@ -49,17 +67,20 @@ async function loadAdminUsers() {
             return `
             <tr>
                 <td>${u.id}</td>
-                <td>${u.name}</td>
+                <td>
+                    <div class="fw-semibold">${u.name}</div>
+                    <small class="text-muted">${u.departmentCode || u.departmentName || ''} ${u.batchYear ? '• Batch ' + u.batchYear : ''}</small>
+                </td>
                 <td><span class="badge bg-light text-dark border">${u.role}</span></td>
                 <td>${u.email}</td>
                 <td>${statusBadge}</td>
                 <td class="text-end">
                     ${unflagBtn}
-                    <button class="btn btn-sm btn-outline-primary me-1"
-                        onclick='window.openEditUserModal(${JSON.stringify(u)})'>
+                    <button class="btn btn-sm btn-outline-primary me-1" title="Edit User"
+                        onclick="window.openEditUserModal(${u.id})">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger"
+                    <button class="btn btn-sm btn-outline-danger" title="Delete User"
                         onclick="window.deleteUser(${u.id})">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -69,7 +90,7 @@ async function loadAdminUsers() {
     } catch (e) {
         console.error("Failed to load users", e);
         const tbody = document.getElementById("adminUserTable");
-        if(tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error loading users</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error loading users</td></tr>`;
     }
 }
 
@@ -88,54 +109,74 @@ window.unflagUser = async function(id) {
 };
 
 window.deleteUser = async function(id) {
-    if(!confirm("Are you sure? This cannot be undone.")) return;
+    if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
 
     try {
         const res = await send(`/admin/delete-user/${id}`, 'DELETE');
-        if(res.ok) {
-            loadAdminUsers(); // Refresh list
+        if (res.ok) {
+            loadAdminUsers();
         } else {
-            alert("Failed to delete user.");
+            const err = await res.text();
+            alert("Failed to delete user: " + err);
         }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+        console.error(e);
+        alert("Error deleting user: " + e.message);
+    }
 };
 
-window.openEditUserModal = function(user) {
-    document.getElementById("editUserId").value = user.id;
-    
-    // Identity & Role fields
-    document.getElementById("editName").value = user.name || "";
-    document.getElementById("editEmail").value = user.email || "";
-    document.getElementById("editRole").value = user.role || "STUDENT";
-    document.getElementById("editBatch").value = user.batchYear || "";
-    document.getElementById("editEnrollment").value = user.enrollmentNumber || "";
-    
-    // Professional Profile fields
-    document.getElementById("editHeadline").value = user.headline || "";
-    document.getElementById("editCompany").value = user.currentCompany || "";
-    document.getElementById("editDesignation").value = user.designation || "";
-    document.getElementById("editSkills").value = user.skills || "";
-    document.getElementById("editLinkedin").value = user.linkedinUrl || "";
-    const bioField = document.getElementById("editBio") || document.getElementById("editExperience");
-    if (bioField) bioField.value = user.pastExperience || "";
+window.openEditUserModal = function(userOrId) {
+    const user = (typeof userOrId === 'object' && userOrId !== null)
+        ? userOrId
+        : adminUsersMap.get(Number(userOrId));
 
-    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+    if (!user) {
+        alert("Could not find user details.");
+        return;
+    }
+
+    const deptCode = (user.department && user.department.code)
+        || (user.departmentCode && user.departmentCode !== "UNKNOWN" ? user.departmentCode : "");
+
+    setVal("editUserId", user.id);
+    setVal("editName", user.name || "");
+    setVal("editEmail", user.email || "");
+    setVal("editRole", user.role || "STUDENT");
+    setVal("editDept", deptCode);
+    setVal("editBatch", user.batchYear || "");
+    setVal("editEnrollment", user.enrollmentNumber || "");
+    setVal("editHeadline", user.headline || "");
+    setVal("editCompany", user.currentCompany || "");
+    setVal("editDesignation", user.designation || "");
+    setVal("editSkills", user.skills || "");
+    setVal("editLinkedin", user.linkedinUrl || "");
+    setVal("editGithub", user.githubUrl || "");
+    setVal("editBio", user.pastExperience || "");
+    setVal("editExperience", user.pastExperience || "");
+
+    const modalEl = document.getElementById('editUserModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 };
 
 window.adminSaveUser = async function() {
-    const id = document.getElementById("editUserId").value;
+    const id = getVal("editUserId");
+    const batchRaw = getVal("editBatch");
     const data = {
-        name: document.getElementById("editName").value,
-        email: document.getElementById("editEmail").value,
-        role: document.getElementById("editRole").value,
-        batchYear: parseInt(document.getElementById("editBatch").value) || null,
-        enrollmentNumber: document.getElementById("editEnrollment").value,
-        headline: document.getElementById("editHeadline").value,
-        currentCompany: document.getElementById("editCompany").value,
-        designation: document.getElementById("editDesignation").value,
-        skills: document.getElementById("editSkills").value,
-        linkedinUrl: document.getElementById("editLinkedin").value,
-        pastExperience: (document.getElementById("editBio") || document.getElementById("editExperience"))?.value || ""
+        name: getVal("editName"),
+        email: getVal("editEmail"),
+        role: getVal("editRole") || "STUDENT",
+        departmentCode: getVal("editDept") || null,
+        batchYear: batchRaw ? parseInt(batchRaw, 10) : null,
+        enrollmentNumber: getVal("editEnrollment"),
+        headline: getVal("editHeadline"),
+        currentCompany: getVal("editCompany"),
+        designation: getVal("editDesignation"),
+        skills: getVal("editSkills"),
+        linkedinUrl: getVal("editLinkedin"),
+        githubUrl: getVal("editGithub"),
+        pastExperience: getVal("editBio") || getVal("editExperience")
     };
 
     if (!data.name || !data.email) {
@@ -144,22 +185,15 @@ window.adminSaveUser = async function() {
     }
 
     const btn = document.querySelector("button[onclick='window.adminSaveUser()']");
-    if(btn) { btn.innerHTML = "Saving..."; btn.disabled = true; }
+    if (btn) { btn.innerHTML = "Saving..."; btn.disabled = true; }
 
     try {
-        const token = localStorage.getItem("jwt_token");
-        const response = await fetch(`/api/admin/users/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
+        const response = await send(`/admin/users/${id}`, 'PUT', data);
 
-        if(response.ok) {
+        if (response.ok) {
             alert("✅ User updated successfully!");
-            bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+            const modalEl = document.getElementById('editUserModal');
+            if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
             loadAdminUsers();
         } else {
             const text = await response.text();
@@ -169,35 +203,33 @@ window.adminSaveUser = async function() {
         console.error(e);
         alert("❌ Error: " + e.message);
     } finally {
-        if(btn) {
-            btn.innerHTML = "Save Changes";
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-save me-1"></i> Save Changes';
             btn.disabled = false;
         }
     }
 };
 
 // =========================================================
-// 3. RESET PASSWORD (NEW)
+// 3. RESET PASSWORD
 // =========================================================
 
 window.adminResetPassword = async function() {
-    const userId = document.getElementById("editUserId").value;
+    const userId = getVal("editUserId");
 
     if (!userId) {
         alert("Error: No user selected.");
         return;
     }
 
-    // Confirmation (Aligned with Controller logic)
     if (!confirm("⚠️ Are you sure? This will reset the user's password to 'Bvicam@2025'.")) {
         return;
     }
 
     const btn = document.querySelector("button[onclick='window.adminResetPassword()']");
-    if(btn) { btn.innerHTML = "Resetting..."; btn.disabled = true; }
+    if (btn) { btn.innerHTML = "Resetting..."; btn.disabled = true; }
 
     try {
-        // Call Backend API (Using PUT as defined in Controller)
         const res = await send(`/admin/users/${userId}/reset-password`, 'PUT');
 
         if (res.ok) {
@@ -211,8 +243,8 @@ window.adminResetPassword = async function() {
         console.error(e);
         alert("Error: " + e.message);
     } finally {
-        if(btn) {
-            btn.innerHTML = '<i class="fas fa-key"></i> Reset Password';
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-key me-1"></i> Reset Password';
             btn.disabled = false;
         }
     }
@@ -223,37 +255,45 @@ window.adminResetPassword = async function() {
 // =========================================================
 
 window.openCreateUserModal = function() {
-    // Clear all form fields
-    document.getElementById("createName").value = "";
-    document.getElementById("createEmail").value = "";
-    document.getElementById("createRole").value = "STUDENT";
-    document.getElementById("createBatch").value = "";
-    document.getElementById("createEnrollment").value = "";
-    document.getElementById("createHeadline").value = "";
-    document.getElementById("createCompany").value = "";
-    document.getElementById("createDesignation").value = "";
-    document.getElementById("createSkills").value = "";
-    document.getElementById("createLinkedin").value = "";
-    document.getElementById("createBio").value = "";
+    setVal("createName", "");
+    setVal("createEmail", "");
+    setVal("createRole", "STUDENT");
+    setVal("createDept", "MCA");
+    setVal("createBatch", "");
+    setVal("createEnrollment", "");
+    setVal("createHeadline", "");
+    setVal("createCompany", "");
+    setVal("createDesignation", "");
+    setVal("createSkills", "");
+    setVal("createLinkedin", "");
+    setVal("createGithub", "");
+    setVal("createBio", "");
+    setVal("createPassword", "Bvicam@2025");
 
-    // Show the modal
-    new bootstrap.Modal(document.getElementById('createUserModal')).show();
+    const modalEl = document.getElementById('createUserModal');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    }
 };
 
 window.adminCreateUser = async function() {
+    const batchRaw = getVal("createBatch");
     const data = {
-        name: document.getElementById("createName").value,
-        email: document.getElementById("createEmail").value,
-        role: document.getElementById("createRole").value,
-        batchYear: parseInt(document.getElementById("createBatch").value) || null,
-        enrollmentNumber: document.getElementById("createEnrollment").value,
-        headline: document.getElementById("createHeadline").value,
-        currentCompany: document.getElementById("createCompany").value,
-        designation: document.getElementById("createDesignation").value,
-        skills: document.getElementById("createSkills").value,
-        linkedinUrl: document.getElementById("createLinkedin").value,
-        pastExperience: document.getElementById("createBio").value,
-        password: "password123" // Default password
+        name: getVal("createName"),
+        email: getVal("createEmail"),
+        role: getVal("createRole") || "STUDENT",
+        departmentCode: getVal("createDept") || "MCA",
+        batchYear: batchRaw ? parseInt(batchRaw, 10) : null,
+        enrollmentNumber: getVal("createEnrollment"),
+        headline: getVal("createHeadline"),
+        currentCompany: getVal("createCompany"),
+        designation: getVal("createDesignation"),
+        skills: getVal("createSkills"),
+        linkedinUrl: getVal("createLinkedin"),
+        githubUrl: getVal("createGithub"),
+        pastExperience: getVal("createBio"),
+        password: getVal("createPassword") || "Bvicam@2025"
     };
 
     if (!data.name || !data.email) {
@@ -262,40 +302,18 @@ window.adminCreateUser = async function() {
     }
 
     const btn = document.querySelector("button[onclick='window.adminCreateUser()']")
+             || document.querySelector("button[onclick='window.submitCreateUser()']")
              || document.querySelector("button[onclick='adminCreateUser()']");
 
-    if(btn) { btn.innerText = "Creating..."; btn.disabled = true; }
+    if (btn) { btn.innerText = "Creating..."; btn.disabled = true; }
 
     try {
-        const token = localStorage.getItem("jwt_token");
-        const response = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
+        const response = await send('/admin/users', 'POST', data);
 
         if (response.ok) {
             alert("✅ User Created Successfully!");
             const modalEl = document.getElementById('createUserModal');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
-            
-            // Clear form
-            document.getElementById("createName").value = "";
-            document.getElementById("createEmail").value = "";
-            document.getElementById("createRole").value = "STUDENT";
-            document.getElementById("createBatch").value = "";
-            document.getElementById("createEnrollment").value = "";
-            document.getElementById("createHeadline").value = "";
-            document.getElementById("createCompany").value = "";
-            document.getElementById("createDesignation").value = "";
-            document.getElementById("createSkills").value = "";
-            document.getElementById("createLinkedin").value = "";
-            document.getElementById("createBio").value = "";
-            
+            if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
             loadAdminUsers();
         } else {
             const errorText = await response.text();
@@ -306,23 +324,25 @@ window.adminCreateUser = async function() {
         console.error(e);
         alert("Network Error: " + e.message);
     } finally {
-        if(btn) { btn.innerText = "Create User"; btn.disabled = false; }
+        if (btn) { btn.innerHTML = '<i class="fas fa-check me-1"></i> Create User'; btn.disabled = false; }
     }
 };
 
+window.submitCreateUser = window.adminCreateUser;
+
 // =========================================================
-// 5. BULK UPLOAD (EXCEL)
+// 5. BULK UPLOAD (EXCEL / CSV)
 // =========================================================
 
 window.uploadBulkDataExcel = async function() {
     const fileInput = document.getElementById("bulkFileExcel");
-    const file = fileInput.files[0];
-    if (!file) return alert("⚠️ Please select an Excel file (.xlsx)!");
+    const file = fileInput?.files[0];
+    if (!file) return alert("⚠️ Please select an Excel (.xlsx) or CSV (.csv) file!");
 
     const btn = document.querySelector("button[onclick='window.uploadBulkDataExcel()']")
              || document.querySelector("button[onclick='uploadBulkDataExcel()']");
 
-    if(btn) { btn.innerHTML = "Processing..."; btn.disabled = true; }
+    if (btn) { btn.innerHTML = "Processing..."; btn.disabled = true; }
 
     const formData = new FormData();
     formData.append("file", file);
@@ -337,7 +357,7 @@ window.uploadBulkDataExcel = async function() {
 
         const text = await res.text();
 
-        if(res.ok) {
+        if (res.ok) {
             alert(text);
             fileInput.value = "";
             loadAdminUsers();
@@ -348,17 +368,56 @@ window.uploadBulkDataExcel = async function() {
     } catch (e) {
         alert("❌ Error: " + e.message);
     } finally {
-        if(btn) { btn.innerHTML = "<i class='fas fa-upload me-1'></i> Upload .xlsx"; btn.disabled = false; }
+        if (btn) { btn.innerHTML = "<i class='fas fa-upload me-1'></i> Upload .xlsx / .csv"; btn.disabled = false; }
     }
 };
 
 // =========================================================
-// 6. FEEDBACK MANAGEMENT
+// 6. BROADCAST EMAIL
+// =========================================================
+
+window.sendBroadcastEmail = async function() {
+    const subject = getVal("broadcastSubject");
+    const body = getVal("broadcastMessage");
+
+    if (!subject || !body) {
+        alert("Please provide both an Email Subject and Message Content.");
+        return;
+    }
+
+    const btn = document.getElementById("btnBroadcastEmail")
+             || document.querySelector("button[onclick='window.sendBroadcastEmail()']");
+    if (btn) { btn.innerHTML = "Sending Broadcast..."; btn.disabled = true; }
+
+    try {
+        const res = await send('/admin/broadcast', 'POST', { subject, body });
+        if (res.ok) {
+            const msg = await res.text();
+            alert("📨 " + (msg || "Broadcast started in background!"));
+            setVal("broadcastSubject", "");
+            setVal("broadcastMessage", "");
+        } else {
+            const err = await res.text();
+            alert("❌ Failed to send broadcast: " + err);
+        }
+    } catch (e) {
+        console.error("Broadcast error:", e);
+        alert("❌ Error sending broadcast: " + e.message);
+    } finally {
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-bullhorn me-1"></i> Send Broadcast to Community';
+            btn.disabled = false;
+        }
+    }
+};
+
+// =========================================================
+// 7. FEEDBACK MANAGEMENT
 // =========================================================
 
 window.loadAdminFeedback = async function() {
     const tbody = document.getElementById("adminFeedbackTable");
-    if(!tbody) return;
+    if (!tbody) return;
 
     tbody.innerHTML = "<tr><td colspan='4' class='text-center py-4'>Loading...</td></tr>";
 
@@ -366,22 +425,71 @@ window.loadAdminFeedback = async function() {
         const feedbacks = await get('/feedback');
         tbody.innerHTML = "";
 
-        if(!feedbacks || feedbacks.length === 0) {
+        if (!feedbacks || feedbacks.length === 0) {
             tbody.innerHTML = "<tr><td colspan='4' class='text-center py-4 text-muted'>No feedback yet.</td></tr>";
             return;
         }
 
         feedbacks.forEach(f => {
-            const dateStr = f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '-';
+            const ts = f.submittedAt || f.createdAt;
+            const dateStr = ts ? new Date(ts).toLocaleDateString() : '-';
             tbody.innerHTML += `
                 <tr>
                     <td>${f.submittedBy?.name || 'Anonymous'}</td>
-                    <td class="text-warning">${"⭐".repeat(f.rating)}</td>
-                    <td>${f.comments}</td>
+                    <td class="text-warning">${"⭐".repeat(f.rating || 0)}</td>
+                    <td>${f.comments || ''}</td>
                     <td>${dateStr}</td>
                 </tr>`;
         });
     } catch(e) {
         tbody.innerHTML = "<tr><td colspan='4' class='text-danger text-center'>Error loading feedback</td></tr>";
     }
-}
+};
+
+// =========================================================
+// 8. JOBS & REFERRALS MANAGEMENT (ADMIN)
+// =========================================================
+
+window.loadAdminJobs = async function() {
+    const tbody = document.getElementById("adminJobsTable");
+    if (!tbody) return;
+
+    tbody.innerHTML = "<tr><td colspan='6' class='text-center py-4'>Loading jobs & referrals...</td></tr>";
+
+    try {
+        const jobs = await get('/jobs');
+        tbody.innerHTML = "";
+
+        if (!jobs || jobs.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='6' class='text-center py-4 text-muted'>No jobs or referrals posted yet. Click '+ Post Job / Referral' above to add one.</td></tr>";
+            return;
+        }
+
+        jobs.forEach(j => {
+            const postedBy = j.postedBy?.name || 'Admin';
+            tbody.innerHTML += `
+                <tr>
+                    <td>${j.id}</td>
+                    <td>
+                        <div class="fw-bold">${j.title || '-'}</div>
+                        <small class="text-primary fw-semibold">${j.company || '-'}</small>
+                        <div class="small text-muted text-truncate" style="max-width: 280px;">${j.description || ''}</div>
+                    </td>
+                    <td>${j.location || 'Remote'}</td>
+                    <td><small class="text-break">${j.applyLink || '-'}</small></td>
+                    <td><span class="badge bg-light text-dark border">${postedBy}</span></td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="window.openEditJobModal(${j.id})" title="Edit Job / Referral">
+                            <i class="fas fa-edit me-1"></i> Edit
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="window.deleteJob(${j.id})" title="Delete Job / Referral">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    } catch (e) {
+        console.error("Failed to load admin jobs:", e);
+        tbody.innerHTML = "<tr><td colspan='6' class='text-danger text-center'>Error loading jobs & referrals</td></tr>";
+    }
+};

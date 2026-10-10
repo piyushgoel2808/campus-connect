@@ -1,33 +1,58 @@
 import { get, getCurrentUser } from '../utils/api.js';
 
 let searchTimeout = null;
+const directoryUsersMap = new Map();
 
 export function initDirectory() {
-    // Attach event listeners manually if preferred, or use inline onclick
+    runSearch();
 }
 
 // --- Exposed Functions ---
 window.debouncedSearch = function() {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(window.runSearch, 400);
+    searchTimeout = setTimeout(window.runSearch, 300);
 };
 
-window.runSearch = async function() {
-    const q = document.getElementById("dirSearch").value;
-    const role = document.getElementById("filterRole").value;
-    const batch = document.getElementById("filterBatch").value;
+export async function runSearch() {
+    const searchEl = document.getElementById("dirSearch");
+    const roleEl = document.getElementById("filterRole");
+    const batchEl = document.getElementById("filterBatch");
+    const tbody = document.getElementById("tableBody");
 
-    const queryParams = new URLSearchParams({ role, batch, q }).toString();
-    const users = await get(`/users/search?${queryParams}`);
-    renderDirectoryTable(users);
-};
+    const q = searchEl ? searchEl.value.trim() : "";
+    const role = roleEl ? roleEl.value : "ALL";
+    const batch = batchEl ? batchEl.value : "";
+
+    const params = new URLSearchParams();
+    if (role && role !== "ALL") params.set("role", role);
+    if (batch) params.set("batch", batch);
+    if (q) params.set("q", q);
+
+    try {
+        const queryString = params.toString();
+        const endpoint = queryString ? `/users/search?${queryString}` : `/users/search`;
+        const users = await get(endpoint);
+        renderDirectoryTable(Array.isArray(users) ? users : []);
+    } catch (e) {
+        console.error("Directory search failed:", e);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="3" class="text-danger text-center py-4">Failed to search directory. Please try again.</td></tr>`;
+        }
+    }
+}
+
+window.runSearch = runSearch;
 
 function renderDirectoryTable(users) {
     const tbody = document.getElementById("tableBody");
+    if (!tbody) return;
     tbody.innerHTML = "";
-    const { email: myEmail } = getCurrentUser();
+    directoryUsersMap.clear();
 
-    if (!users || users.length === 0) {
+    const { email: myEmail } = getCurrentUser();
+    const visibleUsers = (users || []).filter(u => !myEmail || u.email.toLowerCase() !== myEmail.toLowerCase());
+
+    if (visibleUsers.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="3">
@@ -41,21 +66,24 @@ function renderDirectoryTable(users) {
         return;
     }
 
-    users.forEach(u => {
-        if (u.email === myEmail) return;
+    visibleUsers.forEach(u => {
+        directoryUsersMap.set(u.id, u);
 
-        const deptDisplay = u.departmentName ? u.departmentName : (u.role || 'No Role');
+        const deptDisplay = u.departmentName ? `${u.departmentCode || u.departmentName} • ${u.role || ''}` : (u.role || 'Member');
         const batchDisplay = u.batchYear ? `Batch ${u.batchYear}` : 'Batch N/A';
+        const companyInfo = u.currentCompany ? `<div class="small text-primary fw-semibold">${u.designation ? u.designation + ' @ ' : ''}${u.currentCompany}</div>` : '';
         const skillsDisplay = u.skills ? u.skills.split(',').slice(0, 3).map(s => s.trim()).filter(Boolean) : [];
+        const safeName = (u.name || 'User').replace(/'/g, "\\'");
 
         tbody.innerHTML += `
-            <tr class="cc-directory-row" onclick='window.openUserProfile(${JSON.stringify(u).replace(/'/g, "&#39;")})' role="button">
+            <tr class="cc-directory-row" onclick="window.openUserProfile(${u.id})" role="button">
                 <td>
                     <div class="d-flex align-items-center gap-3">
                         <div class="avatar-circle">${(u.name || 'U').charAt(0).toUpperCase()}</div>
                         <div>
                             <div class="fw-bold">${u.name}</div>
                             <div class="small text-muted">${u.email}</div>
+                            ${companyInfo}
                         </div>
                     </div>
                 </td>
@@ -71,7 +99,7 @@ function renderDirectoryTable(users) {
                             ${skillsDisplay.map(skill => `<span class="badge rounded-pill text-bg-light border">${skill}</span>`).join('') || '<span class="text-muted small">No skills listed</span>'}
                         </div>
                         <button class="btn btn-sm btn-outline-primary align-self-start"
-                            onclick="event.stopPropagation(); window.startDirectChat('${u.id}', '${u.name}', '${u.email}')">
+                            onclick="event.stopPropagation(); window.startDirectChat('${u.id}', '${safeName}', '${u.email}')">
                             Message
                         </button>
                     </div>
@@ -80,13 +108,18 @@ function renderDirectoryTable(users) {
     });
 }
 
-window.openUserProfile = function(user) {
+window.openUserProfile = function(userOrId) {
+    const user = (typeof userOrId === 'object' && userOrId !== null)
+        ? userOrId
+        : directoryUsersMap.get(Number(userOrId));
+    if (!user) return;
+
     // Populate all profile fields in the modal
     document.getElementById("modalUserId").value = user.id || "";
     document.getElementById("modalName").innerText = user.name || "N/A";
     document.getElementById("modalEmail").innerText = user.email || "N/A";
     document.getElementById("modalRole").innerText = user.role || "N/A";
-    document.getElementById("modalDept").innerText = user.departmentName || "N/A";
+    document.getElementById("modalDept").innerText = user.departmentName || user.departmentCode || "N/A";
     document.getElementById("modalHeadline").innerText = user.headline || "N/A";
     document.getElementById("modalCompany").innerText = user.currentCompany || "N/A";
     document.getElementById("modalDesignation").innerText = user.designation || "N/A";
@@ -117,7 +150,10 @@ window.openUserProfile = function(user) {
     document.getElementById("modalUserId").dataset.userName = user.name;
     document.getElementById("modalUserId").dataset.userEmail = user.email;
     
-    new bootstrap.Modal(document.getElementById('userProfileModal')).show();
+    const modalEl = document.getElementById('userProfileModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 };
 
 window.startDirectChatFromModal = function() {

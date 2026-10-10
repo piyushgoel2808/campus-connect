@@ -309,18 +309,24 @@ This layout is intentionally modular. Most feature UI is loaded as fragments int
 - I could not complete a local Maven verification from this environment because `mvn` was not installed, and the wrapper command did not provide a usable build transcript here.
 
 ## Build and Runtime Notes
-- Target runtime is Java 17 with Spring Boot and MySQL-compatible storage.
+- Target runtime is Java 17 with Spring Boot 3.2.5 and MySQL 8.0 storage.
+- Dockerized via multi-stage `Dockerfile` (`maven:3.9-eclipse-temurin-17` build stage + `eclipse-temurin:17-jre` runtime stage) and `docker-compose.yml` (`campus-connect-app` on port `8080` and `campus-connect-mysql` on host port `3307`).
 - WebSocket endpoint is `/ws`.
 - REST APIs are under `/api/...`.
 - Static assets are served from `src/main/resources/static`.
-- The sample data and dashboard assume seeded users and departments exist.
+- Component modals inside `src/main/resources/static/components/*.html` are automatically hoisted to `document.body` by `dashboard-main.js` when switching tabs so they are never trapped inside `#main-content` stacking contexts behind `.modal-backdrop`.
 
-## Suggested Next Steps
-- Move secrets such as JWT signing keys and mail credentials out of source and into environment variables.
-- Consolidate chat persistence so there is one clear model for private message history.
-- Add centralized role-based authorization for sensitive endpoints.
-- Replace manual `window`-based client wiring with a more maintainable module pattern if the frontend grows further.
-- Add integration tests for authentication, events, posts, and WebSocket chat.
+## Recent Fixes & Enhancements
+1. **Docker Multi-Container Isolation (`Dockerfile` & `docker-compose.yml`)**:
+   - Replaced legacy deprecated OpenJDK images with multi-arch `eclipse-temurin:17` images (native Apple Silicon `arm64` + `amd64` support) and added `campus-connect-mysql` with persistent volume storage (`campus_mysql_data`).
+2. **Modal Backdrop / Stacking Context Fix (`dashboard-main.js`, `shell.css`, `events.js`, `admin.js`, `directory.js`)**:
+   - Removed `backdrop-filter` trapping on `#main-content` and automatically hoisted dynamically loaded component `.modal` elements to `document.body` on tab switch so modals (`#createUserModal`, `#editUserModal`, `#eventModal`, `#editEventModal`, `#participantsModal`, `#userProfileModal`) always appear above `.modal-backdrop` and remain interactive.
+3. **Directory Search & Member Profile (`UserRepository.java`, `UserController.java`, `UserProfileDto.java`, `directory.js`)**:
+   - Fixed Hibernate 6 `Role` enum parameter binding in `UserRepository.searchUsers`, expanded keyword matching across `name`, `email`, `skills`, `currentCompany`, `headline`, and `designation`, and added `batchYear`, `enrollmentNumber`, and `departmentCode` to `UserProfileDto`.
+4. **Admin User Management, Broadcast & Feedback (`AdminController.java`, `admin.html`, `admin.js`)**:
+   - Added `#editUserModal` and full profile fields to `#createUserModal`, mapped `departmentCode` on user create/update, cleaned up foreign-key associations (`events`, `comments`, `posts`, `jobs`, `feedback`) before user deletion, and wired `sendBroadcastEmail`.
+5. **Jobs & Referrals (`jobs.js`)**:
+   - Enabled the **Post a Job** button (`#btnPostJob`) and job deletion controls for both `ADMIN` and `ALUMNI` roles, and normalized email/URL application links.
 
 ## Conclusion
-Campus Connect is a feature-rich, monolithic campus community app with a strong demo-friendly scope. The backend covers authentication, directory search, events, jobs, posts, feedback, and real-time messaging, while the frontend presents them through a modular dashboard shell. The code is already fairly complete for a student/alumni portal, but production hardening would require better secret handling, tighter authorization, and more test coverage.
+Campus Connect is a feature-rich, monolithic campus community app with a strong demo-friendly scope. The backend covers authentication, directory search, events, jobs, posts, feedback, and real-time messaging, while the frontend presents them through a modular dashboard shell.

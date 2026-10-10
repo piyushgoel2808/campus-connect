@@ -15,6 +15,11 @@
             </button>
         </li>
         <li class="nav-item">
+            <button class="nav-link" id="tab-jobs-admin-btn" data-bs-toggle="tab" data-bs-target="#admin-jobs" onclick="window.loadAdminJobs && window.loadAdminJobs()">
+                <i class="fas fa-briefcase me-1"></i> Jobs & Referrals
+            </button>
+        </li>
+        <li class="nav-item">
             <button class="nav-link" id="tab-feedback-btn" data-bs-toggle="tab" data-bs-target="#admin-feedback">
                 <i class="fas fa-star me-1"></i> Feedback & Ratings
             </button>
@@ -32,17 +37,20 @@
         <!-- Tab 1: User Management -->
         <div class="tab-pane fade show active" id="admin-users">
             <div class="row g-3 mb-4 align-items-center">
-                <div class="col-md-5">
+                <div class="col-md-5 d-flex gap-2 flex-wrap">
                     <button class="btn btn-primary" onclick="window.openCreateUserModal()">
                         <i class="fas fa-user-plus me-1"></i> Add Individual User
+                    </button>
+                    <button class="btn btn-outline-primary" onclick="window.openPostJobModal()">
+                        <i class="fas fa-briefcase me-1"></i> Post Job / Referral
                     </button>
                 </div>
                 <div class="col-md-7">
                     <div class="input-group">
                         <span class="input-group-text bg-light"><i class="fas fa-file-excel text-success"></i></span>
-                        <input type="file" class="form-control" id="bulkFileExcel" accept=".xlsx" aria-label="Bulk upload Excel file">
+                        <input type="file" class="form-control" id="bulkFileExcel" accept=".xlsx,.csv" aria-label="Bulk upload Excel or CSV file">
                         <button class="btn btn-success" onclick="window.uploadBulkDataExcel()">
-                            <i class="fas fa-upload me-1"></i> Upload .xlsx
+                            <i class="fas fa-upload me-1"></i> Upload .xlsx / .csv
                         </button>
                     </div>
                 </div>
@@ -67,7 +75,37 @@
             </div>
         </div>
 
-        <!-- Tab 2: Feedback & Ratings -->
+        <!-- Tab 2: Jobs & Referrals Management -->
+        <div class="tab-pane fade" id="admin-jobs">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0">Manage Jobs & Referrals</h5>
+                    <small class="text-muted">Create, edit, or remove career opportunities and internal referrals.</small>
+                </div>
+                <button class="btn btn-primary" onclick="window.openPostJobModal()">
+                    <i class="fas fa-plus me-1"></i> Post Job / Referral
+                </button>
+            </div>
+            <div class="table-responsive cc-table-card">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title & Company</th>
+                            <th>Location</th>
+                            <th>Application Link / Referral</th>
+                            <th>Posted By</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminJobsTable">
+                        <tr><td colspan="6" class="text-center py-4 text-muted">Loading jobs & referrals...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 3: Feedback & Ratings -->
         <div class="tab-pane fade" id="admin-feedback">
             <div class="table-responsive cc-table-card">
                 <table class="table table-hover mb-0">
@@ -76,16 +114,17 @@
                             <th>User</th>
                             <th>Rating</th>
                             <th>User Comments</th>
+                            <th>Submitted On</th>
                         </tr>
                     </thead>
                     <tbody id="adminFeedbackTable">
-                        <tr><td colspan="3" class="text-center py-4 text-muted">Loading feedback...</td></tr>
+                        <tr><td colspan="4" class="text-center py-4 text-muted">Loading feedback...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Tab 3: Broadcast Email -->
+        <!-- Tab 4: Broadcast Email -->
         <div class="tab-pane fade" id="admin-broadcast">
             <div class="cc-panel p-4 mx-auto admin-broadcast-card bg-light border">
                 <h5 class="fw-bold text-secondary mb-3 d-flex align-items-center gap-2">
@@ -100,7 +139,7 @@
                     <label class="form-label text-muted small fw-bold">Message Content</label>
                     <textarea class="form-control" id="broadcastMessage" rows="6" placeholder="Type your broadcast message here..."></textarea>
                 </div>
-                <button class="btn btn-primary w-100" onclick="window.sendBroadcastEmail()">
+                <button class="btn btn-primary w-100" id="btnBroadcastEmail" onclick="window.sendBroadcastEmail()">
                     <i class="fas fa-bullhorn me-1"></i> Send Broadcast to Community
                 </button>
             </div>
@@ -110,7 +149,7 @@
 
 <!-- Create User Modal -->
 <div class="modal fade cc-profile-modal" id="createUserModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title d-flex align-items-center gap-2">
@@ -123,11 +162,11 @@
                     <div class="col-md-6">
                         <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-id-badge me-1"></i> Identity & Role</h6>
                         <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Full Name</label>
+                            <label class="form-label text-muted small fw-bold">Full Name *</label>
                             <input type="text" class="form-control" id="createName" placeholder="Enter full name" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Email Address</label>
+                            <label class="form-label text-muted small fw-bold">Email Address *</label>
                             <input type="email" class="form-control" id="createEmail" placeholder="user@bvicam.in" required>
                         </div>
                         <div class="mb-3">
@@ -142,20 +181,24 @@
                             <label class="form-label text-muted small fw-bold">Department</label>
                             <select class="form-select" id="createDept">
                                 <option value="MCA">MCA</option>
-                                <option value="BA(JMC)">BA(JMC)</option>
+                                <option value="BJMC">BA(JMC)</option>
                             </select>
                         </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-graduation-cap me-1"></i> Academic & Career</h6>
                         <div class="mb-3">
                             <label class="form-label text-muted small fw-bold">Batch Year</label>
-                            <input type="text" class="form-control" id="createBatch" placeholder="e.g. 2024">
+                            <input type="number" class="form-control" id="createBatch" placeholder="e.g. 2024">
                         </div>
                         <div class="mb-3">
                             <label class="form-label text-muted small fw-bold">Enrollment Number</label>
                             <input type="text" class="form-control" id="createEnrollment" placeholder="e.g. 0012023">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-briefcase me-1"></i> Career & Profile</h6>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Professional Headline</label>
+                            <input type="text" class="form-control" id="createHeadline" placeholder="e.g. SDE at Microsoft | MCA '24">
                         </div>
                         <div class="mb-3">
                             <label class="form-label text-muted small fw-bold">Company / Employer</label>
@@ -165,6 +208,23 @@
                             <label class="form-label text-muted small fw-bold">Designation</label>
                             <input type="text" class="form-control" id="createDesignation" placeholder="e.g. Software Engineer">
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Skills (comma-separated)</label>
+                            <input type="text" class="form-control" id="createSkills" placeholder="e.g. Java, Spring Boot, React">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">LinkedIn URL</label>
+                            <input type="text" class="form-control" id="createLinkedin" placeholder="https://linkedin.com/in/...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">GitHub URL</label>
+                            <input type="text" class="form-control" id="createGithub" placeholder="https://github.com/...">
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label text-muted small fw-bold">Bio / Experience Summary</label>
+                        <textarea class="form-control" id="createBio" rows="2" placeholder="Short professional bio or experience..."></textarea>
                     </div>
                     
                     <div class="col-12 pt-2 border-top">
@@ -175,9 +235,107 @@
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary px-4" onclick="window.submitCreateUser()">
-                    <i class="fas fa-check me-1"></i> Save User
+                <button type="button" class="btn btn-primary px-4" onclick="window.adminCreateUser()">
+                    <i class="fas fa-check me-1"></i> Create User
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade cc-profile-modal" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="fas fa-user-edit"></i> Edit User Profile
+                </h5>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close edit user modal" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="editUserId">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-id-badge me-1"></i> Identity & Role</h6>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Full Name *</label>
+                            <input type="text" class="form-control" id="editName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Email Address *</label>
+                            <input type="email" class="form-control" id="editEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Role</label>
+                            <select class="form-select" id="editRole">
+                                <option value="STUDENT">STUDENT</option>
+                                <option value="ALUMNI">ALUMNI</option>
+                                <option value="ADMIN">ADMIN</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Department</label>
+                            <select class="form-select" id="editDept">
+                                <option value="">-- Select Department --</option>
+                                <option value="MCA">MCA</option>
+                                <option value="BJMC">BA(JMC)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Batch Year</label>
+                            <input type="number" class="form-control" id="editBatch" placeholder="e.g. 2024">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Enrollment Number</label>
+                            <input type="text" class="form-control" id="editEnrollment" placeholder="e.g. 0012024">
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-briefcase me-1"></i> Career & Profile</h6>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Professional Headline</label>
+                            <input type="text" class="form-control" id="editHeadline" placeholder="Headline">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Current Company</label>
+                            <input type="text" class="form-control" id="editCompany" placeholder="Company">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Designation</label>
+                            <input type="text" class="form-control" id="editDesignation" placeholder="Designation">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Skills</label>
+                            <input type="text" class="form-control" id="editSkills" placeholder="Java, Spring Boot, ...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">LinkedIn URL</label>
+                            <input type="text" class="form-control" id="editLinkedin" placeholder="https://linkedin.com/in/...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">GitHub URL</label>
+                            <input type="text" class="form-control" id="editGithub" placeholder="https://github.com/...">
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label text-muted small fw-bold">Bio / Past Experience</label>
+                        <textarea class="form-control" id="editBio" rows="2" placeholder="Past experience or bio..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-warning" onclick="window.adminResetPassword()">
+                    <i class="fas fa-key me-1"></i> Reset Password
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary px-4" onclick="window.adminSaveUser()">
+                        <i class="fas fa-save me-1"></i> Save Changes
+                    </button>
+                </div>
             </div>
         </div>
     </div>

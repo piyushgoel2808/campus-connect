@@ -1,19 +1,55 @@
 import { get, send, getCurrentUser } from '../utils/api.js';
 
-// Logic from your Section 8
+const jobsMap = new Map();
+
+function resolveCurrentRoleAndEmail() {
+    let { role, email } = getCurrentUser();
+    if (!role || !email) {
+        try {
+            const stored = JSON.parse(localStorage.getItem("campus_user") || "{}");
+            if (!role && stored.role) role = stored.role;
+            if (!email && stored.email) email = stored.email;
+        } catch (_) {}
+    }
+    return {
+        role: role ? role.toUpperCase() : "",
+        email: email || ""
+    };
+}
+
 export async function fetchJobs() {
     try {
+        const { role } = resolveCurrentRoleAndEmail();
+        const postJobBtn = document.getElementById("btnPostJob");
+        if (postJobBtn && (role === "ADMIN" || role === "ALUMNI")) {
+            postJobBtn.classList.remove("d-none");
+        }
+
         const jobs = await get('/jobs');
         renderJobs(jobs);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error("Failed to fetch jobs:", e);
+    }
+}
+
+function formatApplyHref(link) {
+    if (!link) return "#";
+    const trimmed = link.trim();
+    if (/^(https?:\/\/|mailto:)/i.test(trimmed)) return trimmed;
+    if (trimmed.includes("@") && !trimmed.includes("/")) return `mailto:${trimmed}`;
+    return `https://${trimmed}`;
 }
 
 function renderJobs(jobs) {
     const list = document.getElementById("jobList");
+    jobsMap.clear();
+    (jobs || []).forEach(j => jobsMap.set(j.id, j));
+
     if (!list) return;
     list.innerHTML = "";
 
-    const { role } = getCurrentUser();
+    const { role, email } = resolveCurrentRoleAndEmail();
+    const isAdmin = role === "ADMIN";
 
     if (!jobs || jobs.length === 0) {
         list.innerHTML = `
@@ -26,12 +62,22 @@ function renderJobs(jobs) {
     }
 
     jobs.forEach(j => {
-        const deleteBtn = (role === "ADMIN")
-            ? `<button class="btn btn-sm btn-outline-danger" onclick="window.deleteJob(${j.id})" aria-label="Delete job"><i class="fas fa-trash"></i></button>`
+        const isOwner = email && j.postedBy?.email && j.postedBy.email.toLowerCase() === email.toLowerCase();
+        const canManage = isAdmin || isOwner;
+
+        const actionBtns = canManage
+            ? `
+                <button class="btn btn-sm btn-outline-primary" onclick="window.openEditJobModal(${j.id})" title="Edit Job / Referral" aria-label="Edit job">
+                    <i class="fas fa-edit me-1"></i> Edit
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="window.deleteJob(${j.id})" title="Delete Job / Referral" aria-label="Delete job">
+                    <i class="fas fa-trash"></i>
+                </button>`
             : "";
 
         const postedBy = j.postedBy?.name || 'GradLink';
         const titleInitial = (j.company || 'J').charAt(0).toUpperCase();
+        const applyHref = formatApplyHref(j.applyLink);
 
         list.innerHTML += `
             <article class="cc-feature-card cc-hover-lift">
@@ -47,45 +93,172 @@ function renderJobs(jobs) {
                             </div>
                         </div>
                     </div>
-                    <div class="d-flex gap-2">${deleteBtn}</div>
+                    <div class="d-flex gap-2 align-items-start">${actionBtns}</div>
                 </div>
                 <div class="cc-feature-card-body">
-                    <p class="cc-feature-meta mb-3">${j.description}</p>
+                    <p class="cc-feature-meta mb-3">${j.description || ''}</p>
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <a href="${j.applyLink}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">Apply Now</a>
-                        <span class="text-muted small">Tap to open application link</span>
+                        <a href="${applyHref}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">Apply Now</a>
+                        <span class="text-muted small">${j.applyLink || 'Tap to open application link'}</span>
                     </div>
                 </div>
             </article>`;
     });
 }
 
-export async function postJob() {
-    const data = {
-        title: document.getElementById("jobTitle").value,
-        company: document.getElementById("jobCompany").value,
-        location: document.getElementById("jobLocation").value,
-        description: document.getElementById("jobDesc").value,
-        applyLink: document.getElementById("jobLink").value
-    };
-    await send('/jobs', 'POST', data);
-
-    // Close modal using Bootstrap API
+window.openPostJobModal = function() {
     const modalEl = document.getElementById('postJobModal');
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    modal.hide();
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+};
 
-    fetchJobs();
-}
+export async function postJob() {
+    const titleEl = document.getElementById("jobTitle");
+    const companyEl = document.getElementById("jobCompany");
+    const locationEl = document.getElementById("jobLocation");
+    const descEl = document.getElementById("jobDesc");
+    const linkEl = document.getElementById("jobLink");
 
-export async function deleteJob(id) {
-    if (confirm("Delete this job?")) {
-        await send(`/jobs/${id}`, 'DELETE');
-        fetchJobs();
+    const data = {
+        title: titleEl ? titleEl.value.trim() : "",
+        company: companyEl ? companyEl.value.trim() : "",
+        location: locationEl ? locationEl.value.trim() : "",
+        description: descEl ? descEl.value.trim() : "",
+        applyLink: linkEl ? linkEl.value.trim() : ""
+    };
+
+    if (!data.title || !data.company) {
+        alert("Please enter both a Job Title and Company Name.");
+        return;
+    }
+
+    try {
+        const res = await send('/jobs', 'POST', data);
+        if (!res.ok) {
+            const errText = await res.text();
+            alert("Failed to post job: " + errText);
+            return;
+        }
+
+        alert("✅ Job / Referral posted successfully!");
+
+        // Reset fields
+        if (titleEl) titleEl.value = "";
+        if (companyEl) companyEl.value = "";
+        if (locationEl) locationEl.value = "";
+        if (descEl) descEl.value = "";
+        if (linkEl) linkEl.value = "";
+
+        // Close modal using Bootstrap API
+        const modalEl = document.getElementById('postJobModal');
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        }
+
+        await fetchJobs();
+        if (window.loadAdminJobs) window.loadAdminJobs();
+    } catch (e) {
+        console.error("Error posting job:", e);
+        alert("Error posting job: " + e.message);
     }
 }
 
-// *** CRITICAL STEP ***
+window.openEditJobModal = async function(jobOrId) {
+    let job = (typeof jobOrId === 'object' && jobOrId !== null)
+        ? jobOrId
+        : jobsMap.get(Number(jobOrId));
+
+    if (!job) {
+        try {
+            const allJobs = await get('/jobs');
+            (allJobs || []).forEach(j => jobsMap.set(j.id, j));
+            job = jobsMap.get(Number(jobOrId));
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    if (!job) {
+        alert("Could not load job details.");
+        return;
+    }
+
+    const setField = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val ?? "";
+    };
+
+    setField("editJobId", job.id);
+    setField("editJobTitle", job.title || "");
+    setField("editJobCompany", job.company || "");
+    setField("editJobLocation", job.location || "");
+    setField("editJobDesc", job.description || "");
+    setField("editJobLink", job.applyLink || "");
+
+    const modalEl = document.getElementById('editJobModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+};
+
+window.submitEditJob = async function() {
+    const id = document.getElementById("editJobId")?.value;
+    const title = document.getElementById("editJobTitle")?.value.trim() || "";
+    const company = document.getElementById("editJobCompany")?.value.trim() || "";
+    const location = document.getElementById("editJobLocation")?.value.trim() || "";
+    const description = document.getElementById("editJobDesc")?.value.trim() || "";
+    const applyLink = document.getElementById("editJobLink")?.value.trim() || "";
+
+    if (!id || !title || !company) {
+        alert("Job Title and Company Name are required!");
+        return;
+    }
+
+    try {
+        const res = await send(`/jobs/${id}`, 'PUT', {
+            title,
+            company,
+            location,
+            description,
+            applyLink
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            alert("Failed to update job: " + errText);
+            return;
+        }
+
+        alert("✅ Job / Referral updated successfully!");
+
+        const modalEl = document.getElementById('editJobModal');
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        }
+
+        await fetchJobs();
+        if (window.loadAdminJobs) window.loadAdminJobs();
+    } catch (e) {
+        console.error("Error updating job:", e);
+        alert("Error updating job: " + e.message);
+    }
+};
+
+export async function deleteJob(id) {
+    if (confirm("Are you sure you want to delete this job / referral?")) {
+        const res = await send(`/jobs/${id}`, 'DELETE');
+        if (!res.ok) {
+            const err = await res.text();
+            alert("Failed to delete job: " + err);
+            return;
+        }
+        await fetchJobs();
+        if (window.loadAdminJobs) window.loadAdminJobs();
+    }
+}
+
 // Expose these functions to the global window so HTML onclick="..." works
 window.deleteJob = deleteJob;
 window.postJob = postJob;
+window.fetchJobs = fetchJobs;

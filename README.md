@@ -55,8 +55,46 @@ The system relies on a relational database architecture with the following core 
 - Post & Job: Stores user-generated content for the Memory Wall and Career board.
 - Feedback: Captures user queries and suggestions.
 
-## 🚀 Setup & Installation (Local Development)
-### Prerequisites
+## 🚀 Setup & Installation
+
+### Option 1: Docker Compose (Recommended — Zero Local Dependencies)
+The project includes an isolated multi-container Docker setup ([`Dockerfile`](Dockerfile) + [`docker-compose.yml`](docker-compose.yml)) that bundles **Eclipse Temurin JDK 17**, **Maven 3.9**, and **MySQL 8.0** so nothing needs to be installed on your host machine.
+
+```bash
+# Build and start both MySQL and the Spring Boot application in the background
+docker compose up --build -d
+
+# Tail application logs
+docker compose logs -f app
+
+# Stop containers (preserving database volume)
+docker compose down
+```
+
+- **Web App URL:** `http://localhost:8080`
+- **Isolated Containers:**
+  - `campus-connect-app` — Spring Boot 3.2.5 + JDK 17 (`localhost:8080 -> 8080`)
+  - `campus-connect-mysql` — MySQL 8.0 (`localhost:3307 -> 3306`, persistent volume `campus_mysql_data`)
+
+### Option 2: Local Native Setup
+#### Prerequisites
 - Java Development Kit (JDK) 17
 - Maven 3.8+
-- MySQL Server (or TiDB connection credentials)
+- MySQL Server 8.0+
+
+```bash
+# Run with Maven Wrapper
+./mvnw spring-boot:run
+```
+
+---
+
+## 🔑 Default Seeded Accounts
+On first startup, [`DataSeeder`](src/main/java/com/bvicam/campusconnect/config/DataSeeder.java) automatically seeds the database with default departments (`MCA`, `BJMC`) and demo accounts:
+
+| Role | Email | Password | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin@bvicam.in` | `admin123` | Full user CRUD, bulk `.xlsx`/`.csv` onboarding, post moderation, event creation/editing, job/referral posting, email broadcast, feedback review |
+| **Alumni** | `alumni@bvicam.in` | `1234` | Post jobs & referrals, directory search, wall posts, event RSVP, global & 1-on-1 chat |
+| **Student** | `student@bvicam.in` | `1234` | Browse & apply to jobs, directory search, wall posts, event RSVP, global & 1-on-1 chat |
+

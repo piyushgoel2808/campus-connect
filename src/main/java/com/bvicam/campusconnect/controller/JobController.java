@@ -66,15 +66,62 @@ public class JobController {
 
         return ResponseEntity.ok("Job posted successfully!");
     }
+
+    // 3. Edit / Update a Job or Referral (Admin or Job Poster)
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateJob(@PathVariable Long id, @RequestBody Job updatedJob) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+        Job job = jobRepository.findById(id).orElse(null);
+
+        if (job == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        boolean isAdmin = user.getRole() == Role.ADMIN;
+        boolean isOwner = job.getPostedBy() != null && job.getPostedBy().getId().equals(user.getId());
+
+        if (!isAdmin && !isOwner) {
+            return ResponseEntity.status(403).body("Not authorized to edit this job.");
+        }
+
+        if (updatedJob.getTitle() != null && !updatedJob.getTitle().trim().isEmpty()) {
+            job.setTitle(updatedJob.getTitle().trim());
+        }
+        if (updatedJob.getCompany() != null && !updatedJob.getCompany().trim().isEmpty()) {
+            job.setCompany(updatedJob.getCompany().trim());
+        }
+        if (updatedJob.getLocation() != null) {
+            job.setLocation(updatedJob.getLocation().trim());
+        }
+        if (updatedJob.getDescription() != null) {
+            job.setDescription(updatedJob.getDescription().trim());
+        }
+        if (updatedJob.getApplyLink() != null) {
+            job.setApplyLink(updatedJob.getApplyLink().trim());
+        }
+
+        jobRepository.save(job);
+        return ResponseEntity.ok("Job updated successfully!");
+    }
+
+    // 4. Delete a Job or Referral (Admin or Job Poster)
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteJob(@PathVariable Long id) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         User user = userRepository.findByEmail(email).orElseThrow();
-        Job job = jobRepository.findById(id).orElseThrow();
+        Job job = jobRepository.findById(id).orElse(null);
 
-        // Allow if ADMIN or if the user Posted it
-        if (user.getRole().name().equals("ADMIN") || job.getPostedBy().getId().equals(user.getId())) {
+        if (job == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        boolean isAdmin = user.getRole() == Role.ADMIN;
+        boolean isOwner = job.getPostedBy() != null && job.getPostedBy().getId().equals(user.getId());
+
+        if (isAdmin || isOwner) {
             jobRepository.deleteById(id);
             return ResponseEntity.ok("Job deleted.");
         }

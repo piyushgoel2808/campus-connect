@@ -75,6 +75,7 @@ public class EventController {
     // 2. CREATE EVENT (Request uses Entity)
     // =========================================================
     @PostMapping
+    @Transactional
     public ResponseEntity<?> createEvent(@RequestBody Event event, Principal principal) {
         try {
             // Prevent NullPointer if participants list is missing in JSON
@@ -110,6 +111,7 @@ public class EventController {
     // 3. UPDATE EVENT (Request uses Entity)
     // =========================================================
     @PutMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> updateEvent(@PathVariable Long id, @RequestBody Event updatedData) {
         return eventRepository.findById(id).map(event -> {
             // Only update fields that are NOT null (Prevents accidental data loss)
@@ -129,6 +131,7 @@ public class EventController {
     // 4. RSVP LOGIC
     // =========================================================
     @PostMapping("/{id}/rsvp")
+    @Transactional
     public ResponseEntity<?> toggleRsvp(@PathVariable Long id, Principal principal) {
         Event event = eventRepository.findById(id).orElseThrow(() -> new RuntimeException("Event not found"));
         User user = userRepository.findByEmail(principal.getName()).orElseThrow(() -> new RuntimeException("User not found"));
@@ -156,17 +159,19 @@ public class EventController {
     // 5. VIEW PARTICIPANTS
     // =========================================================
     @GetMapping("/{id}/participants")
+    @Transactional(readOnly = true)
     public ResponseEntity<Set<User>> getEventParticipants(@PathVariable Long id) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
-        return ResponseEntity.ok(event.getParticipants());
+        return ResponseEntity.ok(new HashSet<>(event.getParticipants()));
     }
 
     // =========================================================
     // 6. DELETE EVENT
     // =========================================================
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> deleteEvent(@PathVariable Long id) {
         if (!eventRepository.existsById(id)) {
             return ResponseEntity.notFound().build();

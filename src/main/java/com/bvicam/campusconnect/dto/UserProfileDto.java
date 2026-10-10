@@ -9,6 +9,9 @@ public class UserProfileDto {
     private String email;
     private String role;
     private String departmentName;
+    private String departmentCode;
+    private Integer batchYear;
+    private String enrollmentNumber;
 
     private String headline;
     private String currentCompany;
