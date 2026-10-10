@@ -1,16 +1,39 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/events.html
+  PURPOSE: Campus & Alumni Events partial view (injected into `#main-content`
+           when the user switches to `#tab-events`).
+
+  CONTROLLER MODULE:
+    - `js/modules/events.js` (`fetchEvents()`, `publishNewEvent()`, `openEditEvent()`,
+      `submitEditEvent()`, `viewParticipants()`, `toggleRSVP()`, `deleteEvent()`)
+
+  DOM SECTIONS:
+    1. `.cc-page-header`      : Page title and `#btnAddEvent` (hidden by default,
+                                unhidden for `ADMIN` users in `fetchEvents()`).
+    2. `#eventsContainer`     : Responsive 3-column card grid populated by `renderEvents()`.
+    3. `#eventModal`          : Admin modal to create/publish a new event.
+    4. `#editEventModal`      : Admin modal to edit an existing event.
+    5. `#participantsModal`   : Admin modal listing users who RSVP'd (`#participantsList`).
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header & Admin Create Event Trigger -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-calendar-alt"></i> Events & Workshops</span>
             <h2 class="cc-page-title">Campus & Alumni Events</h2>
             <p class="cc-page-subtitle">Participate in mentorship webinars, tech talks, alumni reunions, and industry workshops.</p>
         </div>
+        <!-- Revealed only when getCurrentUser().role === 'ADMIN' -->
         <button id="btnAddEvent" class="btn btn-primary d-none" data-bs-toggle="modal" data-bs-target="#eventModal">
             <i class="fas fa-plus me-1"></i> Create Event
         </button>
     </div>
 
-    <!-- Events Grid -->
+    <!-- =====================================================================
+         1. EVENTS GRID (#eventsContainer): Populated by renderEvents() in events.js
+         ===================================================================== -->
     <div id="eventsContainer" class="row g-4">
         <div class="col-12">
             <div class="cc-empty-state cc-panel">
@@ -22,7 +45,10 @@
     </div>
 </div>
 
-<!-- Create Event Modal -->
+<!-- =========================================================================
+     2. CREATE EVENT MODAL (#eventModal)
+     Submitted via `window.publishNewEvent()` in `js/modules/events.js`.
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="eventModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -60,7 +86,10 @@
     </div>
 </div>
 
-<!-- Edit Event Modal -->
+<!-- =========================================================================
+     3. EDIT EVENT MODAL (#editEventModal)
+     Opened by `window.openEditEvent(id)` and saved by `window.submitEditEvent()`.
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="editEventModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -99,7 +128,10 @@
     </div>
 </div>
 
-<!-- Event Participants Modal -->
+<!-- =========================================================================
+     4. EVENT PARTICIPANTS MODAL (#participantsModal)
+     Opened by `window.viewParticipants(eventId)` to display RSVP'd attendees.
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="participantsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">

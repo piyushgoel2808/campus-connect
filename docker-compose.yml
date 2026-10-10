@@ -1,21 +1,45 @@
+# ==============================================================================
+# Campus Connect - Docker Compose Orchestration
+# ==============================================================================
+# Purpose:
+#   Defines the local multi-container development and deployment stack:
+#     1. mysql: Persistent MySQL 8.0 relational database instance.
+#     2. app:   The Campus Connect Spring Boot web & WebSocket server.
+#
+# Key Relationships & Networking:
+#   - Both services share a default Docker bridge network, allowing `app` to
+#     connect to the database via hostname `mysql` on internal port 3306.
+#   - `app` waits for `mysql` to pass its readiness healthcheck before starting.
+# ==============================================================================
+
 services:
+  # ----------------------------------------------------------------------------
+  # Database Service: MySQL 8.0
+  # ----------------------------------------------------------------------------
   mysql:
     image: mysql:8.0
     container_name: campus-connect-mysql
     restart: unless-stopped
     environment:
+      # Root credentials and default schema automatically provisioned on first boot
       MYSQL_ROOT_PASSWORD: admin@123
       MYSQL_DATABASE: campus_connect_db
     ports:
+      # Maps host port 3307 -> container port 3306 to avoid clashes with a local MySQL install
       - "3307:3306"
     volumes:
+      # Persists database tables and records across container restarts
       - campus_mysql_data:/var/lib/mysql
     healthcheck:
+      # Periodically pings MySQL so dependent services know when it is ready to accept connections
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin@123"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ----------------------------------------------------------------------------
+  # Application Service: Campus Connect Spring Boot Server
+  # ----------------------------------------------------------------------------
   app:
     build:
       context: .
@@ -24,16 +48,24 @@ services:
     restart: unless-stopped
     depends_on:
       mysql:
+        # Prevents Spring Boot JPA/Hibernate from failing on startup while MySQL initializes
         condition: service_healthy
     ports:
+      # Exposes the web UI, REST APIs, and STOMP WebSocket endpoints at http://localhost:8080
       - "8080:8080"
     environment:
+      # Overrides application.properties with container-aware JDBC connection and upload directory settings
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/campus_connect_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: admin@123
       UPLOAD_DIR: /app/uploads
     volumes:
+      # Bind-mounts host ./uploads directory into the container so user-uploaded media persists
       - ./uploads:/app/uploads
 
+# ------------------------------------------------------------------------------
+# Named Volumes
+# ------------------------------------------------------------------------------
 volumes:
   campus_mysql_data:
+

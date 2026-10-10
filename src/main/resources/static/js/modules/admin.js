@@ -1,12 +1,57 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/admin.js
+ * PURPOSE: Admin Control Panel module (`components/admin.html`).
+ *
+ * OVERVIEW:
+ *   Provides administrative capabilities for users with the `ADMIN` role:
+ *     1. User Management: List all registered users, inspect profanity flag
+ *        counts, clear flags (`unflagUser`), create single users (`adminCreateUser`),
+ *        edit full user profiles (`adminSaveUser`), reset passwords to default
+ *        (`adminResetPassword`), and delete users (`deleteUser`).
+ *     2. Bulk User Import: Upload `.xlsx` or `.csv` files (`uploadBulkDataExcel`)
+ *        for batch user provisioning.
+ *     3. Community Broadcast: Send an email announcement to all registered
+ *        community members (`sendBroadcastEmail`).
+ *     4. Feedback Viewer: View star ratings and comments submitted by users
+ *        (`loadAdminFeedback`).
+ *     5. Jobs & Referrals Management: View, edit, and delete all job/referral
+ *        postings (`loadAdminJobs`, delegating modal actions to `jobs.js`).
+ *
+ * API ENDPOINTS USED:
+ *   - GET    `/api/users`                         : Fetch all users
+ *   - POST   `/api/admin/users`                   : Create a new user
+ *   - PUT    `/api/admin/users/{id}`              : Update an existing user
+ *   - PUT    `/api/admin/users/{id}/reset-password`: Reset password to `Bvicam@2025`
+ *   - POST   `/api/admin/users/{id}/unflag`       : Clear profanity flag status
+ *   - DELETE `/api/admin/delete-user/{id}`        : Permanently delete a user
+ *   - POST   `/api/admin/upload-users-excel`      : Multipart bulk Excel/CSV import
+ *   - POST   `/api/admin/broadcast`               : Trigger mass email broadcast
+ *   - GET    `/api/feedback`                      : Fetch all user feedback entries
+ *   - GET    `/api/jobs`                          : Fetch all jobs for admin table
+ * ============================================================================
+ */
+
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+// In-memory cache mapping userId -> user object for quick modal population
 const adminUsersMap = new Map();
 
+/**
+ * Helper: Safely sets the `.value` of an input element by DOM ID.
+ * @param {string} id - DOM element ID.
+ * @param {any} val   - Value to assign (defaults to empty string if null/undefined).
+ */
 const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.value = val ?? "";
 };
 
+/**
+ * Helper: Safely reads and trims the `.value` of an input element by DOM ID.
+ * @param {string} id - DOM element ID.
+ * @returns {string} Trimmed input value or empty string if element is missing.
+ */
 const getVal = (id) => {
     const el = document.getElementById(id);
     return el ? el.value.trim() : "";
@@ -16,6 +61,11 @@ const getVal = (id) => {
 // 1. INITIALIZATION
 // =========================================================
 
+/**
+ * Entry point invoked by `dashboard-main.js` when the Admin tab (`#tab-admin`) is loaded.
+ * Verifies ADMIN privileges, loads the initial Users and Jobs tables, and wires up
+ * click listeners on the Admin sub-navigation pills.
+ */
 export function loadAdminModule() {
     // 1. Check Permissions
     const { role } = getCurrentUser();
@@ -28,7 +78,7 @@ export function loadAdminModule() {
     loadAdminUsers();
     window.loadAdminJobs();
 
-    // 3. Attach Event Listeners for Sub-tabs
+    // 3. Attach Event Listeners for Sub-tabs (Users, Jobs & Referrals, User Feedback)
     setTimeout(() => {
         const feedbackBtn = document.getElementById('tab-feedback-btn');
         const usersBtn = document.getElementById('tab-users-btn');
@@ -44,20 +94,28 @@ export function loadAdminModule() {
 // 2. USER MANAGEMENT (READ / DELETE / EDIT)
 // =========================================================
 
+/**
+ * Fetches all users from `GET /api/users`, caches them in `adminUsersMap`,
+ * and renders rows inside `#adminUserTable` including profanity moderation
+ * badges and Unflag / Edit / Delete action buttons.
+ */
 async function loadAdminUsers() {
     try {
         const users = await get('/users');
         const tbody = document.getElementById("adminUserTable");
         if (!tbody) return;
 
+        // Refresh in-memory map so `openEditUserModal(id)` can look up users by ID
         adminUsersMap.clear();
         users.forEach(u => adminUsersMap.set(u.id, u));
 
         tbody.innerHTML = users.map(u => {
+            // Render moderation status badge (Flagged with count vs Clean)
             const statusBadge = u.isFlagged 
                 ? `<span class="cc-flag-badge"><i class="fas fa-flag"></i> Flagged (${u.flagCount || 1}x)</span>`
                 : `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fas fa-check-circle me-1"></i> Clean</span>`;
 
+            // Show quick Unflag button only if user is currently flagged for profanity
             const unflagBtn = u.isFlagged
                 ? `<button class="btn btn-sm btn-outline-warning me-1" title="Clear Profanity Flags" onclick="window.unflagUser(${u.id})">
                      <i class="fas fa-flag-checkered me-1"></i> Unflag
@@ -94,6 +152,12 @@ async function loadAdminUsers() {
     }
 }
 
+/**
+ * Clears the profanity flag status and resets flag count for a specific user
+ * via `POST /api/admin/users/{id}/unflag`.
+ *
+ * @param {number} id - Target user ID to unflag.
+ */
 window.unflagUser = async function(id) {
     if (!confirm("Clear flagged status for this user?")) return;
     try {
@@ -108,6 +172,12 @@ window.unflagUser = async function(id) {
     }
 };
 
+/**
+ * Permanently deletes a user account via `DELETE /api/admin/delete-user/{id}`
+ * after confirming with the administrator.
+ *
+ * @param {number} id - Target user ID to delete.
+ */
 window.deleteUser = async function(id) {
     if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
 
@@ -125,6 +195,11 @@ window.deleteUser = async function(id) {
     }
 };
 
+/**
+ * Populates and opens the `#editUserModal` dialog for a given user ID or user object.
+ *
+ * @param {number|Object} userOrId - Either a user ID (looked up in `adminUsersMap`) or a user object.
+ */
 window.openEditUserModal = function(userOrId) {
     const user = (typeof userOrId === 'object' && userOrId !== null)
         ? userOrId
@@ -135,9 +210,11 @@ window.openEditUserModal = function(userOrId) {
         return;
     }
 
+    // Resolve department code from nested department object or flat DTO field
     const deptCode = (user.department && user.department.code)
         || (user.departmentCode && user.departmentCode !== "UNKNOWN" ? user.departmentCode : "");
 
+    // Populate all form fields inside #editUserModal
     setVal("editUserId", user.id);
     setVal("editName", user.name || "");
     setVal("editEmail", user.email || "");
@@ -160,6 +237,10 @@ window.openEditUserModal = function(userOrId) {
     }
 };
 
+/**
+ * Reads updated user fields from `#editUserModal` and sends `PUT /api/admin/users/{id}`.
+ * Refreshes the user table on success.
+ */
 window.adminSaveUser = async function() {
     const id = getVal("editUserId");
     const batchRaw = getVal("editBatch");
@@ -214,6 +295,10 @@ window.adminSaveUser = async function() {
 // 3. RESET PASSWORD
 // =========================================================
 
+/**
+ * Resets the currently edited user's password to the campus default (`Bvicam@2025`)
+ * via `PUT /api/admin/users/{id}/reset-password`.
+ */
 window.adminResetPassword = async function() {
     const userId = getVal("editUserId");
 
@@ -254,6 +339,9 @@ window.adminResetPassword = async function() {
 // 4. CREATE USER
 // =========================================================
 
+/**
+ * Resets all fields in `#createUserModal` to clean defaults and opens the modal.
+ */
 window.openCreateUserModal = function() {
     setVal("createName", "");
     setVal("createEmail", "");
@@ -277,6 +365,10 @@ window.openCreateUserModal = function() {
     }
 };
 
+/**
+ * Reads new user fields from `#createUserModal` and sends `POST /api/admin/users`.
+ * Closes the modal and reloads `#adminUserTable` upon creation.
+ */
 window.adminCreateUser = async function() {
     const batchRaw = getVal("createBatch");
     const data = {
@@ -328,12 +420,18 @@ window.adminCreateUser = async function() {
     }
 };
 
+// Alias for backward compatibility with inline onclick handlers
 window.submitCreateUser = window.adminCreateUser;
 
 // =========================================================
 // 5. BULK UPLOAD (EXCEL / CSV)
 // =========================================================
 
+/**
+ * Uploads an Excel (`.xlsx`) or CSV (`.csv`) file from `#bulkFileExcel` via
+ * multipart `POST /api/admin/upload-users-excel` to batch-import user accounts.
+ * Note: Uses native `fetch()` with `FormData` so the browser sets the multipart boundary.
+ */
 window.uploadBulkDataExcel = async function() {
     const fileInput = document.getElementById("bulkFileExcel");
     const file = fileInput?.files[0];
@@ -376,6 +474,10 @@ window.uploadBulkDataExcel = async function() {
 // 6. BROADCAST EMAIL
 // =========================================================
 
+/**
+ * Sends a community-wide broadcast email via `POST /api/admin/broadcast`
+ * using the subject (`#broadcastSubject`) and message (`#broadcastMessage`) inputs.
+ */
 window.sendBroadcastEmail = async function() {
     const subject = getVal("broadcastSubject");
     const body = getVal("broadcastMessage");
@@ -415,6 +517,10 @@ window.sendBroadcastEmail = async function() {
 // 7. FEEDBACK MANAGEMENT
 // =========================================================
 
+/**
+ * Fetches all user feedback submissions from `GET /api/feedback` and renders
+ * them inside `#adminFeedbackTable` under the User Feedback sub-tab.
+ */
 window.loadAdminFeedback = async function() {
     const tbody = document.getElementById("adminFeedbackTable");
     if (!tbody) return;
@@ -450,6 +556,11 @@ window.loadAdminFeedback = async function() {
 // 8. JOBS & REFERRALS MANAGEMENT (ADMIN)
 // =========================================================
 
+/**
+ * Fetches all job and referral postings from `GET /api/jobs` and populates
+ * `#adminJobsTable` with Edit and Delete controls (wired to `window.openEditJobModal`
+ * and `window.deleteJob` in `jobs.js`).
+ */
 window.loadAdminJobs = async function() {
     const tbody = document.getElementById("adminJobsTable");
     if (!tbody) return;

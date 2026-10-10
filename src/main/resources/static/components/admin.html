@@ -1,4 +1,28 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/admin.html
+  PURPOSE: Admin Operations Workspace partial view (injected into `#main-content`
+           when an `ADMIN` user clicks `#tab-admin`).
+
+  CONTROLLER MODULE:
+    - `js/modules/admin.js` (`loadAdminModule()`)
+    - Also delegates job creation/editing modals to `js/modules/jobs.js`
+
+  SUB-TABS (`.cc-admin-tabs`):
+    1. `#admin-users`     : User Management table (`#adminUserTable`), single-user
+                            creation trigger, and `.xlsx`/`.csv` bulk upload (`#bulkFileExcel`).
+    2. `#admin-jobs`      : Jobs & Referrals management table (`#adminJobsTable`).
+    3. `#admin-feedback`  : User Feedback & Star Ratings viewer (`#adminFeedbackTable`).
+    4. `#admin-broadcast` : Community-wide email announcement composer (`#broadcastSubject`,
+                            `#broadcastMessage`, `#btnBroadcastEmail`).
+
+  COMPONENT MODALS (Hoisted to `document.body` by `dashboard-main.js` on tab load):
+    - `#createUserModal` : Create a new Student / Alumni / Admin account
+    - `#editUserModal`   : Edit user profile details or reset password to `Bvicam@2025`
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-shield-alt text-danger"></i> Administration</span>
@@ -7,7 +31,7 @@
         </div>
     </div>
 
-    <!-- Admin Navigation Tabs -->
+    <!-- Admin Sub-Navigation Tabs (Wired in loadAdminModule() inside admin.js) -->
     <ul class="nav nav-pills cc-admin-tabs gap-2 mb-3">
         <li class="nav-item">
             <button class="nav-link active" id="tab-users-btn" data-bs-toggle="tab" data-bs-target="#admin-users">
@@ -31,10 +55,12 @@
         </li>
     </ul>
 
-    <!-- Admin Tab Content -->
+    <!-- Admin Tab Content Panels -->
     <div class="tab-content cc-panel p-3 p-lg-4">
         
-        <!-- Tab 1: User Management -->
+        <!-- =================================================================
+             TAB 1: USER MANAGEMENT (Single Add, Bulk Excel/CSV Import, & Table)
+             ================================================================= -->
         <div class="tab-pane fade show active" id="admin-users">
             <div class="row g-3 mb-4 align-items-center">
                 <div class="col-md-5 d-flex gap-2 flex-wrap">
@@ -45,6 +71,7 @@
                         <i class="fas fa-briefcase me-1"></i> Post Job / Referral
                     </button>
                 </div>
+                <!-- Bulk Excel (.xlsx) / CSV (.csv) Upload Control -->
                 <div class="col-md-7">
                     <div class="input-group">
                         <span class="input-group-text bg-light"><i class="fas fa-file-excel text-success"></i></span>
@@ -56,6 +83,7 @@
                 </div>
             </div>
 
+            <!-- Registered Users Table (Populated by loadAdminUsers() in admin.js) -->
             <div class="table-responsive cc-table-card">
                 <table class="table table-hover mb-0">
                     <thead>
@@ -75,7 +103,9 @@
             </div>
         </div>
 
-        <!-- Tab 2: Jobs & Referrals Management -->
+        <!-- =================================================================
+             TAB 2: JOBS & REFERRALS MANAGEMENT (Populated by window.loadAdminJobs)
+             ================================================================= -->
         <div class="tab-pane fade" id="admin-jobs">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                 <div>
@@ -105,7 +135,9 @@
             </div>
         </div>
 
-        <!-- Tab 3: Feedback & Ratings -->
+        <!-- =================================================================
+             TAB 3: FEEDBACK & RATINGS (Populated by window.loadAdminFeedback)
+             ================================================================= -->
         <div class="tab-pane fade" id="admin-feedback">
             <div class="table-responsive cc-table-card">
                 <table class="table table-hover mb-0">
@@ -124,7 +156,9 @@
             </div>
         </div>
 
-        <!-- Tab 4: Broadcast Email -->
+        <!-- =================================================================
+             TAB 4: BROADCAST EMAIL (Handled by window.sendBroadcastEmail)
+             ================================================================= -->
         <div class="tab-pane fade" id="admin-broadcast">
             <div class="cc-panel p-4 mx-auto admin-broadcast-card bg-light border">
                 <h5 class="fw-bold text-secondary mb-3 d-flex align-items-center gap-2">
@@ -147,7 +181,10 @@
     </div>
 </div>
 
-<!-- Create User Modal -->
+<!-- =========================================================================
+     MODAL 1: CREATE NEW USER (#createUserModal)
+     Opened by `window.openCreateUserModal()` and submitted by `window.adminCreateUser()`
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="createUserModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -159,6 +196,7 @@
             </div>
             <div class="modal-body p-4">
                 <div class="row g-3">
+                    <!-- Left Column: Identity, Role, Department, Batch, Enrollment -->
                     <div class="col-md-6">
                         <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-id-badge me-1"></i> Identity & Role</h6>
                         <div class="mb-3">
@@ -194,6 +232,7 @@
                         </div>
                     </div>
                     
+                    <!-- Right Column: Career, Skills, & Social Links -->
                     <div class="col-md-6">
                         <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-briefcase me-1"></i> Career & Profile</h6>
                         <div class="mb-3">
@@ -243,7 +282,11 @@
     </div>
 </div>
 
-<!-- Edit User Modal -->
+<!-- =========================================================================
+     MODAL 2: EDIT USER PROFILE & PASSWORD RESET (#editUserModal)
+     Opened by `window.openEditUserModal(id)`, saved via `window.adminSaveUser()`,
+     and supports one-click password reset via `window.adminResetPassword()`.
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="editUserModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -256,6 +299,7 @@
             <div class="modal-body p-4">
                 <input type="hidden" id="editUserId">
                 <div class="row g-3">
+                    <!-- Left Column: Identity, Role, Department, Batch, Enrollment -->
                     <div class="col-md-6">
                         <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-id-badge me-1"></i> Identity & Role</h6>
                         <div class="mb-3">
@@ -292,6 +336,7 @@
                         </div>
                     </div>
 
+                    <!-- Right Column: Career, Skills, & Social Links -->
                     <div class="col-md-6">
                         <h6 class="text-primary mb-3 fw-bold"><i class="fas fa-briefcase me-1"></i> Career & Profile</h6>
                         <div class="mb-3">

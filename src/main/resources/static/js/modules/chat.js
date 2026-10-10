@@ -1,3 +1,31 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/chat.js
+ * PURPOSE: Real-time STOMP over SockJS WebSocket client for Global Chat,
+ *          1-on-1 Direct Messaging, Typing Indicators, and Push Notifications.
+ *
+ * OVERVIEW:
+ *   Manages all real-time communication across `dashboard.html` and
+ *   `components/messages.html`:
+ *     1. Connects to `/ws` using SockJS + STOMP with the user's JWT Bearer token.
+ *     2. Subscribes to:
+ *        - `/user/queue/messages`      : Incoming private 1-on-1 messages
+ *        - `/user/queue/typing`        : Incoming typing indicator events
+ *        - `/user/queue/notifications` : Real-time notifications (forwarded to `notifications.js`)
+ *        - `/topic/public`             : Global community chat room broadcasts
+ *     3. Loads recent conversation partners (`GET /api/messages/partners`) into
+ *        the `#recentChatsList` sidebar in `components/messages.html`.
+ *     4. Opens the 1-on-1 `#dmModal` dialog (`window.startDirectChat`), fetches
+ *        historical messages (`GET /api/messages/history?partnerEmail=...`), and
+ *        publishes private messages to `/app/chat.private`.
+ *
+ * API & WEBSOCKET ENDPOINTS USED:
+ *   - WS Handshake : `/ws`
+ *   - STOMP Send   : `/app/chat.sendMessage`, `/app/chat.private`, `/app/chat.typing`
+ *   - REST GET     : `/api/messages/partners`, `/api/messages/history?partnerEmail={email}`
+ * ============================================================================
+ */
+
 import { get, getCurrentUser } from '../utils/api.js';
 
 // =========================================================
@@ -8,6 +36,12 @@ let stompClient = null;
 let currentChatPartnerEmail = null;
 const notificationListeners = [];
 
+/**
+ * Registers a callback function to be invoked whenever a real-time notification
+ * arrives on `/user/queue/notifications`. Used by `notifications.js`.
+ *
+ * @param {Function} handler - Callback receiving the parsed notification object.
+ */
 export function onRealtimeNotification(handler) {
     if (typeof handler === 'function') {
         notificationListeners.push(handler);
@@ -17,6 +51,11 @@ export function onRealtimeNotification(handler) {
 // =========================================================
 // 1. CONNECT (SECURED WITH JWT)
 // =========================================================
+/**
+ * Establishes the STOMP-over-SockJS WebSocket connection if not already connected,
+ * authenticates the handshake with the user's JWT token, updates `#chatStatus`,
+ * and subscribes to private messages, typing events, notifications, and public chat.
+ */
 export function connectChat() {
     if (stompClient && stompClient.connected) return;
 
@@ -93,6 +132,10 @@ export function connectChat() {
 // =========================================================
 // 2. SIDEBAR HISTORY (PRESERVED)
 // =========================================================
+/**
+ * Fetches the list of users with whom the current user has exchanged direct
+ * messages (`GET /api/messages/partners`) and renders clickable items in `#recentChatsList`.
+ */
 export async function fetchRecentChats() {
     try {
         const users = await get('/messages/partners');
@@ -113,6 +156,13 @@ export async function fetchRecentChats() {
 // =========================================================
 // 3. RECEIVE MESSAGE LOGIC (WITH NORMALIZATION)
 // =========================================================
+/**
+ * Handles an incoming private message from `/user/queue/messages`.
+ * If the DM modal (`#dmModal`) is currently open for that conversation partner,
+ * appends the message bubble directly; otherwise triggers a Bootstrap toast alert.
+ *
+ * @param {Object} message - Parsed ChatMessage payload (`{ senderName, receiverName, content }`).
+ */
 function onPrivateMessageReceived(message) {
     const currentUser = getCurrentUser();
     if (!currentUser) return;
@@ -141,6 +191,12 @@ function onPrivateMessageReceived(message) {
     }
 }
 
+/**
+ * Appends a message bubble to the 1-on-1 Direct Message modal (`#dmMessagesArea`).
+ *
+ * @param {string} text         - Message content.
+ * @param {'me'|'them'} who     - Alignment/color style (`me` = right/primary, `them` = left/secondary).
+ */
 function appendDirectMessage(text, who) {
     const container = document.getElementById("dmMessagesArea");
     if (!container) return;
@@ -161,6 +217,11 @@ function appendDirectMessage(text, who) {
 // =========================================================
 // 4. PUBLIC CHAT LOGIC (GLOBAL)
 // =========================================================
+/**
+ * Renders an incoming public broadcast message from `/topic/public` inside `#chatArea`.
+ *
+ * @param {Object} message - Parsed public chat message (`{ senderName, content, type }`).
+ */
 function onPublicMessageReceived(message) {
     const messageArea = document.getElementById("chatArea"); // Matches Global Chat container
     if (!messageArea) return;
@@ -181,6 +242,9 @@ function onPublicMessageReceived(message) {
     messageArea.scrollTop = messageArea.scrollHeight;
 }
 
+/**
+ * Publishes a message from `#messageInput` to the Global Chat room (`/app/chat.sendMessage`).
+ */
 window.sendMessage = function() {
     const input = document.getElementById("messageInput");
     if (!input) return;
@@ -205,6 +269,15 @@ window.sendMessage = function() {
 // 5. EXPOSED WINDOW FUNCTIONS
 // =========================================================
 
+/**
+ * Opens the 1-on-1 Direct Message modal (`#dmModal`) for the specified partner
+ * and loads conversation history from `GET /api/messages/history?partnerEmail=...`.
+ * Can be called from the Messages sidebar or the Directory "Message" button.
+ *
+ * @param {number|string} userId    - Partner's user ID.
+ * @param {string}        userName  - Partner's display name for modal header.
+ * @param {string}        userEmail - Partner's email address used as routing key.
+ */
 window.startDirectChat = async function(userId, userName, userEmail) {
     currentChatPartnerEmail = userEmail;
 
@@ -240,6 +313,10 @@ window.startDirectChat = async function(userId, userName, userEmail) {
     }
 };
 
+/**
+ * Sends a private 1-on-1 message from `#dmInput` via STOMP (`/app/chat.private`)
+ * and performs an optimistic UI append inside `#dmMessagesArea`.
+ */
 window.sendDirectMessage = function() {
     const input = document.getElementById("dmInput");
     const content = input.value.trim();
@@ -267,6 +344,10 @@ window.sendDirectMessage = function() {
 let typingTimeout = null;
 let isTyping = false;
 
+/**
+ * Sends a debounced typing status frame (`isTyping: true`, followed by
+ * `isTyping: false` after 2 seconds of inactivity) to `/app/chat.typing`.
+ */
 window.handleTyping = function() {
     if (!currentChatPartnerEmail || !stompClient) return;
 
@@ -290,6 +371,12 @@ window.handleTyping = function() {
     }, 2000);
 }
 
+/**
+ * Displays or hides `#typingIndicator` inside `#dmModal` when the active chat
+ * partner starts or stops typing.
+ *
+ * @param {Object} message - Typing status payload (`{ senderEmail, receiverEmail, typing }`).
+ */
 function onTypingMessageReceived(message) {
     if (currentChatPartnerEmail && message.senderEmail && message.senderEmail.toLowerCase() === currentChatPartnerEmail.toLowerCase()) {
         const indicator = document.getElementById("typingIndicator");

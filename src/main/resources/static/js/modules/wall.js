@@ -1,9 +1,50 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/wall.js
+ * PURPOSE: Campus Feed / Community Wall controller (`components/wall.html`).
+ *
+ * OVERVIEW:
+ *   Powers the main social feed on the GradLink dashboard:
+ *     1. Image Handling: Supports attaching either a local image file (`#postImageFile`
+ *        uploaded via `POST /api/posts/upload`) or an external image URL (`#postImage`),
+ *        with live thumbnail preview (`#postImagePreviewContainer`).
+ *     2. Feed Rendering: Fetches posts (`GET /api/posts`) and renders cards into
+ *        `#postsContainer` with pinned post badges, relative timestamps, like buttons,
+ *        and author/admin moderation menus.
+ *     3. Post Creation & Profanity Guard: Publishes posts (`POST /api/posts`) and
+ *        displays an inline moderation banner (`#postAlert`) if blocked by the
+ *        backend profanity filter.
+ *     4. Pinning & Deletion: Allows admins to pin/unpin posts (`POST /api/posts/{id}/pin`)
+ *        and authors/admins to delete posts (`DELETE /api/posts/{id}`).
+ *     5. Threaded Comments & Replies: Supports expanding comments per post,
+ *        fetching comments + nested replies (`GET /api/posts/{postId}/comments`),
+ *        posting top-level comments and nested replies (`POST /api/posts/{postId}/comments`),
+ *        and deleting comments (`DELETE /api/posts/comments/{commentId}`).
+ *
+ * API ENDPOINTS USED:
+ *   - GET    `/api/posts`                      : Fetch all feed posts (pinned first)
+ *   - POST   `/api/posts`                      : Create a new post `{ content, imageUrl }`
+ *   - POST   `/api/posts/upload`               : Upload a local image file (Multipart)
+ *   - DELETE `/api/posts/{id}`                 : Delete a post (Author / Admin)
+ *   - POST   `/api/posts/{id}/pin`             : Toggle pinned status (Admin)
+ *   - POST   `/api/posts/{id}/like`            : Increment post like count
+ *   - GET    `/api/posts/{postId}/comments`    : Fetch comments and nested replies
+ *   - POST   `/api/posts/{postId}/comments`    : Add a comment or nested reply (`parentId`)
+ *   - DELETE `/api/posts/comments/{commentId}` : Delete a comment or reply
+ * ============================================================================
+ */
+
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+// Holds the currently selected local File object when the user picks a photo from disk
 let selectedImageFile = null;
 
 /**
  * 1. IMAGE FILE SELECTION & PREVIEW
+ * Triggered when the user selects a local image file via `#postImageFile`.
+ * Clears any manual URL input and displays an object-URL thumbnail preview.
+ *
+ * @param {HTMLInputElement} input - The file input element (`#postImageFile`).
  */
 window.handleImageFileSelect = function(input) {
     if (input.files && input.files[0]) {
@@ -23,6 +64,12 @@ window.handleImageFileSelect = function(input) {
     }
 };
 
+/**
+ * Triggered when the user types or pastes an image URL into `#postImage`.
+ * Clears any selected local file and shows a live preview of the external URL.
+ *
+ * @param {HTMLInputElement} input - The URL text input element (`#postImage`).
+ */
 window.handleImageUrlInput = function(input) {
     const previewImg = document.getElementById("postImagePreview");
     const previewContainer = document.getElementById("postImagePreviewContainer");
@@ -42,6 +89,9 @@ window.handleImageUrlInput = function(input) {
     }
 };
 
+/**
+ * Clears both local image file selection and image URL input, hiding the preview box.
+ */
 window.clearSelectedImage = function() {
     selectedImageFile = null;
     const fileInput = document.getElementById("postImageFile");
@@ -56,7 +106,10 @@ window.clearSelectedImage = function() {
 };
 
 /**
- * Helper to upload image file to backend
+ * Uploads a selected local image file to `POST /api/posts/upload` as `multipart/form-data`.
+ *
+ * @param {File} file - Image file selected by the user.
+ * @returns {Promise<string>} The server-hosted relative image URL (`data.imageUrl`).
  */
 async function uploadImageFile(file) {
     const token = localStorage.getItem("jwt_token");
@@ -86,7 +139,11 @@ async function uploadImageFile(file) {
 }
 
 /**
- * Alert Banner for Moderation / Warnings
+ * Displays a dismissible alert banner (`#postAlert`) above the post composer
+ * when content is blocked by the profanity filter or validation fails.
+ *
+ * @param {string}  message             - Alert message to display.
+ * @param {boolean} [isWarning=false]   - True for yellow warning style, false for red danger style.
  */
 function showWallAlert(message, isWarning = false) {
     const alertEl = document.getElementById("postAlert");
@@ -107,6 +164,9 @@ function showWallAlert(message, isWarning = false) {
     alertEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/**
+ * Hides the `#postAlert` banner above the post composer.
+ */
 function hideWallAlert() {
     const alertEl = document.getElementById("postAlert");
     if (alertEl) alertEl.classList.add("d-none");
@@ -114,6 +174,7 @@ function hideWallAlert() {
 
 /**
  * 2. FETCH & RENDER FEED
+ * Loads all feed posts from `GET /api/posts` and renders them into `#postsContainer`.
  */
 export async function fetchPosts() {
     const container = document.getElementById("postsContainer");
@@ -134,6 +195,12 @@ export async function fetchPosts() {
     }
 }
 
+/**
+ * Renders an array of post objects into `#postsContainer`, including pinned badges,
+ * author/admin action controls, post image, like button, and collapsible comment section.
+ *
+ * @param {Array<Object>} posts - Array of post objects returned from `/api/posts`.
+ */
 function renderPosts(posts) {
     const container = document.getElementById("postsContainer");
     container.innerHTML = "";
@@ -262,6 +329,10 @@ function renderPosts(posts) {
 
 /**
  * 3. TOGGLE PIN FUNCTION
+ * Pins or unpins a post at the top of the Campus Feed (`POST /api/posts/{id}/pin`).
+ * Restricted to `ADMIN` users on the backend.
+ *
+ * @param {number} id - Target post ID.
  */
 window.togglePin = async function(id) {
     try {
@@ -275,6 +346,8 @@ window.togglePin = async function(id) {
 
 /**
  * 4. CREATE POST WITH LOCAL IMAGE OR URL & PROFANITY HANDLING
+ * Uploads a selected local image if present, then submits `{ content, imageUrl }`
+ * to `POST /api/posts`. Displays a moderation alert if the backend rejects the post.
  */
 window.createPost = async function() {
     hideWallAlert();
@@ -330,6 +403,9 @@ window.createPost = async function() {
 
 /**
  * 5. DELETE POST
+ * Deletes a post by ID (`DELETE /api/posts/{id}`) after user confirmation.
+ *
+ * @param {number} id - Target post ID.
  */
 window.deletePost = async function(id) {
     if (!confirm("Delete this post?")) return;
@@ -347,6 +423,11 @@ window.deletePost = async function(id) {
 
 /**
  * 6. LIKE POST
+ * Optimistically increments the like counter on the button and sends
+ * `POST /api/posts/{id}/like`.
+ *
+ * @param {number}            id         - Target post ID.
+ * @param {HTMLButtonElement} btnElement - The clicked Like button element.
  */
 window.likePost = async function(id, btnElement) {
     try {
@@ -366,6 +447,9 @@ window.likePost = async function(id, btnElement) {
 
 /**
  * 7. COMMENTS SYSTEM (TOGGLE, LOAD, ADD, DELETE)
+ * Expands or collapses `#comments-section-{postId}` and loads comments when opened.
+ *
+ * @param {number} postId - Target post ID.
  */
 window.toggleComments = function(postId) {
     const section = document.getElementById(`comments-section-${postId}`);
@@ -380,6 +464,12 @@ window.toggleComments = function(postId) {
     }
 };
 
+/**
+ * Fetches top-level comments and their nested replies from `GET /api/posts/{postId}/comments`
+ * and renders them inside `#comments-list-{postId}`.
+ *
+ * @param {number} postId - Target post ID.
+ */
 window.loadComments = async function(postId) {
     const listEl = document.getElementById(`comments-list-${postId}`);
     if (!listEl) return;
@@ -488,6 +578,12 @@ window.loadComments = async function(postId) {
     }
 };
 
+/**
+ * Toggles the inline reply input box (`#reply-box-{commentId}`) under a comment.
+ *
+ * @param {number} commentId          - Parent comment ID.
+ * @param {string} [authorName=""]    - Parent comment author's name.
+ */
 window.toggleReplyBox = function(commentId, authorName = "") {
     const box = document.getElementById(`reply-box-${commentId}`);
     if (!box) return;
@@ -504,6 +600,13 @@ window.toggleReplyBox = function(commentId, authorName = "") {
     }
 };
 
+/**
+ * Submits a nested reply to a comment via `POST /api/posts/{postId}/comments`
+ * with `{ content, parentId }`. Displays an inline moderation error if blocked.
+ *
+ * @param {number} postId   - Post ID containing the comment thread.
+ * @param {number} parentId - Parent comment ID being replied to.
+ */
 window.addReply = async function(postId, parentId) {
     const input = document.getElementById(`reply-input-${parentId}`);
     const alertEl = document.getElementById(`reply-alert-${parentId}`);
@@ -546,6 +649,12 @@ window.addReply = async function(postId, parentId) {
     }
 };
 
+/**
+ * Submits a top-level comment on a post via `POST /api/posts/{postId}/comments`.
+ * Displays an inline moderation alert (`#comment-alert-{postId}`) if blocked by profanity filter.
+ *
+ * @param {number} postId - Target post ID.
+ */
 window.addComment = async function(postId) {
     const input = document.getElementById(`comment-input-${postId}`);
     const alertEl = document.getElementById(`comment-alert-${postId}`);
@@ -586,6 +695,13 @@ window.addComment = async function(postId) {
     }
 };
 
+/**
+ * Deletes a comment or nested reply via `DELETE /api/posts/comments/{commentId}`
+ * and refreshes the post's comment section.
+ *
+ * @param {number} postId    - Post ID whose comment list should be refreshed.
+ * @param {number} commentId - Comment or reply ID to delete.
+ */
 window.deleteComment = async function(postId, commentId) {
     if (!confirm("Delete this comment?")) return;
 
@@ -613,6 +729,10 @@ window.deleteComment = async function(postId, commentId) {
 
 /**
  * HELPER: Simple HTML Escaper
+ * Sanitizes user-supplied strings before injecting into template literals to prevent XSS.
+ *
+ * @param {string} text - Raw text string.
+ * @returns {string} HTML-escaped string.
  */
 function escapeHtml(text) {
     if (!text) return "";
@@ -626,6 +746,10 @@ function escapeHtml(text) {
 
 /**
  * HELPER: Time Ago Logic
+ * Converts a timestamp into a human-friendly relative age string (`Just now`, `5m ago`, `3d ago`).
+ *
+ * @param {string} dateString - ISO-8601 date string.
+ * @returns {string} Formatted relative time label.
  */
 function timeAgo(dateString) {
     const date = new Date(dateString);

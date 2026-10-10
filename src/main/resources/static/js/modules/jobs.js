@@ -1,7 +1,38 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/jobs.js
+ * PURPOSE: Jobs & Referrals board controller (`components/jobs.html` and
+ *          shared modals in `dashboard.html`).
+ *
+ * OVERVIEW:
+ *   Fetches job and internship referral postings from `GET /api/jobs` and
+ *   renders cards into `#jobList`.
+ *   Role-based permissions:
+ *     - `ALUMNI` and `ADMIN` users can post new jobs (`#btnPostJob` -> `#postJobModal`).
+ *     - A job's original author (`isOwner`) or any `ADMIN` can edit (`#editJobModal`)
+ *       or delete (`window.deleteJob`) the posting.
+ *     - Also syncs with the Admin Panel's Jobs table (`window.loadAdminJobs`)
+ *       whenever a job is created, edited, or deleted.
+ *
+ * API ENDPOINTS USED:
+ *   - GET    `/api/jobs`      : Fetch all job/referral listings
+ *   - POST   `/api/jobs`      : Create a new job/referral (Alumni / Admin)
+ *   - PUT    `/api/jobs/{id}` : Update an existing job/referral (Owner / Admin)
+ *   - DELETE `/api/jobs/{id}` : Delete a job/referral (Owner / Admin)
+ * ============================================================================
+ */
+
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+// In-memory cache mapping jobId -> job object for modal editing
 const jobsMap = new Map();
 
+/**
+ * Resolves the current user's normalized uppercase role and email from
+ * `getCurrentUser()`, falling back to `campus_user` in `localStorage` if needed.
+ *
+ * @returns {{ role: string, email: string }}
+ */
 function resolveCurrentRoleAndEmail() {
     let { role, email } = getCurrentUser();
     if (!role || !email) {
@@ -17,6 +48,10 @@ function resolveCurrentRoleAndEmail() {
     };
 }
 
+/**
+ * Fetches all job postings from `GET /api/jobs`, reveals `#btnPostJob` if the
+ * user is `ADMIN` or `ALUMNI`, and renders the job cards into `#jobList`.
+ */
 export async function fetchJobs() {
     try {
         const { role } = resolveCurrentRoleAndEmail();
@@ -32,6 +67,15 @@ export async function fetchJobs() {
     }
 }
 
+/**
+ * Normalizes an application link or email into a valid `href` attribute:
+ *   - Preserves `http://`, `https://`, and `mailto:` links as-is.
+ *   - Prefixes bare email addresses with `mailto:`.
+ *   - Prefixes bare domain URLs with `https://`.
+ *
+ * @param {string} link - Raw apply link or email entered by the poster.
+ * @returns {string} Safe href string for the "Apply Now" anchor tag.
+ */
 function formatApplyHref(link) {
     if (!link) return "#";
     const trimmed = link.trim();
@@ -40,6 +84,12 @@ function formatApplyHref(link) {
     return `https://${trimmed}`;
 }
 
+/**
+ * Renders job/referral cards inside `#jobList` and caches each job in `jobsMap`.
+ * Displays Edit and Delete buttons if the logged-in user is an `ADMIN` or the job's author.
+ *
+ * @param {Array<Object>} jobs - Array of job objects returned from `/api/jobs`.
+ */
 function renderJobs(jobs) {
     const list = document.getElementById("jobList");
     jobsMap.clear();
@@ -106,6 +156,9 @@ function renderJobs(jobs) {
     });
 }
 
+/**
+ * Opens the shared `#postJobModal` dialog (defined in `dashboard.html`).
+ */
 window.openPostJobModal = function() {
     const modalEl = document.getElementById('postJobModal');
     if (modalEl) {
@@ -113,6 +166,10 @@ window.openPostJobModal = function() {
     }
 };
 
+/**
+ * Reads form fields from `#postJobModal`, validates required fields, and submits
+ * `POST /api/jobs`. Refreshes both `#jobList` and `#adminJobsTable` on success.
+ */
 export async function postJob() {
     const titleEl = document.getElementById("jobTitle");
     const companyEl = document.getElementById("jobCompany");
@@ -164,6 +221,13 @@ export async function postJob() {
     }
 }
 
+/**
+ * Populates `#editJobModal` with the selected job's details (fetching `/api/jobs`
+ * if `jobsMap` is not yet populated, e.g., when invoked directly from Admin Panel)
+ * and opens the modal.
+ *
+ * @param {number|Object} jobOrId - Job ID or job object to edit.
+ */
 window.openEditJobModal = async function(jobOrId) {
     let job = (typeof jobOrId === 'object' && jobOrId !== null)
         ? jobOrId
@@ -202,6 +266,10 @@ window.openEditJobModal = async function(jobOrId) {
     }
 };
 
+/**
+ * Submits edited job fields from `#editJobModal` to `PUT /api/jobs/{id}`
+ * and refreshes both the Jobs board and Admin Jobs table.
+ */
 window.submitEditJob = async function() {
     const id = document.getElementById("editJobId")?.value;
     const title = document.getElementById("editJobTitle")?.value.trim() || "";
@@ -245,6 +313,12 @@ window.submitEditJob = async function() {
     }
 };
 
+/**
+ * Deletes a job posting via `DELETE /api/jobs/{id}` after user confirmation
+ * and refreshes both the Jobs board and Admin Jobs table.
+ *
+ * @param {number} id - Target job ID to delete.
+ */
 export async function deleteJob(id) {
     if (confirm("Are you sure you want to delete this job / referral?")) {
         const res = await send(`/jobs/${id}`, 'DELETE');

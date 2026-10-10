@@ -1,4 +1,27 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/profile.html
+  PURPOSE: Current User Profile & Notification Preferences partial view
+           (injected into `#main-content` when the user switches to `#tab-profile`).
+
+  CONTROLLER MODULE:
+    - `js/modules/profile.js` (`loadProfile()`, `window.saveProfile()`)
+
+  FORM FIELDS (Populated from `GET /api/users/me` & saved to `PUT /api/users/profile`):
+    - `#pHeadline`       : Professional headline (e.g., "SDE at Microsoft | MCA '24")
+    - `#pCompany`        : Current company or institution
+    - `#pDesignation`    : Current role or designation
+    - `#pSkills`         : Comma-separated skills & technologies
+    - `#pExperience`     : Bio & career experience summary
+    - `#pLinkedin`       : LinkedIn profile URL
+    - `#pGithub`         : GitHub profile URL
+    - `#pNotifyMessages` : Toggle switch for direct message notifications
+    - `#pNotifyEvents`   : Toggle switch for campus event notifications
+    - `#pNotifyJobs`     : Toggle switch for new job posting notifications
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header & Save Profile Action Button -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-user-gear"></i> Settings</span>
@@ -10,9 +33,10 @@
         </button>
     </div>
 
+    <!-- Profile & Preferences Form Panel -->
     <div class="cc-panel p-4">
         <div class="row g-4">
-            <!-- Professional Summary -->
+            <!-- 1. Professional Summary (#pHeadline) -->
             <div class="col-12">
                 <div class="cc-divider-title">
                     <i class="fas fa-briefcase text-primary"></i> Professional Headline
@@ -23,7 +47,7 @@
                 </div>
             </div>
 
-            <!-- Current Employment / Role -->
+            <!-- 2. Current Employment / Role (#pCompany, #pDesignation) -->
             <div class="col-md-6">
                 <label class="form-label text-muted small fw-bold">Current Company or Institution</label>
                 <div class="input-group">
@@ -39,7 +63,7 @@
                 </div>
             </div>
 
-            <!-- Skills & Experience -->
+            <!-- 3. Skills & Career Experience (#pSkills, #pExperience) -->
             <div class="col-12">
                 <label class="form-label text-muted small fw-bold">Skills & Technologies</label>
                 <input type="text" id="pSkills" class="form-control" placeholder="e.g. Java, Spring Boot, React, AWS, Docker, Python">
@@ -50,7 +74,7 @@
                 <textarea id="pExperience" class="form-control" rows="3" placeholder="Briefly describe your career background, projects, or interests..."></textarea>
             </div>
 
-            <!-- Social Links -->
+            <!-- 4. Social & Portfolio Links (#pLinkedin, #pGithub) -->
             <div class="col-md-6">
                 <label class="form-label text-muted small fw-bold">LinkedIn Profile URL</label>
                 <div class="input-group">
@@ -66,7 +90,7 @@
                 </div>
             </div>
 
-            <!-- Notification Preferences -->
+            <!-- 5. Notification Preferences (#pNotifyMessages, #pNotifyEvents, #pNotifyJobs) -->
             <div class="col-12 pt-3 border-top">
                 <div class="cc-divider-title">
                     <i class="fas fa-bell text-primary"></i> Notification Preferences

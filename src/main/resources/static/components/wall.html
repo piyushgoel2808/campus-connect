@@ -1,4 +1,26 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/wall.html
+  PURPOSE: Campus Wall / Community Feed partial view (default tab injected into
+           `#main-content` when the dashboard loads or when `#tab-wall` is clicked).
+
+  CONTROLLER MODULE:
+    - `js/modules/wall.js` (`fetchPosts()`, `createPost()`, `handleImageFileSelect()`,
+      `handleImageUrlInput()`, `clearSelectedImage()`, `likePost()`, `togglePin()`,
+      `deletePost()`, `toggleComments()`, `addComment()`, `addReply()`)
+
+  DOM SECTIONS:
+    1. `#postAlert`         : Dismissible warning/moderation banner shown when a
+                              post is blocked by the profanity filter.
+    2. `.cc-post-card`      : Post Composer card with text area (`#postContent`),
+                              local image file picker (`#postImageFile`), external
+                              image URL input (`#postImage`), live thumbnail preview
+                              (`#postImagePreviewContainer`), and Publish button (`#btnPost`).
+    3. `#postsContainer`    : Dynamic feed stack populated by `renderPosts()` in `wall.js`.
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-newspaper"></i> Community Wall</span>
@@ -7,21 +29,21 @@
         </div>
     </div>
 
-    <!-- Moderation & Error Alert -->
+    <!-- 1. Moderation & Validation Alert Banner (Controlled by showWallAlert() in wall.js) -->
     <div id="postAlert" class="alert alert-danger d-none mb-3 shadow-sm border-danger" role="alert"></div>
 
-    <!-- Post Creator Card -->
+    <!-- 2. Post Creator Card (Supports text + local photo upload or image URL) -->
     <div class="cc-post-card">
         <div class="cc-divider-title"><i class="fas fa-feather-alt text-primary"></i> Share an update</div>
         <textarea id="postContent" class="form-control mb-3" rows="3" placeholder="What's on your mind? Share a project, announcement, or question with GradLink..."></textarea>
 
-        <!-- Image Preview Container -->
+        <!-- Image Preview Container (Shown when a local photo or image URL is selected) -->
         <div id="postImagePreviewContainer" class="cc-image-preview-container d-none">
             <img id="postImagePreview" class="cc-image-preview-img" src="" alt="Selected Preview">
             <button type="button" class="cc-image-preview-remove" onclick="window.clearSelectedImage()" title="Remove image">✕</button>
         </div>
 
-        <!-- Hidden local file input -->
+        <!-- Hidden local file input triggered by the "Upload Photo" button below -->
         <input type="file" id="postImageFile" accept="image/png, image/jpeg, image/gif, image/webp" class="d-none" onchange="window.handleImageFileSelect(this)">
 
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -31,7 +53,7 @@
                     <i class="fas fa-cloud-upload-alt text-primary me-1"></i> Upload Photo
                 </button>
 
-                <!-- Optional URL Input -->
+                <!-- Optional External Image URL Input -->
                 <div class="input-group input-group-sm" style="min-width: 260px;">
                     <span class="input-group-text bg-light border-end-0"><i class="fas fa-link text-muted"></i></span>
                     <input type="text" id="postImage" class="form-control border-start-0" placeholder="Or paste image URL" oninput="window.handleImageUrlInput(this)">
@@ -46,7 +68,7 @@
         </div>
     </div>
 
-    <!-- Feed Container -->
+    <!-- 3. Feed Posts Container (Populated by renderPosts() in js/modules/wall.js) -->
     <div id="postsContainer" class="cc-stack">
         <div class="cc-empty-state cc-panel">
             <i class="fas fa-newspaper"></i>

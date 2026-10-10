@@ -1,11 +1,40 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/events.js
+ * PURPOSE: Campus Events listing, RSVP toggling, and Admin Event CRUD module
+ *          (`components/events.html`).
+ *
+ * OVERVIEW:
+ *   Fetches upcoming campus events (`GET /api/events`) and renders event cards
+ *   into `#eventsContainer`. Every logged-in user can toggle their RSVP status
+ *   (`window.toggleRSVP`). Users with the `ADMIN` role additionally see the
+ *   "+ Add Event" button (`#btnAddEvent`) and per-card controls to view the
+ *   RSVP attendee list (`#participantsModal`), edit event details (`#editEventModal`),
+ *   or delete an event.
+ *
+ * API ENDPOINTS USED:
+ *   - GET    `/api/events`                    : Fetch all campus events
+ *   - POST   `/api/events`                    : Create a new event (Admin)
+ *   - PUT    `/api/events/{id}`               : Update an existing event (Admin)
+ *   - DELETE `/api/events/{id}`               : Delete an event (Admin)
+ *   - POST   `/api/events/{id}/rsvp`          : Toggle current user's RSVP
+ *   - GET    `/api/events/{id}/participants`  : List users who RSVP'd (Admin)
+ * ============================================================================
+ */
+
 import { get, send, getCurrentUser } from '../utils/api.js';
 
+// In-memory cache mapping eventId -> event object for quick Edit modal population
 const eventsMap = new Map();
 
 // =========================================================
 // 1. FETCH & RENDER
 // =========================================================
 
+/**
+ * Fetches all events from `GET /api/events`, renders them into `#eventsContainer`,
+ * and reveals `#btnAddEvent` if the current user is an `ADMIN`.
+ */
 export async function fetchEvents() {
     const container = document.getElementById("eventsContainer");
     if(container) container.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary"></div></div>';
@@ -33,6 +62,11 @@ export async function fetchEvents() {
     }
 }
 
+/**
+ * Renders the list of event cards inside `#eventsContainer`.
+ *
+ * @param {Array<Object>} events - Array of event objects from `/api/events`.
+ */
 function renderEvents(events) {
     const container = document.getElementById("eventsContainer");
     if(!container) return;
@@ -63,7 +97,7 @@ function renderEvents(events) {
         const count = e.participantCount || 0;
         const countBadge = `<span class="badge rounded-pill text-bg-light border mb-2"><i class="fas fa-user-check me-1"></i> ${count} Going</span>`;
 
-        // 2. Admin Controls
+        // 2. Admin Controls (View RSVPs, Edit, Delete)
         let adminControls = "";
         if (isAdmin) {
             adminControls = `
@@ -82,7 +116,7 @@ function renderEvents(events) {
                 </div>`;
         }
 
-        // 3. RSVP Button
+        // 3. RSVP Button (reflects whether the current user is already attending)
         let rsvpBtn = e.attending
             ? `<button class="btn btn-success w-100" onclick="window.toggleRSVP(${e.id})"><i class="fas fa-check me-1"></i> Going</button>`
             : `<button class="btn btn-outline-primary w-100" onclick="window.toggleRSVP(${e.id})">RSVP</button>`;
@@ -117,7 +151,11 @@ function renderEvents(events) {
 // 2. EXPOSED FUNCTIONS (Attached to Window)
 // =========================================================
 
-// A. Create New Event
+/**
+ * A. Create New Event
+ * Reads inputs from `#eventModal`, sends `POST /api/events`, closes the modal,
+ * resets the form, and reloads the events grid.
+ */
 window.publishNewEvent = async function() {
     const rawDate = document.getElementById("evtDate")?.value || "";
     const cleanDate = rawDate ? rawDate.slice(0, 16) : null;
@@ -156,7 +194,13 @@ window.publishNewEvent = async function() {
     }
 };
 
-// B. View Participants (Fetch List)
+/**
+ * B. View Participants (Fetch List)
+ * Opens `#participantsModal` and loads the list of users who have RSVP'd to
+ * the specified event (`GET /api/events/{eventId}/participants`).
+ *
+ * @param {number} eventId - Target event ID.
+ */
 window.viewParticipants = async function(eventId) {
     const list = document.getElementById("participantsList");
     if(!list) return;
@@ -195,7 +239,12 @@ window.viewParticipants = async function(eventId) {
     }
 };
 
-// C. Toggle RSVP
+/**
+ * C. Toggle RSVP
+ * Toggles the current user's attendance for an event via `POST /api/events/{id}/rsvp`.
+ *
+ * @param {number} id - Target event ID.
+ */
 window.toggleRSVP = async function(id) {
     try {
         await send(`/events/${id}/rsvp`, 'POST');
@@ -203,7 +252,12 @@ window.toggleRSVP = async function(id) {
     } catch(e) { console.error(e); }
 };
 
-// D. Delete Event
+/**
+ * D. Delete Event
+ * Deletes an event via `DELETE /api/events/{id}` after confirmation.
+ *
+ * @param {number} id - Target event ID.
+ */
 window.deleteEvent = async function(id) {
     if(confirm("Are you sure you want to delete this event?")) {
         await send(`/events/${id}`, 'DELETE');
@@ -211,7 +265,12 @@ window.deleteEvent = async function(id) {
     }
 };
 
-// E. Edit Event (Open Modal)
+/**
+ * E. Edit Event (Open Modal)
+ * Populates `#editEventModal` with existing event details from `eventsMap` and shows it.
+ *
+ * @param {number|Object|string} eventOrId - Event ID, event object, or URL-encoded JSON string.
+ */
 window.openEditEvent = function(eventOrId) {
     const event = (typeof eventOrId === 'object' && eventOrId !== null)
         ? eventOrId
@@ -236,7 +295,10 @@ window.openEditEvent = function(eventOrId) {
     }
 };
 
-// F. Submit Edit
+/**
+ * F. Submit Edit
+ * Reads modified fields from `#editEventModal` and sends `PUT /api/events/{id}`.
+ */
 window.submitEditEvent = async function() {
     const id = document.getElementById("editEventId").value;
     const rawDate = document.getElementById("editEventDate").value;

@@ -27,6 +27,18 @@ import java.util.Set;
 import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
 
+/**
+ * Hybrid WebSocket (STOMP) and REST Controller for real-time messaging.
+ * <p>
+ * Handles:
+ * </p>
+ * <ul>
+ *   <li>Public broadcast chat messages ({@code /app/chat.sendMessage} -> {@code /topic/public})</li>
+ *   <li>Private 1-on-1 messages ({@code /app/chat.private} -> {@code /user/{email}/queue/messages}) with database persistence and real-time notifications</li>
+ *   <li>Real-time typing indicators ({@code /app/chat.typing} -> {@code /user/{email}/queue/typing})</li>
+ *   <li>REST endpoints for loading conversation history ({@code GET /api/messages/history}) and recent chat partners ({@code GET /api/messages/partners})</li>
+ * </ul>
+ */
 @Controller
 public class ChatController {
 
@@ -42,6 +54,22 @@ public class ChatController {
     @Autowired
     private NotificationService notificationService;
 
+    // =========================================================
+    // 1. PUBLIC CHAT (STOMP WEBSOCKET)
+    // =========================================================
+
+    /**
+     * Broadcasts a message to the public campus chat room.
+     * <ul>
+     *   <li><b>WebSocket Destination:</b> {@code /app/chat.sendMessage}</li>
+     *   <li><b>Broadcast Topic:</b> {@code /topic/public}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User</li>
+     * </ul>
+     *
+     * @param chatMessage the incoming chat payload
+     * @param principal   the authenticated WebSocket user principal
+     * @return the {@link ChatMessage} broadcast to all subscribers of {@code /topic/public}
+     */
     // --- PUBLIC CHAT ---
     @MessageMapping("/chat.sendMessage")
     @SendTo("/topic/public")
@@ -52,6 +80,18 @@ public class ChatController {
         return chatMessage;
     }
 
+    /**
+     * Broadcasts a user join event to the public campus chat room.
+     * <ul>
+     *   <li><b>WebSocket Destination:</b> {@code /app/chat.addUser}</li>
+     *   <li><b>Broadcast Topic:</b> {@code /topic/public}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User</li>
+     * </ul>
+     *
+     * @param chatMessage the join event message payload
+     * @param principal   the authenticated WebSocket user principal
+     * @return the {@link ChatMessage} broadcast to {@code /topic/public}
+     */
     @MessageMapping("/chat.addUser")
     @SendTo("/topic/public")
     public ChatMessage addUser(@Payload ChatMessage chatMessage, Principal principal) {
@@ -61,6 +101,22 @@ public class ChatController {
         return chatMessage;
     }
 
+    // =========================================================
+    // 2. PRIVATE 1-ON-1 CHAT & TYPING INDICATOR (STOMP WEBSOCKET)
+    // =========================================================
+
+    /**
+     * Processes a private 1-on-1 chat message: persists it to MySQL, pushes it in real time
+     * to both the recipient's and sender's user queues, and triggers an in-app notification.
+     * <ul>
+     *   <li><b>WebSocket Destination:</b> {@code /app/chat.private}</li>
+     *   <li><b>Target Queues:</b> {@code /user/{receiverEmail}/queue/messages} and {@code /user/{senderEmail}/queue/messages}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User ({@code STUDENT}, {@code ALUMNI}, {@code ADMIN})</li>
+     * </ul>
+     *
+     * @param message   the {@link ChatMessage} containing {@code receiverName} and {@code content}
+     * @param principal the authenticated sender's WebSocket principal
+     */
     // --- PRIVATE CHAT (Real-Time) ---
     @MessageMapping("/chat.private")
     public void sendPrivateMessage(@Payload ChatMessage message, Principal principal) {
@@ -108,6 +164,17 @@ public class ChatController {
         }
     }
 
+    /**
+     * Forwards a real-time typing status indicator to the target conversation partner.
+     * <ul>
+     *   <li><b>WebSocket Destination:</b> {@code /app/chat.typing}</li>
+     *   <li><b>Target Queue:</b> {@code /user/{receiverEmail}/queue/typing}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User</li>
+     * </ul>
+     *
+     * @param message   the {@link TypingMessage} payload indicating whether the sender is typing
+     * @param principal the authenticated sender's WebSocket principal
+     */
     // --- TYPING INDICATOR ---
     @MessageMapping("/chat.typing")
     public void typingIndicator(@Payload TypingMessage message, Principal principal) {
@@ -122,6 +189,23 @@ public class ChatController {
         );
     }
 
+    // =========================================================
+    // 3. CHAT HISTORY & PARTNERS (REST API)
+    // =========================================================
+
+    /**
+     * Fetches the chronological private message history between the currently logged-in user
+     * and the specified conversation partner.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code GET /api/messages/history?partnerEmail={email}}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User ({@code STUDENT}, {@code ALUMNI}, {@code ADMIN})</li>
+     *   <li><b>Query Parameter:</b> {@code partnerEmail} - email of the other user in the conversation</li>
+     *   <li><b>Response:</b> {@code 200 OK} with list of {@link PrivateMessage}, or {@code 401 Unauthorized}</li>
+     * </ul>
+     *
+     * @param partnerEmail the email address of the chat partner
+     * @return a {@link ResponseEntity} containing the ordered list of messages
+     */
     // --- FETCH HISTORY (API) ---
     @GetMapping("/api/messages/history")
     @ResponseBody
@@ -135,6 +219,17 @@ public class ChatController {
         return ResponseEntity.ok(messageRepo.findConversation(myEmail, partnerEmail));
     }
 
+    /**
+     * Retrieves the list of unique users with whom the currently authenticated user
+     * has exchanged private messages, ordered by most recent interaction.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code GET /api/messages/partners}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User ({@code STUDENT}, {@code ALUMNI}, {@code ADMIN})</li>
+     *   <li><b>Response:</b> {@code 200 OK} with list of {@link User} entities, or {@code 401 Unauthorized}</li>
+     * </ul>
+     *
+     * @return a {@link ResponseEntity} containing the user's recent chat partners
+     */
     // --- GET RECENT CONVERSATIONS (Partners) ---
     @GetMapping("/api/messages/partners")
     @ResponseBody

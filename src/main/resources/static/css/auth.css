@@ -1,5 +1,12 @@
 /* ==========================================================================
-   GradLink Auth / Login Page Styles
+   GradLink (BVICAM) - Authentication / Login Page Styles (auth.css)
+   --------------------------------------------------------------------------
+   Purpose:
+   - Styles login.html:
+     * Full-viewport dark ambient canvas (.auth-page) with glowing orbs
+     * Split-screen glassmorphic login card (.auth-card)
+     * Left-side campus brand showcase panel (.auth-brand-panel)
+     * Right-side sign-in form, password toggle, and error alert states
    ========================================================================== */
 
 .auth-page {

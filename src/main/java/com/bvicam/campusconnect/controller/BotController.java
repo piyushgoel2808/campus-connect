@@ -9,6 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * REST Controller for the interactive Campus Bot Assistant ({@code /api/bot}).
+ * <p>
+ * Answers natural-language student and alumni questions regarding placement statistics,
+ * batchmate directories, admin contact information, syllabus resources, and live upcoming
+ * campus events queried from the database.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/bot")
 public class BotController {
@@ -18,8 +26,21 @@ public class BotController {
     @Autowired
     private com.bvicam.campusconnect.repository.EventRepository eventRepository;
 
+    /**
+     * Processes a user question and returns a formatted HTML/Markdown response from the Campus Bot.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code POST /api/bot/ask}</li>
+     *   <li><b>Access Role:</b> Any Authenticated User ({@code STUDENT}, {@code ALUMNI}, {@code ADMIN})</li>
+     *   <li><b>Request Payload:</b> JSON object containing {@code {"question": "..."}}</li>
+     *   <li><b>Response:</b> JSON object containing {@code {"answer": "..."}}</li>
+     * </ul>
+     *
+     * @param payload map containing the user's {@code "question"} string
+     * @return a single-entry map with key {@code "answer"} containing the bot's reply
+     */
     @PostMapping("/ask")
     public Map<String, String> askBot(@RequestBody Map<String, String> payload) {
+        // Step 1: Normalize question text to lowercase and initialize fallback reply
         String question = payload.get("question").toLowerCase();
         String answer = "I'm sorry, I didn't understand that. Try asking about 'batch', 'placement', or 'events'.";
 
@@ -58,6 +79,7 @@ public class BotController {
         else if (question.contains("syllabus") || question.contains("subjects")) {
             answer = "📚 **MCA Syllabus:** You can download the latest syllabus from the Dashboard > Resources section.";
         }
+        // RULE 5: Live Upcoming Campus Events from Database
         else if (question.contains("event") || question.contains("workshop") || question.contains("seminar")) {
             List<com.bvicam.campusconnect.entity.Event> events = eventRepository.findByDateTimeAfterOrderByDateTimeAsc(java.time.LocalDateTime.now());
             if (events.isEmpty()) {

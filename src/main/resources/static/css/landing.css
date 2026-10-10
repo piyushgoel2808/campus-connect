@@ -1,5 +1,12 @@
 /* ==========================================================================
-   GradLink Landing Page Styles
+   GradLink (BVICAM) - Public Landing Page Styles (landing.css)
+   --------------------------------------------------------------------------
+   Purpose:
+   - Styles index.html (public marketing & campus showcase homepage):
+     * Announcement top bar (.top-bar) & sticky navigation bar
+     * Hero banner with campus background, floating preview cards, and stats strip
+     * Feature highlight cards (.feature-card) & Alumni Spotlight section
+     * Call-to-action banner (.cta-section) and multi-column footer
    ========================================================================== */
 
 .landing-page {

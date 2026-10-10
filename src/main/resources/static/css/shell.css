@@ -1,5 +1,14 @@
 /* ==========================================================================
-   GradLink Shell & Dashboard Styles
+   GradLink (BVICAM) - Authenticated Dashboard Shell Styles (shell.css)
+   --------------------------------------------------------------------------
+   Purpose:
+   - Styles the persistent dashboard shell in dashboard.html:
+     1. Top glassmorphic navigation bar, notifications dropdown, user pill, logout button
+     2. Left sticky desktop sidebar navigation & mobile horizontal pill navigation
+     3. Center #main-content container & explicit Bootstrap modal/backdrop z-index layering
+     4. Right-hand Global Chat column & message bubbles (.my-message / .other-message)
+     5. Floating GradBot AI assistant widget (#botIcon & #botWindow)
+     6. Direct Message modal (.dm-messages-area) and Feedback star rating widget
    ========================================================================== */
 
 .shell-page {

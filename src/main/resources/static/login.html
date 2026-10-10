@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/login.html
+  PURPOSE: Authentication / Sign-In page for the GradLink platform.
+
+  OVERVIEW:
+    Renders the centered `.login-card` containing `#loginForm`:
+      - `#email`              : Institutional email input (`name@bvicam.in`)
+      - `#password`           : Password input with visibility toggle (`togglePasswordVisibility()`)
+      - `#alertBox`           : Dynamic error/success alert banner controlled by `js/app.js`
+      - `button[type=submit]` : Submits credentials to `POST /api/auth/login` via `js/app.js`
+
+  CONTROLLER SCRIPT:
+    - `js/app.js` : Attaches submit handler to `#loginForm`, stores `jwt_token`
+                    and user details in `localStorage`, and redirects to `dashboard.html`.
+  ============================================================================
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -22,7 +39,11 @@
 <body class="auth-page">
 
     <div class="container">
+        <!-- =================================================================
+             LOGIN CARD: Brand header, alert banner, and credential form
+             ================================================================= -->
         <div class="login-card">
+            <!-- Brand Header & Portal Badge -->
             <div class="text-center mb-3">
                 <span class="badge badge-bvicam mb-2">BVICAM Community Portal</span>
                 <div class="brand-header">
@@ -34,8 +55,10 @@
                 <p class="auth-subtitle">Sign in to connect with students, alumni, jobs, events, and the GradLink community.</p>
             </div>
             
+            <!-- Dynamic Alert Box: Shown by js/app.js on login success or failure -->
             <div id="alertBox" class="alert alert-danger d-none" role="alert"></div>
 
+            <!-- Login Form: Handled by handleLogin() in js/app.js -->
             <form id="loginForm">
                 <div class="mb-3">
                     <label for="email" class="form-label">Institutional Email</label>
@@ -62,6 +85,7 @@
                 </button>
             </form>
             
+            <!-- Navigation link back to public landing page -->
             <div class="text-center mt-3 pt-2 border-top">
                 <a href="index.html" class="auth-footer-link">
                     <i class="fas fa-chevron-left small"></i>
@@ -71,8 +95,12 @@
         </div>
     </div>
 
-    <!-- Password visibility toggle script & app.js -->
+    <!-- Password visibility toggle helper & Authentication controller (js/app.js) -->
     <script>
+        /**
+         * Toggles `#password` between masked ("password") and plain text ("text")
+         * and updates the eye icon (`#togglePasswordIcon`).
+         */
         function togglePasswordVisibility() {
             const pwd = document.getElementById("password");
             const icon = document.getElementById("togglePasswordIcon");

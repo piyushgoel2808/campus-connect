@@ -1,10 +1,36 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/bot.js
+ * PURPOSE: GradBot AI / FAQ Assistant floating widget controller.
+ *
+ * OVERVIEW:
+ *   Powers the floating GradBot assistant drawer anchored in the bottom-right
+ *   corner of `dashboard.html` (`#botWindow`). Supports toggling the chat
+ *   window open/closed, clicking preset quick-question chips, typing custom
+ *   questions, displaying a live typing spinner, and rendering conversation
+ *   bubbles inside `#botMessages`.
+ *
+ * API ENDPOINTS USED:
+ *   - POST `/api/bot/ask` : Sends `{ question }` and receives `{ answer }`.
+ *
+ * DOM ELEMENTS REFERENCED (in `dashboard.html`):
+ *   - `#botWindow`   : Floating chat card container
+ *   - `#botMessages` : Scrollable message history container
+ *   - `#botInput`    : Text input field for user questions
+ * ============================================================================
+ */
+
 import { send } from '../utils/api.js';
 
 /**
- * GradBot Assistant Controller
+ * Initializes the GradBot assistant by attaching `window.toggleBot` and
+ * `window.askBot` handlers for use by `dashboard.html` inline `onclick` attributes.
  */
 export function initBot() {
-    // 1. Toggle Bot Window
+    /**
+     * 1. Toggle Bot Window
+     * Shows or hides `#botWindow` and auto-focuses `#botInput` when opened.
+     */
     window.toggleBot = function() {
         const botWindow = document.getElementById("botWindow");
         if (!botWindow) return;
@@ -22,7 +48,13 @@ export function initBot() {
         }
     };
 
-    // 2. Ask Bot Function (handles typing and quick prompt clicks)
+    /**
+     * 2. Ask Bot Function (handles typing and quick prompt clicks)
+     * Sends either a clicked `presetQuestion` chip string or the current text
+     * in `#botInput` to `POST /api/bot/ask`, then renders GradBot's reply.
+     *
+     * @param {string} [presetQuestion] - Optional pre-filled prompt from quick-action buttons.
+     */
     window.askBot = async function(presetQuestion) {
         const input = document.getElementById("botInput");
         const messagesArea = document.getElementById("botMessages");
@@ -31,15 +63,15 @@ export function initBot() {
         const question = (presetQuestion || input.value).trim();
         if (!question) return;
 
-        // Remove initial placeholder if present
+        // Remove initial welcome placeholder if present
         const placeholder = messagesArea.querySelector(".system-placeholder");
         if (placeholder) placeholder.remove();
 
-        // Append user question
+        // Append user question bubble and clear input field
         appendBotMessage(question, "user");
         input.value = "";
 
-        // Show typing indicator
+        // Show temporary typing indicator while awaiting backend response
         const typingId = "bot-typing-" + Date.now();
         const typingDiv = document.createElement("div");
         typingDiv.id = typingId;
@@ -67,12 +99,19 @@ export function initBot() {
     };
 }
 
+/**
+ * Creates and appends a styled chat bubble to `#botMessages` and scrolls to the bottom.
+ *
+ * @param {string} text             - Message text content to display.
+ * @param {'user'|'bot'} sender     - Whether the bubble is from the user or GradBot.
+ */
 function appendBotMessage(text, sender) {
     const messagesArea = document.getElementById("botMessages");
     if (!messagesArea) return;
 
     const div = document.createElement("div");
     if (sender === "user") {
+        // Right-aligned brand gradient bubble for user prompts
         div.className = "message my-message align-self-end";
         div.style.background = "var(--cc-gradient-brand)";
         div.style.color = "#ffffff";
@@ -83,6 +122,7 @@ function appendBotMessage(text, sender) {
         div.style.fontSize = "0.9rem";
         div.innerText = text;
     } else {
+        // Left-aligned white card bubble for GradBot responses
         div.className = "message other-message align-self-start";
         div.style.background = "#ffffff";
         div.style.border = "1px solid var(--cc-border)";
@@ -103,3 +143,4 @@ function appendBotMessage(text, sender) {
     messagesArea.appendChild(div);
     messagesArea.scrollTop = messagesArea.scrollHeight;
 }
+

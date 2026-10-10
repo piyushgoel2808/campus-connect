@@ -1,4 +1,21 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/jobs.html
+  PURPOSE: Career Opportunities & Referrals partial view (injected into
+           `#main-content` when the user switches to `#tab-jobs`).
+
+  CONTROLLER MODULE:
+    - `js/modules/jobs.js` (`fetchJobs()`, `postJob()`, `openEditJobModal()`, `deleteJob()`)
+
+  DOM SECTIONS:
+    1. `.cc-page-header` : Header and `#btnPostJob` (hidden by default; unhidden
+                           for `ALUMNI` and `ADMIN` roles by `fetchJobs()`).
+                           Opens `#postJobModal` defined in `dashboard.html`.
+    2. `#jobList`        : Card list container populated by `renderJobs()` in `jobs.js`.
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header & Post Job Trigger (visible to ALUMNI and ADMIN) -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-briefcase"></i> Careers & Referrals</span>
@@ -10,6 +27,7 @@
         </button>
     </div>
 
+    <!-- Job & Referral Cards List (Populated by renderJobs() in js/modules/jobs.js) -->
     <div id="jobList" class="cc-list-grid">
         <div class="cc-empty-state cc-panel">
             <i class="fas fa-briefcase"></i>

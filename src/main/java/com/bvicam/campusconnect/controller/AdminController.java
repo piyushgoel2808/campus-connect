@@ -29,6 +29,14 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * REST Controller for Administrative Operations ({@code /api/admin}).
+ * <p>
+ * Provides endpoints for user lifecycle management (CRUD, password reset, moderation unflagging),
+ * campus-wide email broadcasts, post moderation, and bulk user onboarding via Excel ({@code .xlsx})
+ * or CSV ({@code .csv}) file uploads. Intended for users with the {@link Role#ADMIN} role.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
@@ -43,6 +51,9 @@ public class AdminController {
     private final FeedbackRepository feedbackRepository;
     private final EventRepository eventRepository;
 
+    /**
+     * Constructs the {@code AdminController} with all required repositories and services injected.
+     */
     @Autowired
     public AdminController(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
@@ -64,6 +75,14 @@ public class AdminController {
         this.eventRepository = eventRepository;
     }
 
+    /**
+     * Resolves a department short code to an existing {@link Department} entity,
+     * normalizing legacy aliases (such as {@code "BA(JMC)"} to {@code "BJMC"}) and
+     * auto-creating the department if it does not yet exist.
+     *
+     * @param code the department code string
+     * @return the resolved or newly created {@link Department}, or {@code null} if the code is blank
+     */
     private Department resolveDepartment(String code) {
         if (code == null || code.trim().isEmpty()) return null;
         String normalized = code.trim();
@@ -79,15 +98,38 @@ public class AdminController {
     // 1. USER MANAGEMENT (CRUD)
     // =========================================================
 
+    /**
+     * Retrieves all registered user accounts in the system.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code GET /api/admin/users}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Response:</b> {@code 200 OK} with JSON array of {@link User} entities</li>
+     * </ul>
+     *
+     * @return a {@link ResponseEntity} containing the list of all users
+     */
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
         return ResponseEntity.ok(userRepository.findAll());
     }
 
+    /**
+     * Creates a new user account (Student, Alumni, or Admin) from the Admin Dashboard.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code POST /api/admin/users}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Request Payload:</b> {@link RegisterRequest} JSON body</li>
+     *   <li><b>Response:</b> {@code 200 OK} on success, {@code 400 Bad Request} if email is missing/duplicate</li>
+     * </ul>
+     *
+     * @param request the registration details for the new user
+     * @return a {@link ResponseEntity} with a confirmation or error message
+     */
     @PostMapping("/users")
     @Transactional
     public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
         try {
+            // Step 1: Validate that a non-empty, unique email address was provided
             if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
                 return ResponseEntity.badRequest().body("Error: Email is required!");
             }
@@ -95,6 +137,7 @@ public class AdminController {
                 return ResponseEntity.badRequest().body("Error: Email already exists!");
             }
 
+            // Step 2: Populate core identity and academic fields
             User user = new User();
             user.setName(request.getName());
             user.setEmail(request.getEmail().trim());
@@ -102,11 +145,12 @@ public class AdminController {
             user.setEnrollmentNumber(request.getEnrollmentNumber());
             user.setBatchYear(request.getBatchYear());
 
+            // Step 3: Resolve and link the academic department if a departmentCode was supplied
             if (request.getDepartmentCode() != null && !request.getDepartmentCode().trim().isEmpty()) {
                 user.setDepartment(resolveDepartment(request.getDepartmentCode()));
             }
 
-            // Set Professional Profile Fields
+            // Step 4: Set Professional Profile Fields
             user.setHeadline(request.getHeadline());
             user.setCurrentCompany(request.getCurrentCompany());
             user.setDesignation(request.getDesignation());
@@ -115,12 +159,14 @@ public class AdminController {
             user.setLinkedinUrl(request.getLinkedinUrl());
             user.setPastExperience(request.getPastExperience());
 
+            // Step 5: Hash the provided password (or default to "Bvicam@2025") and mark passwordChanged = false
             String rawPass = (request.getPassword() != null && !request.getPassword().trim().isEmpty())
                     ? request.getPassword().trim()
                     : "Bvicam@2025";
             user.setPasswordHash(passwordEncoder.encode(rawPass));
             user.setPasswordChanged(false);
 
+            // Step 6: Save the new user entity
             userRepository.save(user);
             return ResponseEntity.ok("✅ User created successfully!");
         } catch (Exception e) {
@@ -128,22 +174,36 @@ public class AdminController {
         }
     }
 
+    /**
+     * Deletes a user account and cleans up all associated foreign-key records
+     * (event RSVPs, comments, posts, jobs, and feedback).
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code DELETE /api/admin/delete-user/{id}}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Path Variable:</b> {@code id} - the ID of the user to delete</li>
+     *   <li><b>Response:</b> {@code 200 OK} on deletion, or {@code 404 Not Found} if user does not exist</li>
+     * </ul>
+     *
+     * @param id the ID of the user to delete
+     * @return a {@link ResponseEntity} indicating success or not found
+     */
     @DeleteMapping("/delete-user/{id}")
     @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        // Step 1: Verify the user exists
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
 
-        // Remove user from event participants
+        // Step 2: Remove user from event participants join table to avoid FK constraint violations
         for (Event event : eventRepository.findAll()) {
             if (event.getParticipants() != null && event.getParticipants().remove(user)) {
                 eventRepository.save(event);
             }
         }
 
-        // Remove comments, posts, jobs, and feedback authored by this user
+        // Step 3: Remove comments, posts, jobs, and feedback authored by this user
         commentRepository.findAll().stream()
                 .filter(c -> c.getAuthor() != null && id.equals(c.getAuthor().getId()))
                 .forEach(commentRepository::delete);
@@ -157,15 +217,32 @@ public class AdminController {
                 .filter(f -> f.getSubmittedBy() != null && id.equals(f.getSubmittedBy().getId()))
                 .forEach(feedbackRepository::delete);
 
+        // Step 4: Delete the user record itself
         userRepository.delete(user);
         return ResponseEntity.ok("✅ User deleted successfully.");
     }
 
+    /**
+     * Updates an existing user's academic, role, and professional profile details.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code PUT /api/admin/users/{id}}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Path Variable:</b> {@code id} - the ID of the user to update</li>
+     *   <li><b>Request Payload:</b> {@link RegisterRequest} JSON body with updated fields</li>
+     *   <li><b>Response:</b> {@code 200 OK} with confirmation message</li>
+     * </ul>
+     *
+     * @param id          the ID of the user to update
+     * @param updatedData the updated user fields
+     * @return a {@link ResponseEntity} confirming the update
+     */
     @PutMapping("/users/{id}")
     @Transactional
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody RegisterRequest updatedData) {
+        // Step 1: Retrieve existing user by ID
         User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Step 2: Apply updated identity, academic, and professional fields
         if (updatedData.getName() != null) user.setName(updatedData.getName());
         if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail().trim());
         if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
@@ -179,14 +256,28 @@ public class AdminController {
         user.setLinkedinUrl(updatedData.getLinkedinUrl());
         user.setPastExperience(updatedData.getPastExperience());
 
+        // Step 3: Update department association if provided
         if (updatedData.getDepartmentCode() != null && !updatedData.getDepartmentCode().trim().isEmpty()) {
             user.setDepartment(resolveDepartment(updatedData.getDepartmentCode()));
         }
 
+        // Step 4: Persist changes
         userRepository.save(user);
         return ResponseEntity.ok("✅ User updated successfully.");
     }
 
+    /**
+     * Clears moderation flags ({@code isFlagged = false}, {@code flagCount = 0}) on a user account.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code POST /api/admin/users/{id}/unflag}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Path Variable:</b> {@code id} - the ID of the flagged user</li>
+     *   <li><b>Response:</b> {@code 200 OK} with JSON confirmation, or {@code 404 Not Found}</li>
+     * </ul>
+     *
+     * @param id the ID of the user to unflag
+     * @return a {@link ResponseEntity} confirming the flags were cleared
+     */
     @PostMapping("/users/{id}/unflag")
     @Transactional
     public ResponseEntity<?> unflagUser(@PathVariable Long id) {
@@ -198,6 +289,18 @@ public class AdminController {
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found")));
     }
 
+    /**
+     * Resets a user's password back to the default temporary password ({@code "Bvicam@2025"}).
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code PUT /api/admin/users/{id}/reset-password}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Path Variable:</b> {@code id} - the ID of the user whose password should be reset</li>
+     *   <li><b>Response:</b> {@code 200 OK} with confirmation message</li>
+     * </ul>
+     *
+     * @param id the ID of the user
+     * @return a {@link ResponseEntity} confirming the password reset
+     */
     @PutMapping("/users/{id}/reset-password")
     @Transactional
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
@@ -212,6 +315,18 @@ public class AdminController {
     // 2. MODERATION & BROADCAST (Restored from Version 1)
     // =========================================================
 
+    /**
+     * Triggers an asynchronous broadcast email to all registered users.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code POST /api/admin/broadcast}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Request Payload:</b> JSON object containing {@code "subject"} and {@code "body"}</li>
+     *   <li><b>Response:</b> {@code 200 OK} when background dispatch starts, or {@code 400 Bad Request}</li>
+     * </ul>
+     *
+     * @param payload map containing {@code subject} and {@code body} strings
+     * @return a {@link ResponseEntity} acknowledging the background email broadcast
+     */
     @PostMapping("/broadcast")
     public ResponseEntity<?> sendBroadcast(@RequestBody Map<String, String> payload) {
         String subject = payload.get("subject");
@@ -223,6 +338,18 @@ public class AdminController {
         return ResponseEntity.ok("Broadcast started in background!");
     }
 
+    /**
+     * Deletes a community post by ID directly as an administrator.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code DELETE /api/admin/delete-post/{id}}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Path Variable:</b> {@code id} - the ID of the post to delete</li>
+     *   <li><b>Response:</b> {@code 200 OK} on deletion, or {@code 404 Not Found}</li>
+     * </ul>
+     *
+     * @param id the ID of the post to remove
+     * @return a {@link ResponseEntity} confirming deletion
+     */
     @DeleteMapping("/delete-post/{id}")
     @Transactional
     public ResponseEntity<?> deletePost(@PathVariable Long id) {
@@ -237,13 +364,27 @@ public class AdminController {
     // 3. BULK UPLOAD (Optimized Logic)
     // =========================================================
 
+    /**
+     * Bulk-imports user accounts from an uploaded CSV ({@code .csv}) or Excel ({@code .xlsx}) file.
+     * <ul>
+     *   <li><b>HTTP Route:</b> {@code POST /api/admin/upload-users-excel}</li>
+     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
+     *   <li><b>Request Payload:</b> {@code multipart/form-data} with file parameter {@code "file"}</li>
+     *   <li><b>Response:</b> {@code 200 OK} with count of imported users, or {@code 400/500} on error</li>
+     * </ul>
+     *
+     * @param file the uploaded {@link MultipartFile} ({@code .csv} or {@code .xlsx})
+     * @return a {@link ResponseEntity} summarizing the bulk upload result
+     */
     @PostMapping("/upload-users-excel")
     @Transactional
     public ResponseEntity<?> uploadUsersUniversal(@RequestParam("file") MultipartFile file) {
+        // Step 1: Validate that a non-empty file with a valid filename was provided
         if (file.isEmpty()) return ResponseEntity.badRequest().body("Please select a file.");
         String fileName = file.getOriginalFilename();
         if (fileName == null) return ResponseEntity.badRequest().body("Invalid file.");
 
+        // Step 2: Route to the appropriate parser based on file extension (.csv vs .xlsx)
         try {
             if (fileName.toLowerCase().endsWith(".csv")) {
                 return processCSV(file);
@@ -257,6 +398,10 @@ public class AdminController {
         }
     }
 
+    /**
+     * Parses an Excel ({@code .xlsx}) workbook using Apache POI and creates user records for each row.
+     * Skips row 0 (header row) and any rows missing name or email.
+     */
     private ResponseEntity<?> processExcel(MultipartFile file) throws Exception {
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -282,6 +427,9 @@ public class AdminController {
         }
     }
 
+    /**
+     * Parses a CSV ({@code .csv}) file line by line (respecting quoted commas) and creates user records.
+     */
     private ResponseEntity<?> processCSV(MultipartFile file) throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String line;
@@ -310,6 +458,10 @@ public class AdminController {
         }
     }
 
+    /**
+     * Helper method that constructs and persists a {@link User} from parsed spreadsheet columns.
+     * Skips creation if a user with the given email already exists.
+     */
     private void saveUserFromData(String name, String email, String roleStr, String batchStr, String enroll,
                                   String company, String desig, String head, String skills,
                                   String git, String linked, String exp) {
@@ -349,6 +501,9 @@ public class AdminController {
         userRepository.save(user);
     }
 
+    /**
+     * Safely extracts a trimmed string representation from an Apache POI {@link Cell}.
+     */
     private String getCellValue(Cell cell) {
         if (cell == null) return "";
         switch (cell.getCellType()) {

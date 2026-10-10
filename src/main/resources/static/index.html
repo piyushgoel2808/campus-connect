@@ -1,4 +1,26 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/index.html
+  PURPOSE: Public marketing and onboarding landing page for GradLink (BVICAM).
+
+  OVERVIEW:
+    Static entry page served at `/` and `/index.html`. Introduces the GradLink
+    student & alumni networking platform with:
+      1. Top Institutional Announcement Bar (`.top-bar`)
+      2. Sticky Glassmorphic Navigation Bar (`.navbar`) with section links
+         (`#features`, `#stats`, `#about`), BVICAM official portal link, and
+         CTA button to `login.html`.
+      3. Hero Banner (`.hero-section`) with primary "Launch GradLink" CTA.
+      4. Community Statistics Section (`#stats`).
+      5. Key Platform Features Grid (`#features` — Directory, Job Board, Real-Time Chat).
+      6. Call-to-Action Banner (`.cta-section`) & Institute Contact Footer (`#about`).
+
+  STYLESHEETS:
+    - `css/tokens.css`  : Design tokens (colors, typography, shadows)
+    - `css/landing.css` : Landing-page-specific layout and animations
+  ============================================================================
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +43,9 @@
 </head>
 <body class="landing-page">
 
-    <!-- Top Announcement Bar -->
+    <!-- =====================================================================
+         1. TOP ANNOUNCEMENT BAR: Displays institute name and welcome tagline
+         ===================================================================== -->
     <div class="top-bar">
         <div class="container text-center text-md-start">
             <div class="row align-items-center">
@@ -36,7 +60,9 @@
         </div>
     </div>
 
-    <!-- Glass Navbar -->
+    <!-- =====================================================================
+         2. STICKY GLASS NAVBAR: Brand logo, anchor links, and Sign In button
+         ===================================================================== -->
     <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container">
             <a class="navbar-brand" href="index.html">
@@ -75,7 +101,9 @@
         </div>
     </nav>
 
-    <!-- Modern Hero Section -->
+    <!-- =====================================================================
+         3. HERO SECTION: Main headline, value proposition, and primary CTAs
+         ===================================================================== -->
     <section class="hero-section text-center d-flex align-items-center">
         <div class="container hero-content">
             <div class="hero-badge animate-fade-in">
@@ -100,7 +128,9 @@
         </div>
     </section>
 
-    <!-- Floating Statistics Card -->
+    <!-- =====================================================================
+         4. FLOATING STATISTICS CARD (#stats): Highlights network reach
+         ===================================================================== -->
     <section class="stats-section" id="stats">
         <div class="container">
             <div class="stats-card-wrapper">
@@ -128,7 +158,9 @@
         </div>
     </section>
 
-    <!-- Key Features Section -->
+    <!-- =====================================================================
+         5. KEY FEATURES SECTION (#features): Overview of core GradLink modules
+         ===================================================================== -->
     <section id="features">
         <div class="container">
             <div class="section-header">
@@ -171,7 +203,9 @@
         </div>
     </section>
 
-    <!-- Call to Action Banner -->
+    <!-- =====================================================================
+         6. CALL TO ACTION BANNER: Prompts visitors to sign in to GradLink
+         ===================================================================== -->
     <section class="cta-section">
         <div class="container">
             <div class="cta-content">
@@ -184,7 +218,9 @@
         </div>
     </section>
 
-    <!-- Luxury Dark Footer -->
+    <!-- =====================================================================
+         7. FOOTER (#about): Brand summary, quick navigation links, & address
+         ===================================================================== -->
     <footer>
         <div class="container">
             <div class="row g-4">
@@ -257,7 +293,7 @@
         </div>
     </footer>
 
-    <!-- Bootstrap Bundle JS -->
+    <!-- Bootstrap Bundle JS (for mobile navbar collapse toggle) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

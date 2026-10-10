@@ -1,18 +1,48 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/directory.js
+ * PURPOSE: Campus People Directory search, filtering, and profile preview modal
+ *          controller (`components/directory.html`).
+ *
+ * OVERVIEW:
+ *   Allows students, alumni, faculty, and admins to search the campus community
+ *   by keyword (`#dirSearch`), role (`#filterRole`), and graduation batch year
+ *   (`#filterBatch`). Renders matching members inside `#tableBody`, supports
+ *   opening a detailed profile modal (`#userProfileModal`), and provides a
+ *   1-click "Message" button to launch a 1-on-1 Direct Chat via `chat.js`.
+ *
+ * API ENDPOINTS USED:
+ *   - GET `/api/users/search?role={role}&batch={batch}&q={q}` : Search directory
+ * ============================================================================
+ */
+
 import { get, getCurrentUser } from '../utils/api.js';
 
+// Debounce timer handle for live keyword search
 let searchTimeout = null;
+// In-memory map caching userId -> user object for quick profile modal lookup
 const directoryUsersMap = new Map();
 
+/**
+ * Initializes the directory view by executing an initial unfiltered search.
+ */
 export function initDirectory() {
     runSearch();
 }
 
 // --- Exposed Functions ---
+/**
+ * Debounces live typing inside `#dirSearch` by 300ms before triggering `runSearch()`.
+ */
 window.debouncedSearch = function() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(window.runSearch, 300);
 };
 
+/**
+ * Reads filter criteria (`#dirSearch`, `#filterRole`, `#filterBatch`), queries
+ * `GET /api/users/search`, and renders the resulting list into `#tableBody`.
+ */
 export async function runSearch() {
     const searchEl = document.getElementById("dirSearch");
     const roleEl = document.getElementById("filterRole");
@@ -23,6 +53,7 @@ export async function runSearch() {
     const role = roleEl ? roleEl.value : "ALL";
     const batch = batchEl ? batchEl.value : "";
 
+    // Build URL query string from active filters
     const params = new URLSearchParams();
     if (role && role !== "ALL") params.set("role", role);
     if (batch) params.set("batch", batch);
@@ -43,12 +74,19 @@ export async function runSearch() {
 
 window.runSearch = runSearch;
 
+/**
+ * Renders the directory table rows inside `#tableBody`, excluding the currently
+ * logged-in user so users only see other community members.
+ *
+ * @param {Array<Object>} users - Array of user DTOs returned from `/api/users/search`.
+ */
 function renderDirectoryTable(users) {
     const tbody = document.getElementById("tableBody");
     if (!tbody) return;
     tbody.innerHTML = "";
     directoryUsersMap.clear();
 
+    // Filter out the current user's own profile from directory results
     const { email: myEmail } = getCurrentUser();
     const visibleUsers = (users || []).filter(u => !myEmail || u.email.toLowerCase() !== myEmail.toLowerCase());
 
@@ -108,6 +146,11 @@ function renderDirectoryTable(users) {
     });
 }
 
+/**
+ * Populates and opens the `#userProfileModal` dialog when a directory row is clicked.
+ *
+ * @param {number|Object} userOrId - User ID (looked up in `directoryUsersMap`) or user object.
+ */
 window.openUserProfile = function(userOrId) {
     const user = (typeof userOrId === 'object' && userOrId !== null)
         ? userOrId
@@ -156,6 +199,10 @@ window.openUserProfile = function(userOrId) {
     }
 };
 
+/**
+ * Launches a 1-on-1 Direct Chat (`window.startDirectChat` from `chat.js`) using
+ * the user metadata stored on `#modalUserId` inside `#userProfileModal`.
+ */
 window.startDirectChatFromModal = function() {
     const userIdEl = document.getElementById("modalUserId");
     const userId = userIdEl.value;

@@ -1,4 +1,35 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/dashboard.html
+  PURPOSE: Authenticated Single-Page Application (SPA) shell for GradLink.
+
+  ARCHITECTURE & LAYOUT:
+    1. Top Sticky Navbar (`.navbar`):
+       - Brand identity (`GradLink BVICAM`)
+       - Notification Bell dropdown (`#notificationMenuBtn`, `#notificationBadge`,
+         `#notificationList`, `#markAllNotificationsRead`) controlled by `notifications.js`
+       - Logged-in User Pill (`#userAvatarInitial`, `#welcomeUser`) populated by `dashboard-main.js`
+       - Logout Button (`onclick="logout()"`)
+    2. Three-Column Responsive Grid:
+       - Left Column (Desktop Sidebar + Mobile Horizontal Pills):
+         Calls `window.switchTab(tab)` in `dashboard-main.js` to load HTML partials
+         (`wall`, `messages`, `directory`, `events`, `jobs`, `profile`, `admin`).
+         Note: `#tab-admin` is hidden (`d-none`) by default and revealed only for `ADMIN` users.
+       - Center Column (`#main-content`):
+         Dynamic viewport where `components/<tab>.html` fragments are injected.
+       - Right Column (`.chat-column`):
+         Persistent Global Chat room (`#chatStatus`, `#chatArea`, `#messageInput`)
+         powered by STOMP over SockJS in `chat.js`.
+    3. Global Modals & Floating Assistants (stay mounted across tab switches):
+       - `#dmModal`       : 1-on-1 Direct Message conversation modal (`chat.js`)
+       - `#postJobModal`  : Create Job / Referral modal (`jobs.js` & `admin.js`)
+       - `#editJobModal`  : Edit Job / Referral modal (`jobs.js` & `admin.js`)
+       - `#feedbackModal` : 5-star platform rating modal (`feedback.js`)
+       - `#botIcon` / `#botWindow` : Floating GradBot AI assistant (`bot.js`)
+       - `#liveToast`     : Real-time incoming message toast notification (`chat.js`)
+  ============================================================================
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -22,7 +53,9 @@
 </head>
 <body class="shell-page">
 
-<!-- Modern Glassmorphic Top Navbar -->
+<!-- =========================================================================
+     1. TOP GLASSMORPHIC NAVBAR: Notifications, User Identity Pill, & Logout
+     ========================================================================= -->
 <nav class="navbar navbar-expand-lg sticky-top">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand" href="#">
@@ -34,7 +67,7 @@
         </a>
         
         <div class="d-flex align-items-center gap-2">
-            <!-- Notifications Dropdown -->
+            <!-- Notifications Dropdown (Managed by js/modules/notifications.js) -->
             <div class="dropdown me-1">
                 <button class="notification-btn" id="notificationMenuBtn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open notifications">
                     <i class="fas fa-bell"></i>
@@ -51,13 +84,13 @@
                 </div>
             </div>
             
-            <!-- User Pill -->
+            <!-- User Pill (Populated on load by js/dashboard-main.js) -->
             <div class="user-profile-badge d-none d-md-flex align-items-center me-1">
                 <span class="user-avatar-sm" id="userAvatarInitial"><i class="fas fa-user small"></i></span>
                 <span class="fw-semibold text-secondary small" id="welcomeUser">Loading...</span>
             </div>
             
-            <!-- Logout Button -->
+            <!-- Logout Button (Triggers window.logout() in js/dashboard-main.js) -->
             <button class="btn btn-logout" onclick="logout()">
                 <i class="fas fa-sign-out-alt me-1"></i>
                 <span class="d-none d-sm-inline">Logout</span>
@@ -66,11 +99,13 @@
     </div>
 </nav>
 
-<!-- Main Container -->
+<!-- =========================================================================
+     2. MAIN THREE-COLUMN SHELL CONTAINER
+     ========================================================================= -->
 <div class="container-fluid mt-4 px-3 px-lg-4">
     <div class="row g-4">
 
-        <!-- Desktop Sidebar Navigation -->
+        <!-- 2A. Desktop Left Sidebar Navigation (lg and up) -->
         <div class="col-lg-2 d-none d-lg-block">
             <div class="nav flex-column nav-pills sticky-top shell-sticky-nav">
                 <button class="nav-link active" id="tab-wall" aria-label="Open wall" onclick="switchTab('wall')">
@@ -91,10 +126,12 @@
                 <button class="nav-link" id="tab-profile" aria-label="Open profile" onclick="switchTab('profile')">
                     <i class="fas fa-user-circle me-2"></i> Profile Settings
                 </button>
+                <!-- Admin Workspace tab: hidden by default, unhidden for ADMIN role in dashboard-main.js -->
                 <button class="nav-link d-none" id="tab-admin" aria-label="Open admin dashboard" onclick="switchTab('admin')">
                     <i class="fas fa-shield-alt me-2 text-danger"></i> Admin Workspace
                 </button>
 
+                <!-- Feedback Modal Trigger -->
                 <div class="pt-3 mt-2 border-top">
                     <button class="nav-link text-warning w-100" onclick="openFeedbackModal()">
                         <i class="fas fa-star me-2"></i> Rate GradLink
@@ -103,7 +140,7 @@
             </div>
         </div>
 
-        <!-- Mobile Horizontal Nav Pills -->
+        <!-- 2B. Mobile Horizontal Scrollable Nav Pills (below lg breakpoint) -->
         <div class="col-12 d-lg-none mb-2">
             <div class="nav nav-pills nav-fill mobile-nav-surface p-2 rounded-4 overflow-auto flex-nowrap gap-2">
                 <button class="nav-link active" aria-label="Open wall" onclick="switchTab('wall')">
@@ -133,7 +170,7 @@
             </div>
         </div>
 
-        <!-- Center Content Area -->
+        <!-- 2C. Center Dynamic Content Area: `window.switchTab()` injects `components/<tab>.html` here -->
         <div class="col-lg-7">
             <div id="main-content" class="p-3 p-lg-4">
                 <div class="text-center py-5">
@@ -143,7 +180,7 @@
             </div>
         </div>
 
-        <!-- Right Side Global Chat Column -->
+        <!-- 2D. Right Side Global Chat Column (STOMP /topic/public via js/modules/chat.js) -->
         <div class="col-lg-3 chat-column d-none d-lg-block">
             <div class="chat-card">
                 <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
@@ -164,7 +201,11 @@
     </div>
 </div>
 
-<!-- Direct Message Modal -->
+<!-- =========================================================================
+     3. SHARED MODALS (Mounted at body level so any tab can open them)
+     ========================================================================= -->
+
+<!-- 3A. 1-on-1 Direct Message Modal (Controlled by js/modules/chat.js) -->
 <div class="modal fade" id="dmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
@@ -190,7 +231,7 @@
     </div>
 </div>
 
-<!-- Post Job Modal -->
+<!-- 3B. Post Job / Referral Modal (Shared by Jobs tab & Admin Workspace via js/modules/jobs.js) -->
 <div class="modal fade" id="postJobModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -228,7 +269,7 @@
     </div>
 </div>
 
-<!-- Edit Job / Referral Modal -->
+<!-- 3C. Edit Job / Referral Modal (Controlled by window.openEditJobModal & window.submitEditJob in jobs.js) -->
 <div class="modal fade" id="editJobModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -269,7 +310,7 @@
     </div>
 </div>
 
-<!-- Feedback Modal -->
+<!-- 3D. User Feedback & Star Rating Modal (Controlled by js/modules/feedback.js) -->
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -304,7 +345,11 @@
     </div>
 </div>
 
-<!-- Floating GradBot Assistant -->
+<!-- =========================================================================
+     4. FLOATING GRADBOT ASSISTANT & TOAST NOTIFICATIONS
+     ========================================================================= -->
+
+<!-- Floating GradBot Launcher Button & Chat Window (Controlled by js/modules/bot.js) -->
 <div id="botIcon" onclick="toggleBot()" title="Chat with GradBot" aria-label="Open GradBot Assistant">
     <i class="fas fa-robot fa-lg"></i>
 </div>
@@ -341,7 +386,7 @@
     </div>
 </div>
 
-<!-- Toast Notifications -->
+<!-- Live Toast Notification Container (Shown when a private message arrives while #dmModal is closed) -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
     <div id="liveToast" class="toast cc-glass-panel border-0" role="alert">
         <div class="toast-header bg-primary text-white border-0">
@@ -353,7 +398,9 @@
     </div>
 </div>
 
-<!-- Scripts -->
+<!-- =========================================================================
+     5. VENDOR LIBRARIES (Bootstrap, SockJS, STOMP) & SPA ROUTER ENTRYPOINT
+     ========================================================================= -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>

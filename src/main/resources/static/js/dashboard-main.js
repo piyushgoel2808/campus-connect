@@ -1,3 +1,25 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/dashboard-main.js
+ * PURPOSE: Main Single-Page Application (SPA) shell router and initializer for
+ *          `dashboard.html`.
+ *
+ * OVERVIEW:
+ *   Coordinates the authenticated dashboard experience:
+ *     1. Verifies the user is logged in (via `getCurrentUser()`) and populates
+ *        the top navigation bar user badge (`#welcomeUser`, `#userAvatarInitial`).
+ *     2. Reveals the Admin tab (`#tab-admin`) only when `user.role === 'ADMIN'`.
+ *     3. Establishes the persistent STOMP/SockJS WebSocket connection (`connectChat()`),
+ *        initializes the notification dropdown (`initNotifications()`), and boots
+ *        the floating GradBot assistant (`initBot()`).
+ *     4. Implements `window.switchTab(tab)`, which dynamically fetches HTML partials
+ *        from `components/<tab>.html`, injects them into `#main-content`, hoists
+ *        any component `.modal` elements to `document.body` (preventing stacking
+ *        context / backdrop issues), and invokes the corresponding module loader.
+ *     5. Exposes `window.logout()` to clear `localStorage` and return to `login.html`.
+ * ============================================================================
+ */
+
 // =========================================================
 // 1. IMPORTS (Links all your modules)
 // =========================================================
@@ -13,7 +35,7 @@ import { initBot } from './modules/bot.js?v=20261010_3';
 // 2. MAIN INITIALIZATION
 // =========================================================
 document.addEventListener("DOMContentLoaded", async () => {
-    // A. Security Check
+    // A. Security Check: Ensure user session exists in localStorage
     const user = getCurrentUser();
     console.log("Logged in as:", user);
 
@@ -22,7 +44,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // B. Set UI Elements
+    // B. Set UI Elements: Populate navbar greeting and avatar initial badge
     const welcomeEl = document.getElementById("welcomeUser");
     if(welcomeEl) welcomeEl.innerText = user.name || "User";
     const avatarInitialEl = document.getElementById("userAvatarInitial");
@@ -30,10 +52,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         avatarInitialEl.innerText = user.name.charAt(0).toUpperCase();
     }
 
-    // C. Setup Admin/Role Visibility
+    // C. Setup Admin/Role Visibility: Unhide #tab-admin for ADMIN users
     setupRoleBasedVisibility(user.role);
 
-    // D. Connect WebSocket & Assistants
+    // D. Connect WebSocket & Assistants: Start real-time chat, notifications, and GradBot
     connectChat();
     initNotifications();
     initBot();
@@ -42,6 +64,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     await window.switchTab('wall'); // changed default to wall, you can set to 'messages'
 });
 
+/**
+ * Reveals role-restricted navigation items in the navbar.
+ * Currently unhides `#tab-admin` if the logged-in user has the `ADMIN` role.
+ *
+ * @param {string|null} role - The role string from localStorage (`ADMIN`, `STUDENT`, etc.).
+ */
 function setupRoleBasedVisibility(role) {
     if (role && role.toUpperCase() === 'ADMIN') {
         const adminTab = document.getElementById("tab-admin");
@@ -52,6 +80,23 @@ function setupRoleBasedVisibility(role) {
 // =========================================================
 // 3. TAB SWITCHING LOGIC (The Traffic Controller)
 // =========================================================
+/**
+ * Dynamically loads a feature view into `#main-content` and initializes its JS module.
+ *
+ * Lifecycle of a tab switch:
+ *   1. Updates `.active` state on navbar buttons (`#tab-<tab>`).
+ *   2. Disposes and removes any modals hoisted by the previous tab, clearing
+ *      lingering `.modal-backdrop` elements and body scroll locks.
+ *   3. Renders a loading spinner inside `#main-content`.
+ *   4. Fetches `components/${tab}.html` (cache-busted with timestamp) and injects it.
+ *   5. Hoists any `.modal` inside the newly loaded HTML fragment directly onto
+ *      `document.body` with `data-cc-dynamic-modal="true"` so Bootstrap modals are
+ *      never trapped inside parent stacking contexts.
+ *   6. Calls the tab's corresponding module initializer (eagerly imported for
+ *      core tabs, or lazy-imported via `import()` for directory/admin/profile).
+ *
+ * @param {'wall'|'jobs'|'events'|'messages'|'directory'|'admin'|'profile'} tab - Target tab name.
+ */
 window.switchTab = async function(tab) {
     console.log("Switching to tab:", tab);
 
@@ -134,6 +179,10 @@ window.switchTab = async function(tab) {
 // =========================================================
 // GLOBAL LOGOUT FUNCTION
 // =========================================================
+/**
+ * Clears all authentication and user session keys from `localStorage`
+ * and redirects the browser back to `login.html`.
+ */
 window.logout = function() {
     // 1. Clear Security Token
     localStorage.removeItem("jwt_token");

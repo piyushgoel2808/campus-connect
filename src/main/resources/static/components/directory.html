@@ -1,4 +1,25 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/directory.html
+  PURPOSE: Campus People Directory partial view (injected into `#main-content`
+           when the user switches to `#tab-directory`).
+
+  CONTROLLER MODULE:
+    - `js/modules/directory.js` (`runSearch()`, `debouncedSearch()`, `openUserProfile()`)
+
+  DOM SECTIONS:
+    1. `.cc-filter-bar`     : Live keyword search input (`#dirSearch`), Role dropdown
+                              (`#filterRole`), Batch Year dropdown (`#filterBatch`),
+                              and Search button (`onclick="runSearch()"`).
+    2. `#tableBody`         : Dynamic table body where matching student/alumni rows
+                              are rendered by `renderDirectoryTable()`.
+    3. `#userProfileModal`  : Detailed member profile modal hoisted to `document.body`
+                              on tab load; includes a "Send Direct Message" CTA that
+                              triggers `startDirectChatFromModal()`.
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-users"></i> Directory</span>
@@ -7,7 +28,9 @@
         </div>
     </div>
 
-    <!-- Filter Toolbar -->
+    <!-- =====================================================================
+         1. FILTER TOOLBAR: Keyword search (debounced 300ms), Role, & Batch filters
+         ===================================================================== -->
     <div class="cc-panel p-3 p-lg-4">
         <div class="cc-filter-bar">
             <div class="input-group">
@@ -34,7 +57,9 @@
         </div>
     </div>
 
-    <!-- Directory Table Card -->
+    <!-- =====================================================================
+         2. DIRECTORY RESULTS TABLE: Populated by renderDirectoryTable() in directory.js
+         ===================================================================== -->
     <div class="cc-panel p-2 p-lg-3">
         <div class="table-responsive">
             <table class="table align-middle table-hover mb-0">
@@ -46,7 +71,10 @@
     </div>
 </div>
 
-<!-- User Profile Modal -->
+<!-- =========================================================================
+     3. USER PROFILE MODAL (#userProfileModal)
+     Populated and shown by `window.openUserProfile(userId)` in `directory.js`.
+     ========================================================================= -->
 <div class="modal fade cc-profile-modal" id="userProfileModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -57,9 +85,11 @@
                 <button type="button" class="btn-close btn-close-white" aria-label="Close profile modal" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
+                <!-- Stores user ID and data-user-name / data-user-email for startDirectChatFromModal() -->
                 <input type="hidden" id="modalUserId">
                 
                 <div class="row g-3">
+                    <!-- Left Column: Personal Identity & Academic Batch -->
                     <div class="col-md-6">
                         <div class="cc-divider-title">
                             <i class="fas fa-user-circle text-primary"></i> Personal Identity
@@ -102,6 +132,7 @@
                         </div>
                     </div>
 
+                    <!-- Right Column: Professional Career, Skills, & Social Links -->
                     <div class="col-md-6">
                         <div class="cc-divider-title">
                             <i class="fas fa-briefcase text-primary"></i> Professional Career

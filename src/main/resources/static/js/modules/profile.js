@@ -1,9 +1,32 @@
+/**
+ * ============================================================================
+ * FILE: src/main/resources/static/js/modules/profile.js
+ * PURPOSE: Current user's Profile & Notification Preferences editor module
+ *          (`components/profile.html`).
+ *
+ * OVERVIEW:
+ *   Loads the logged-in user's profile data from `GET /api/users/me` into the
+ *   form fields in `components/profile.html` (`#pHeadline`, `#pCompany`,
+ *   `#pDesignation`, `#pSkills`, `#pExperience`, `#pLinkedin`, `#pGithub`, and
+ *   notification checkboxes `#pNotifyMessages`, `#pNotifyEvents`, `#pNotifyJobs`),
+ *   and saves updates via `PUT /api/users/profile` (`window.saveProfile`).
+ *
+ * API ENDPOINTS USED:
+ *   - GET `/api/users/me`      : Fetch current authenticated user's profile
+ *   - PUT `/api/users/profile` : Save updated profile and notification settings
+ * ============================================================================
+ */
+
 import { get, send } from '../utils/api.js';
 
 // =========================================================
 // 1. LOAD PROFILE
 // =========================================================
 
+/**
+ * Fetches the authenticated user's profile from `GET /api/users/me` and
+ * populates the input fields and notification toggle switches in `components/profile.html`.
+ */
 export async function loadProfile() {
     // Only try to load if we are actually on the profile tab
     // (though usually this function is called specifically when that tab loads)
@@ -24,6 +47,7 @@ export async function loadProfile() {
         setVal("pLinkedin", user.linkedinUrl);
         setVal("pGithub", user.githubUrl);
 
+        // Helper to set checkbox state (defaults to true unless explicitly false)
         const setChecked = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.checked = val !== false;
@@ -42,6 +66,10 @@ export async function loadProfile() {
 // 2. SAVE PROFILE (Exposed to Window)
 // =========================================================
 
+/**
+ * Reads all profile inputs and notification checkboxes from `components/profile.html`
+ * and sends `PUT /api/users/profile`. Reloads the profile form on success.
+ */
 window.saveProfile = async function() {
     // Helper to get values safely
     const getVal = (id) => {

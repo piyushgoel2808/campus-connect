@@ -1,5 +1,15 @@
 /* ==========================================================================
-   GradLink Component Styles
+   GradLink (BVICAM) - Reusable UI Component Styles (components.css)
+   --------------------------------------------------------------------------
+   Purpose:
+   - Defines shared layout and visual styles for all dynamically loaded
+     dashboard views (components/wall.html, directory.html, events.html,
+     jobs.html, messages.html, profile.html, admin.html):
+     * Page headers (.cc-page-header, .cc-section-kicker, .cc-page-title)
+     * Panels, KPI strips, and filter toolbars (.cc-panel, .cc-filter-bar)
+     * Feature cards for Events & Jobs (.cc-feature-card, .cc-pill)
+     * Campus Wall feed cards, comments, and image upload previews (.cc-post-card)
+     * Directory & Admin data tables, avatars, and profile modals (.cc-profile-modal)
    ========================================================================== */
 
 .cc-page-section {

@@ -1,4 +1,21 @@
+<!--
+  ============================================================================
+  FILE: src/main/resources/static/components/messages.html
+  PURPOSE: Direct Messages & Recent Conversations partial view (injected into
+           `#main-content` when the user switches to `#tab-messages`).
+
+  CONTROLLER MODULE:
+    - `js/modules/chat.js` (`fetchRecentChats()`, `window.startDirectChat()`)
+
+  DOM SECTIONS:
+    1. `.cc-page-header`  : Section title and subtitle.
+    2. `#recentChatsList` : Populated by `fetchRecentChats()` with conversation
+                            partners returned from `GET /api/messages/partners`.
+                            Clicking any partner opens `#dmModal` (in `dashboard.html`).
+  ============================================================================
+-->
 <div class="cc-page-section">
+    <!-- Page Header -->
     <div class="cc-page-header">
         <div>
             <span class="cc-section-kicker"><i class="fas fa-comments"></i> Direct Messages</span>
@@ -7,6 +24,7 @@
         </div>
     </div>
 
+    <!-- Active Inbox Panel: Populated by fetchRecentChats() in js/modules/chat.js -->
     <div class="cc-panel">
         <div class="cc-panel-header">
             <h5 class="mb-0 fw-bold text-secondary d-flex align-items-center gap-2">
