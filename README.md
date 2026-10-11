@@ -24,6 +24,8 @@ Comprehensive architectural, dataflow, database, and codebase guides are located
 | 🔄 **[End-to-End Data Flows (`docs/dataflow.md`)](docs/dataflow.md)** | Step-by-step sequence and flowchart diagrams for Auth, Wall Moderation, 1-on-1 Chat, Directory Search, Events RSVP, Jobs/Referrals, and Admin Bulk Upload |
 | 🗄️ **[Database Schema (`docs/database-schema.md`)](docs/database-schema.md)** | Complete Entity-Relationship (`erDiagram`) visual and column-by-column specifications for all 11 relational tables |
 | ✨ **[Features & Role Matrix (`docs/features.md`)](docs/features.md)** | Role-Based Access Control (`STUDENT` / `ALUMNI` / `ADMIN`) matrix and deep dive into all 9 platform modules |
+| 🎯 **[Interview Guide & Q&A (`docs/interview-guide.md`)](docs/interview-guide.md)** | 30-second elevator pitch, 3-minute structured walkthrough script, and technical interview questions & model answers |
+
 
 ---
 

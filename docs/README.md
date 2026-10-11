@@ -15,3 +15,5 @@ Welcome to the technical documentation suite for **Campus Connect (GradLink)** â
 | [**3. End-to-End Data Flows (`dataflow.md`)**](dataflow.md) | Detailed sequence diagrams and flowcharts for Authentication, Campus Wall Posting & Bilingual Profanity Moderation, Real-Time 1-on-1 Chat, Directory Search, Event RSVPs, Jobs & Referrals, and Admin Bulk Upload. |
 | [**4. Database Schema & ERD (`database-schema.md`)**](database-schema.md) | Complete Entity-Relationship Diagram (`erDiagram`) and table-by-table column specifications for all 11 relational tables (`users`, `departments`, `posts`, `comments`, `event`, `event_participants`, `jobs`, `private_messages`, `chat_messages`, `notifications`, `feedback`). |
 | [**5. Features & RBAC Guide (`features.md`)**](features.md) | Role-Based Access Control (`STUDENT` / `ALUMNI` / `ADMIN`) matrix and deep dive into all 9 feature modules. |
+| [**6. Interview Guide & Q&A (`interview-guide.md`)**](interview-guide.md) | 30-second elevator pitch, 3-minute structured project walkthrough, and 17+ technical interview questions & model answers. |
+
