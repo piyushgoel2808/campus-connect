@@ -201,3 +201,80 @@ flowchart TD
 1. Admin enters a Subject and Message in **Admin Workspace -> Broadcast Email** and clicks **Send Broadcast to Community**.
 2. `POST /api/admin/broadcast` collects all registered user email addresses from `UserRepository` and invokes `emailService.sendBroadcastEmail(emails, subject, message)`.
 3. Because `sendBroadcastEmail` is annotated with `@Async`, Spring immediately returns `200 OK ("✅ Broadcast initiated for N users.")` to the browser while dispatching the SMTP emails on a background worker thread.
+
+---
+
+## 8. GradBot AI RAG Knowledge Ingestion & Real-Time Q&A Flow
+
+### A. Document & URL Ingestion Pipeline (Admin)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin
+    participant AdminUI as admin.html + admin.js
+    participant Ctrl as AdminKnowledgeController
+    participant Svc as KnowledgeIngestionService
+    participant PDF as Apache PDFBox / Jsoup
+    participant Chunker as TextChunker (~600 chars, 100 overlap)
+    participant Ollama as OllamaClientService (POST /api/embeddings)
+    participant DB as MySQL (knowledge_documents, document_chunks)
+
+    alt Admin uploads Notice PDF / Text File
+        Admin->>AdminUI: Select file, title, category -> click "Upload & Vectorize"
+        AdminUI->>Ctrl: POST /api/admin/knowledge/upload (multipart/form-data)
+        Ctrl->>Svc: ingestFile(file, title, category)
+        Svc->>PDF: Extract text via PDFTextStripper
+    else Admin submits BVICAM URL
+        Admin->>AdminUI: Enter URL (e.g. bvicam.in/faculty) -> click "Scrape & Index URL"
+        AdminUI->>Ctrl: POST /api/admin/knowledge/scrape-url {url, title, category}
+        Ctrl->>Svc: scrapeAndIndexUrl(url, title, category)
+        Svc->>PDF: Jsoup.connect(url).get() -> htmlDoc.body().text()
+    end
+
+    Svc->>Chunker: chunkText(extractedText, 600, 100)
+    Chunker-->>Svc: List of text chunk segments
+    Svc->>DB: Save KnowledgeDocument entity
+    loop For each chunk
+        Svc->>Ollama: generateEmbedding(chunkText) via nomic-embed-text
+        Ollama-->>Svc: 768-dim float vector
+        Svc->>Svc: VectorUtil.toJson(embedding)
+    end
+    Svc->>DB: chunkRepository.saveAll(chunks)
+    Svc-->>Ctrl: KnowledgeDocumentDto
+    Ctrl-->>AdminUI: 200 OK -> Alert success & reload adminKnowledgeTable
+```
+
+### B. GradBot Conversational RAG & Real-Time Live Context Flow (Student / Alumni / Admin)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Student / Alumni / Admin
+    participant BotUI as dashboard.html + bot.js
+    participant BotCtrl as BotController (/api/bot/ask)
+    participant AiSvc as CampusAiService
+    participant Ollama as OllamaClientService
+    participant ChunkDB as DocumentChunkRepository
+    participant LiveDB as Event / Job / User Repositories
+
+    User->>BotUI: Type question or click chip (e.g. "When are MCA exams?")
+    BotUI->>BotUI: Render user message bubble, display typing indicator
+    BotUI->>BotCtrl: POST /api/bot/ask {"question": "When are MCA exams?"}
+    BotCtrl->>AiSvc: answerQuestion(question)
+    
+    AiSvc->>Ollama: generateEmbedding(question)
+    Ollama-->>AiSvc: 768-dim query vector
+    AiSvc->>ChunkDB: findAllWithDocument()
+    AiSvc->>AiSvc: In-memory cosine similarity ranking -> top-4 chunks with score >= 0.25
+    AiSvc->>LiveDB: Query live upcoming events, active job postings, batch directory
+    LiveDB-->>AiSvc: Real-time database records
+    AiSvc->>AiSvc: Synthesize prompt with retrieved chunks + live domain records
+    AiSvc->>Ollama: generateChatResponse(systemPrompt, question) via gemma4:e4b
+    Ollama-->>AiSvc: Model markdown answer
+    AiSvc-->>BotCtrl: BotAskResponse (answer, model, citations)
+    BotCtrl-->>BotUI: 200 OK JSON
+
+    BotUI->>BotUI: Remove typing indicator
+    BotUI->>BotUI: Sanitize via DOMPurify + format Markdown
+    BotUI->>BotUI: Build verified HTTP/HTTPS citation pills via DOM elements
+    BotUI->>BotUI: Append bot response card to #botMessages and scroll to bottom
+```

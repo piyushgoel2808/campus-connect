@@ -596,3 +596,59 @@
     box-shadow: var(--cc-shadow-sm);
 }
 
+/* ==========================================================================
+   GRADBOT AI CONVERSATION & CITATION STYLES
+   ========================================================================== */
+.bot-response-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bot-response-card:hover {
+    box-shadow: var(--cc-shadow-md) !important;
+}
+
+.bot-markdown-content {
+    line-height: 1.55;
+    color: #1e293b;
+    word-break: break-word;
+}
+
+.bot-markdown-content ul,
+.bot-markdown-content ol {
+    padding-left: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.bot-markdown-content li {
+    margin-bottom: 0.25rem;
+}
+
+.bot-markdown-content pre {
+    max-height: 200px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    background: #0f172a !important;
+    border: 1px solid #334155;
+}
+
+.bot-citations-box {
+    background: #f8fafc;
+    padding: 0.4rem 0.6rem;
+    border-radius: 8px;
+    margin-top: 0.5rem;
+}
+
+.bot-citation-pill {
+    font-size: 0.72rem !important;
+    padding: 0.25rem 0.5rem !important;
+    border-radius: 6px !important;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.bot-citation-pill:hover {
+    background: #e0e7ff !important;
+    border-color: #818cf8 !important;
+    transform: translateY(-1px);
+}
+

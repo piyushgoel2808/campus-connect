@@ -30,7 +30,8 @@ Every user account is assigned one of three roles (`STUDENT`, `ALUMNI`, or `ADMI
 | Admin Workspace: Review & Unflag Profanity-Flagged Users | ❌ | ❌ | ✅ |
 | Admin Workspace: Send Async Campus-Wide Broadcast Emails | ❌ | ❌ | ✅ |
 | Admin Workspace: Review All Submitted Member Feedback | ❌ | ❌ | ✅ |
-| Chat with **GradBot** Campus Assistant | ✅ | ✅ | ✅ |
+| Admin Workspace: Ingest Notices (PDF/TXT) & Scrape BVICAM URLs into GradBot RAG | ❌ | ❌ | ✅ |
+| Chat with **GradBot** AI Campus Assistant (Ollama `gemma4:e4b` + Hybrid RAG) | ✅ | ✅ | ✅ |
 
 ---
 
@@ -119,8 +120,15 @@ Accessible exclusively to `ADMIN` users via the **Admin Workspace** navigation t
 2. **Jobs & Referrals:** Dedicated management table to post, edit, or delete any career listing on the platform.
 3. **Feedback & Ratings:** Review star ratings (`1`–`5` ⭐) and written suggestions submitted by users.
 4. **Broadcast Email:** Send asynchronous campus-wide email announcements to all registered users via `EmailService`.
+5. **GradBot Knowledge Base:** Dedicated administrative sub-tab to ingest official notices (PDFs, TXT, MD) via Apache PDFBox, scrape external URLs (e.g. `https://bvicam.in`) via Jsoup, generate 768-dimensional vector embeddings, and audit/delete indexed sources.
 
 ---
 
-### 2.9 GradBot Campus Assistant
-- Floating bottom-right interactive assistant (`#botIcon` / `#botWindow`) with quick-action chips for **Placement Stats**, **Batch Lookups** (e.g., *"Who is in 2024 batch?"*), **Upcoming Events**, **Syllabus**, and **Admin Contact Info**.
+### 2.9 GradBot AI Campus Assistant & Hybrid RAG Engine
+- **Powered by Local Ollama (`gemma4:e4b`):** Privacy-first, zero cloud API fees, and fully parameterized via `application.properties`.
+- **Hybrid RAG Context:**
+  - **Vector Retrieval:** In-memory cosine similarity ranking over 768-dimensional normalized embeddings (`nomic-embed-text`) stored in `document_chunks`.
+  - **Live Domain Context:** Real-time JPA queries to `EventRepository`, `JobRepository`, and `UserRepository` for up-to-the-minute upcoming event dates, active referral openings, and batchmate queries.
+- **Clickable Citations:** GradBot answers provide verified HTTP/HTTPS citation links and document badges pointing back to official sources.
+- **Dual-Layer XSS Defense:** Strict character escaping + DOMPurify client-side sanitization preventing script injection or attribute-breaking payloads.
+- **Interactive Floating Drawer (`#botWindow`):** Quick-prompt chips for **MCA Syllabus**, **Exam Notices**, **Upcoming Events**, **Placements**, **Active Job Openings**, and **Batch Directory**.

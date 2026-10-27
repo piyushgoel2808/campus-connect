@@ -1,6 +1,6 @@
 # TICKET-AI-006: [Tracer Bullet 5] GradBot UI Polish, Markdown Citations & Quick Prompts
 
-- **Status:** BACKLOG
+- **Status:** DONE
 - **Type:** Frontend UX / Final Polish
 - **Estimate:** 2h
 - **Blocked By:** TICKET-AI-005

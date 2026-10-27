@@ -83,10 +83,12 @@ export function loadAdminModule() {
         const feedbackBtn = document.getElementById('tab-feedback-btn');
         const usersBtn = document.getElementById('tab-users-btn');
         const jobsBtn = document.getElementById('tab-jobs-admin-btn');
+        const knowledgeBtn = document.getElementById('tab-knowledge-btn');
 
         if (feedbackBtn) feedbackBtn.onclick = loadAdminFeedback;
         if (usersBtn) usersBtn.onclick = loadAdminUsers;
         if (jobsBtn) jobsBtn.onclick = window.loadAdminJobs;
+        if (knowledgeBtn) knowledgeBtn.onclick = window.loadAdminKnowledge;
     }, 100);
 }
 
@@ -602,5 +604,168 @@ window.loadAdminJobs = async function() {
     } catch (e) {
         console.error("Failed to load admin jobs:", e);
         tbody.innerHTML = "<tr><td colspan='6' class='text-danger text-center'>Error loading jobs & referrals</td></tr>";
+    }
+};
+
+// =========================================================
+// 9. GRADBOT KNOWLEDGE BASE MANAGEMENT (ADMIN)
+// =========================================================
+
+/**
+ * Fetches all indexed knowledge documents from `GET /api/admin/knowledge/documents`
+ * and populates `#adminKnowledgeTable`.
+ */
+window.loadAdminKnowledge = async function() {
+    const tbody = document.getElementById("adminKnowledgeTable");
+    if (!tbody) return;
+
+    tbody.innerHTML = "<tr><td colspan='7' class='text-center py-4'>Loading indexed documents...</td></tr>";
+
+    try {
+        const docs = await get('/admin/knowledge/documents');
+        tbody.innerHTML = "";
+
+        if (!docs || docs.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='7' class='text-center py-4 text-muted'>No documents or URLs indexed yet. Use the upload or scraping forms above to add sources to GradBot.</td></tr>";
+            return;
+        }
+
+        docs.forEach(doc => {
+            const dateStr = doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '-';
+            const catBadgeClass = doc.category === 'NOTICE' ? 'bg-danger' :
+                                  doc.category === 'SYLLABUS' ? 'bg-info text-dark' :
+                                  doc.category === 'BVICAM_WEB' ? 'bg-success' : 'bg-secondary';
+            const sourceBadgeClass = doc.sourceType === 'WEB_URL' ? 'bg-primary' : 'bg-dark';
+            const sourceDisplay = doc.sourceUrl ? `<a href="${doc.sourceUrl}" target="_blank" rel="noopener noreferrer" class="small text-truncate d-block" style="max-width: 260px;">${doc.sourceUrl}</a>` : '';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>${doc.id}</td>
+                    <td>
+                        <div class="fw-bold text-dark">${doc.title || '-'}</div>
+                        ${doc.originalFileName ? `<small class="text-muted"><i class="fas fa-file me-1"></i>${doc.originalFileName}</small>` : ''}
+                        ${sourceDisplay}
+                    </td>
+                    <td><span class="badge ${catBadgeClass}">${doc.category || 'GENERAL'}</span></td>
+                    <td><span class="badge ${sourceBadgeClass}">${doc.sourceType || 'FILE_UPLOAD'}</span></td>
+                    <td><span class="badge bg-light text-dark border">${doc.chunkCount} chunks</span></td>
+                    <td><small class="text-muted">${dateStr}</small></td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-danger" onclick="window.deleteKnowledgeDocument(${doc.id})" title="Delete Document & Chunks">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    } catch (e) {
+        console.error("Failed to load knowledge documents:", e);
+        tbody.innerHTML = "<tr><td colspan='7' class='text-danger text-center'>Error loading knowledge sources</td></tr>";
+    }
+};
+
+/**
+ * Uploads a notice/syllabus document via multipart `POST /api/admin/knowledge/upload`.
+ */
+window.uploadKnowledgeDocument = async function() {
+    const fileInput = document.getElementById("knowledgeFileInput");
+    const file = fileInput?.files[0];
+    if (!file) {
+        alert("⚠️ Please select a file (.pdf, .txt, .md) to upload!");
+        return;
+    }
+
+    const title = getVal("knowledgeDocTitle");
+    const category = getVal("knowledgeDocCategory") || "NOTICE";
+    const btn = document.getElementById("btnUploadDoc");
+
+    if (btn) { btn.innerHTML = "<i class='fas fa-spinner fa-spin me-1'></i> Processing & Vectorizing..."; btn.disabled = true; }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    if (title) formData.append("title", title);
+    formData.append("category", category);
+
+    try {
+        const token = localStorage.getItem("jwt_token");
+        const res = await fetch('/api/admin/knowledge/upload', {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+            body: formData
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            alert(`✅ Document "${data.title}" successfully indexed into ${data.chunkCount} vector chunks!`);
+            fileInput.value = "";
+            setVal("knowledgeDocTitle", "");
+            window.loadAdminKnowledge();
+        } else {
+            const errorText = await res.text();
+            alert("❌ Upload Failed: " + errorText);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Error: " + e.message);
+    } finally {
+        if (btn) { btn.innerHTML = "<i class='fas fa-upload me-1'></i> Upload & Vectorize"; btn.disabled = false; }
+    }
+};
+
+/**
+ * Scrapes and indexes an external URL via `POST /api/admin/knowledge/scrape-url`.
+ */
+window.scrapeKnowledgeUrl = async function() {
+    const url = getVal("knowledgeScrapeUrl");
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+        alert("⚠️ Please enter a valid URL starting with http:// or https://");
+        return;
+    }
+
+    const title = getVal("knowledgeScrapeTitle");
+    const category = getVal("knowledgeScrapeCategory") || "BVICAM_WEB";
+    const btn = document.getElementById("btnScrapeUrl");
+
+    if (btn) { btn.innerHTML = "<i class='fas fa-spinner fa-spin me-1'></i> Scraping & Vectorizing..."; btn.disabled = true; }
+
+    try {
+        const res = await send('/admin/knowledge/scrape-url', 'POST', { url, title, category });
+        if (res.ok) {
+            const data = await res.json();
+            alert(`✅ URL successfully scraped and indexed as "${data.title}" (${data.chunkCount} chunks)!`);
+            setVal("knowledgeScrapeUrl", "");
+            setVal("knowledgeScrapeTitle", "");
+            window.loadAdminKnowledge();
+        } else {
+            const errorText = await res.text();
+            alert("❌ Scraping Failed: " + errorText);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Error: " + e.message);
+    } finally {
+        if (btn) { btn.innerHTML = "<i class='fas fa-spider me-1'></i> Scrape & Index URL"; btn.disabled = false; }
+    }
+};
+
+/**
+ * Deletes a knowledge document and all its chunks via `DELETE /api/admin/knowledge/documents/{id}`.
+ */
+window.deleteKnowledgeDocument = async function(id) {
+    if (!confirm(`Are you sure you want to delete document #${id}? All associated vector chunks will be permanently removed.`)) {
+        return;
+    }
+
+    try {
+        const res = await send(`/admin/knowledge/documents/${id}`, 'DELETE');
+        if (res.ok) {
+            alert("✅ Document deleted successfully.");
+            window.loadAdminKnowledge();
+        } else {
+            const err = await res.text();
+            alert("❌ Delete failed: " + err);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Error deleting document: " + e.message);
     }
 };

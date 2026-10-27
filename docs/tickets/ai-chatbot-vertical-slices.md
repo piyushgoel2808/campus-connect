@@ -30,7 +30,7 @@ flowchart LR
 
 - **Type:** Feature / Database
 - **Estimated Effort:** 2 Hours
-- **Status:** READY
+- **Status:** DONE
 
 ### Description
 Create the relational domain models and Spring Data JPA repositories to store uploaded notices, scraped BVICAM web pages, and their associated chunk embeddings.
@@ -55,7 +55,7 @@ Create the relational domain models and Spring Data JPA repositories to store up
 
 - **Type:** Feature / Backend Service
 - **Estimated Effort:** 2.5 Hours
-- **Status:** READY
+- **Status:** DONE
 - **Prerequisite:** Ticket CC-AI-01
 
 ### Description
@@ -85,7 +85,7 @@ Implement a robust Spring Boot service `OllamaClientService` that communicates w
 
 - **Type:** Feature / Backend Service
 - **Estimated Effort:** 3 Hours
-- **Status:** READY
+- **Status:** DONE
 - **Prerequisites:** Ticket CC-AI-01, Ticket CC-AI-02
 
 ### Description
@@ -108,7 +108,7 @@ Add `Jsoup` and `Apache PDFBox` dependencies to `pom.xml`, and build `KnowledgeI
 
 - **Type:** Feature / Backend Service & Controller
 - **Estimated Effort:** 3.5 Hours
-- **Status:** READY
+- **Status:** DONE
 - **Prerequisites:** Ticket CC-AI-01, Ticket CC-AI-02, Ticket CC-AI-03
 
 ### Description
@@ -134,7 +134,7 @@ Implement `CampusAiService` and upgrade `BotController` to synthesize answers us
 
 - **Type:** Feature / Admin Controller & Frontend UI
 - **Estimated Effort:** 3 Hours
-- **Status:** READY
+- **Status:** DONE
 - **Prerequisites:** Ticket CC-AI-03, Ticket CC-AI-04
 
 ### Description
@@ -157,7 +157,7 @@ Expose Admin REST endpoints under `/api/admin/knowledge/**` (secured with `hasRo
 
 - **Type:** Feature / Frontend UI
 - **Estimated Effort:** 2 Hours
-- **Status:** READY
+- **Status:** DONE
 - **Prerequisites:** Ticket CC-AI-04
 
 ### Description

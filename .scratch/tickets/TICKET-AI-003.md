@@ -1,6 +1,6 @@
 # TICKET-AI-003: [Tracer Bullet 2] Notice Ingestion & Admin Document Upload Slice
 
-- **Status:** BACKLOG
+- **Status:** DONE
 - **Type:** Full-Stack Feature / Vertical Slice
 - **Estimate:** 3h
 - **Blocked By:** TICKET-AI-002

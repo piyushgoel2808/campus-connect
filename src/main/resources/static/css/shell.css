@@ -318,15 +318,15 @@
     position: fixed;
     bottom: 96px;
     right: 24px;
-    width: min(380px, calc(100vw - 2rem));
-    height: 480px;
+    width: min(400px, calc(100vw - 2rem));
+    height: 520px;
     z-index: 1040;
     display: none;
     border-radius: var(--cc-radius-xl);
     overflow: hidden;
     border: 1px solid var(--cc-border);
     box-shadow: var(--cc-shadow-xl);
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(24px);
     animation: fadeInScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -340,7 +340,8 @@
 
 .shell-page .bot-messages {
     overflow-y: auto;
-    height: 350px;
+    flex: 1;
+    min-height: 250px;
     padding: 1rem;
     background: #f8fafc;
     display: flex;

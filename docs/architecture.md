@@ -224,4 +224,42 @@ flowchart LR
     AppContainer -->|"Internal Docker Network\nmysql:3306"| DbContainer[("Container: campus-connect-mysql\n(MySQL 8.0, Host Port 3307:3306)")]
     AppContainer <-->|"Bind Mount"| UploadsDir[("./uploads -> /app/uploads")]
     DbContainer <-->|"Named Volume"| DbVol[("campus_mysql_data")]
+    AppContainer -->|"host.docker.internal:11434"| OllamaHost["Local Ollama Daemon\n(gemma4:e4b + nomic-embed)"]
 ```
+
+---
+
+## 7. GradBot AI & Hybrid RAG Architecture
+
+GradBot combines local Large Language Model reasoning (`gemma4:e4b`) with Retrieval-Augmented Generation (RAG) and real-time JPA domain queries.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as Browser (bot.js)
+    participant Ctrl as BotController (/api/bot/ask)
+    participant AiService as CampusAiService
+    participant ChunkRepo as DocumentChunkRepository
+    participant LiveDB as MySQL Repositories (Events, Jobs, Users)
+    participant Ollama as Local Ollama Daemon (localhost:11434)
+
+    User->>Ctrl: POST /api/bot/ask {"question": "When are midterms?"}
+    Ctrl->>AiService: answerQuestion(question)
+    AiService->>Ollama: POST /api/embeddings (nomic-embed-text)
+    Ollama-->>AiService: 768-dim query vector
+    AiService->>ChunkRepo: findAllWithDocument()
+    AiService->>AiService: In-memory cosine similarity ranking (top-K = 4)
+    AiService->>LiveDB: Query upcoming events, active jobs, batch members
+    LiveDB-->>AiService: Live domain context entities
+    AiService->>AiService: Assemble system prompt with citations & live context
+    AiService->>Ollama: POST /api/chat (gemma4:e4b)
+    Ollama-->>AiService: Synthesized answer with citations
+    AiService-->>Ctrl: BotAskResponse (answer, model, citations)
+    Ctrl-->>User: HTTP 200 JSON
+    User->>User: DOMPurify sanitize + render Markdown + safe citation links
+```
+
+### Key Highlights
+- **100% Local Inference:** Gemma 4 (6.6 GB) and Nomic Embed Text (274 MB) run on the local machine via Ollama with zero external API fees and complete data privacy.
+- **Dynamic Live JPA Context:** Unlike static RAG systems, GradBot dynamically queries active database records for events, jobs, and alumni batches, ensuring zero stale data.
+- **Fail-Safe Degradation:** If Ollama is offline or times out (configured to 60s), the service gracefully falls back to structured prompt suggestions without crashing the application.

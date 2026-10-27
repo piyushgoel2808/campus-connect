@@ -163,7 +163,8 @@ campus-connect/
 | [`ChatController.java`](../src/main/java/com/bvicam/campusconnect/controller/ChatController.java) | STOMP `/app`<br>REST `/api/messages` | • `@MessageMapping("/chat.sendMessage")` — Broadcasts public chat message to `/topic/public`.<br>• `@MessageMapping("/chat.addUser")` — Broadcasts user join event to `/topic/public`.<br>• `@MessageMapping("/chat.private")` — Saves 1-on-1 `PrivateMessage`, sends to `/user/{email}/queue/messages`, and dispatches notification.<br>• `@MessageMapping("/chat.typing")` — Forwards typing indicator to `/topic/typing/{receiverEmail}`.<br>• `GET /api/messages/history?otherUser=` — Returns chronological 1-on-1 chat history.<br>• `GET /api/messages/partners` — Returns `User` profiles of recent conversation partners. |
 | [`NotificationController.java`](../src/main/java/com/bvicam/campusconnect/controller/NotificationController.java) | `/api/notifications` | • `GET /api/notifications` — Returns top 10 recent notifications for current user.<br>• `GET /api/notifications/unread-count` — Returns `{ "unreadCount": N }`.<br>• `PUT /api/notifications/{id}/read` — Marks a single notification as read.<br>• `PUT /api/notifications/read-all` — Marks all notifications as read. |
 | [`FeedbackController.java`](../src/main/java/com/bvicam/campusconnect/controller/FeedbackController.java) | `/api/feedback` | • `POST /api/feedback` — Submits a 1–5 star rating and comment.<br>• `GET /api/feedback` — Returns all submitted feedback newest-first (`ADMIN` review). |
-| [`BotController.java`](../src/main/java/com/bvicam/campusconnect/controller/BotController.java) | `/api/bot` | • `POST /api/bot/ask` — Rule-based campus FAQ assistant answering queries on placements, batch directory (`2020`–`2026`), contact info, syllabus, and live upcoming events. |
+| [`AdminKnowledgeController.java`](../src/main/java/com/bvicam/campusconnect/controller/AdminKnowledgeController.java) | `/api/admin/knowledge` | • `POST /api/admin/knowledge/upload` — Ingests PDF/TXT notices into vector knowledge base via Apache PDFBox.<br>• `POST /api/admin/knowledge/scrape-url` — Crawls official BVICAM web pages via Jsoup.<br>• `GET /api/admin/knowledge/documents` — Lists all indexed documents and source URLs.<br>• `DELETE /api/admin/knowledge/documents/{id}` — Cascading delete for documents and vector chunks. |
+| [`BotController.java`](../src/main/java/com/bvicam/campusconnect/controller/BotController.java) | `/api/bot` | • `POST /api/bot/ask` — Conversational GradBot assistant powered by local Ollama (`gemma4:e4b`), hybrid RAG vector search, live MySQL event/job/batch context, and citations. |
 
 ---
 
@@ -178,6 +179,9 @@ campus-connect/
 | [`NotificationService.java`](../src/main/java/com/bvicam/campusconnect/service/NotificationService.java) | `createAndDispatch`, `getRecentNotifications`, `getUnreadCount`, `markAsRead`, `markAllAsRead` | Checks user notification preferences (`notifyMessages`, `notifyEvents`, `notifyJobs`), persists `Notification` records, and pushes live STOMP payloads to `/user/{email}/queue/notifications`. |
 | [`EventService.java`](../src/main/java/com/bvicam/campusconnect/service/EventService.java) | `getAllEvents`, `getUpcomingEvents`, `createEvent`, `rsvpEvent`, `deleteEvent` | Service helper for event lifecycle and participant RSVP management. |
 | [`EmailService.java`](../src/main/java/com/bvicam/campusconnect/service/EmailService.java) | `sendBroadcastEmail(emails, subject, content)` | `@Async` service that dispatches campus-wide broadcast emails on a background thread via `JavaMailSender`. |
+| [`OllamaClientService.java`](../src/main/java/com/bvicam/campusconnect/service/OllamaClientService.java) | `generateChatResponse(prompt, query)`, `generateEmbedding(text)` | Local HTTP client connecting to Ollama daemon (`localhost:11434`) for chat (`gemma4:e4b`) and embeddings (`nomic-embed-text`) with timeout and offline fallback. |
+| [`KnowledgeIngestionService.java`](../src/main/java/com/bvicam/campusconnect/service/KnowledgeIngestionService.java) | `ingestFile(...)`, `scrapeAndIndexUrl(...)`, `getAllDocuments`, `deleteDocument` | Extracts text from uploaded PDFs (Apache PDFBox) or web pages (Jsoup), partitions with `TextChunker`, generates vector embeddings, and persists document chunks. |
+| [`CampusAiService.java`](../src/main/java/com/bvicam/campusconnect/service/CampusAiService.java) | `answerQuestion(question)` | Coordinates RAG retrieval over vector embeddings, injects real-time MySQL campus records (Events, Jobs, Batch), synthesizes prompts, and produces answers with citations. |
 
 ---
 
@@ -194,6 +198,8 @@ campus-connect/
 | [`PrivateMessageRepository.java`](../src/main/java/com/bvicam/campusconnect/repository/PrivateMessageRepository.java) | `PrivateMessage` | `findConversation(user1, user2)` (bidirectional JPQL ordered by `timestamp ASC`) |
 | [`NotificationRepository.java`](../src/main/java/com/bvicam/campusconnect/repository/NotificationRepository.java) | `Notification` | `findTop10ByRecipientEmailOrderByCreatedAtDesc`, `findByRecipientEmailAndReadFalse`, `countByRecipientEmailAndReadFalse` |
 | [`FeedbackRepository.java`](../src/main/java/com/bvicam/campusconnect/repository/FeedbackRepository.java) | `Feedback` | `findAllByOrderBySubmittedAtDesc()` |
+| [`KnowledgeDocumentRepository.java`](../src/main/java/com/bvicam/campusconnect/repository/KnowledgeDocumentRepository.java) | `KnowledgeDocument` | `findAllByOrderByCreatedAtDesc()`, `findByCategoryOrderByCreatedAtDesc(category)` |
+| [`DocumentChunkRepository.java`](../src/main/java/com/bvicam/campusconnect/repository/DocumentChunkRepository.java) | `DocumentChunk` | `findByDocumentIdOrderByChunkIndexAsc(docId)`, `findAllWithDocument()`, `findByDocumentCategory(category)` |
 
 ---
 

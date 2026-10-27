@@ -1,6 +1,6 @@
 # TICKET-AI-002: Knowledge Base Domain Entities & Vector Storage
 
-- **Status:** BACKLOG
+- **Status:** DONE
 - **Type:** Domain & Database Layer
 - **Estimate:** 2h
 - **Blocked By:** TICKET-AI-001
