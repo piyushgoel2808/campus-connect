@@ -59,6 +59,11 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: admin@123
       UPLOAD_DIR: /app/uploads
+      # Connects containerized Spring Boot to host machine's Ollama daemon.
+      # Note: Ensure host Ollama is started with OLLAMA_HOST=0.0.0.0 if running on Linux hosts.
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Bind-mounts host ./uploads directory into the container so user-uploaded media persists
       - ./uploads:/app/uploads

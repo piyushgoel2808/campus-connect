@@ -22,4 +22,9 @@ public interface EventRepository extends JpaRepository<Event, Long> {
      */
     // Find events happening after today
     List<Event> findByDateTimeAfterOrderByDateTimeAsc(java.time.LocalDateTime now);
+
+    /**
+     * Bounded query returning at most 5 upcoming events to avoid prompt bloat.
+     */
+    List<Event> findTop5ByDateTimeAfterOrderByDateTimeAsc(java.time.LocalDateTime now);
 }
