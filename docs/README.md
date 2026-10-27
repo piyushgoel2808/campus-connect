@@ -16,4 +16,7 @@ Welcome to the technical documentation suite for **Campus Connect (GradLink)** â
 | [**4. Database Schema & ERD (`database-schema.md`)**](database-schema.md) | Complete Entity-Relationship Diagram (`erDiagram`) and table-by-table column specifications for all 11 relational tables (`users`, `departments`, `posts`, `comments`, `event`, `event_participants`, `jobs`, `private_messages`, `chat_messages`, `notifications`, `feedback`). |
 | [**5. Features & RBAC Guide (`features.md`)**](features.md) | Role-Based Access Control (`STUDENT` / `ALUMNI` / `ADMIN`) matrix and deep dive into all 9 feature modules. |
 | [**6. Interview Guide & Q&A (`interview-guide.md`)**](interview-guide.md) | 30-second elevator pitch, 3-minute structured project walkthrough, and 17+ technical interview questions & model answers. |
+| [**7. ADR-001: AI Chatbot & RAG Engine (`adr/ADR-001-ai-chatbot-rag-knowledge-engine.md`)**](adr/ADR-001-ai-chatbot-rag-knowledge-engine.md) | Architecture Decision Record for local Ollama `gemma4:e4b` integration, RAG knowledge store, and Admin document ingestion. |
+| [**8. AI Vertical-Slice Tickets (`tickets/ai-chatbot-vertical-slices.md`)**](tickets/ai-chatbot-vertical-slices.md) | Full 6-ticket dependency graph and execution plan (CC-AI-01 through CC-AI-06) for the AI Chatbot subsystem. |
+
 

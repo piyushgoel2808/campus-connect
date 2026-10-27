@@ -25,6 +25,9 @@ Comprehensive architectural, dataflow, database, and codebase guides are located
 | 🗄️ **[Database Schema (`docs/database-schema.md`)](docs/database-schema.md)** | Complete Entity-Relationship (`erDiagram`) visual and column-by-column specifications for all 11 relational tables |
 | ✨ **[Features & Role Matrix (`docs/features.md`)](docs/features.md)** | Role-Based Access Control (`STUDENT` / `ALUMNI` / `ADMIN`) matrix and deep dive into all 9 platform modules |
 | 🎯 **[Interview Guide & Q&A (`docs/interview-guide.md`)](docs/interview-guide.md)** | 30-second elevator pitch, 3-minute structured walkthrough script, and technical interview questions & model answers |
+| 🏛️ **[ADR-001: AI Chatbot & RAG Engine (`docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md`)](docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md)** | Architecture Decision Record for local Ollama `gemma4:e4b` integration, RAG knowledge store, and Admin document ingestion |
+| 🎟️ **[AI Vertical-Slice Tickets (`docs/tickets/ai-chatbot-vertical-slices.md`)](docs/tickets/ai-chatbot-vertical-slices.md)** | Execution plan with 6 vertical slices (CC-AI-01 through CC-AI-06) for end-to-end AI chatbot integration |
+
 
 
 ---
