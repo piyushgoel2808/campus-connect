@@ -27,6 +27,8 @@ Comprehensive architectural, dataflow, database, and codebase guides are located
 | 🎯 **[Interview Guide & Q&A (`docs/interview-guide.md`)](docs/interview-guide.md)** | 30-second elevator pitch, 3-minute structured walkthrough script, and technical interview questions & model answers |
 | 🏛️ **[ADR-001: AI Chatbot & RAG Engine (`docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md`)](docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md)** | Architecture Decision Record for local Ollama `gemma4:e4b` integration, RAG knowledge store, and Admin document ingestion |
 | 🎟️ **[AI Vertical-Slice Tickets (`docs/tickets/ai-chatbot-vertical-slices.md`)](docs/tickets/ai-chatbot-vertical-slices.md)** | Execution plan with 6 vertical slices (CC-AI-01 through CC-AI-06) for end-to-end AI chatbot integration |
+| 📋 **[Formal Specification: GradBot AI (`docs/specs/ai-chatbot-rag-engine.spec.md`)](docs/specs/ai-chatbot-rag-engine.spec.md)** | Formal engineering specification covering Problem, Solution, User Stories, Architecture, Testing, and Out of Scope |
+
 
 
 

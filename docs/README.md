@@ -18,5 +18,7 @@ Welcome to the technical documentation suite for **Campus Connect (GradLink)** â
 | [**6. Interview Guide & Q&A (`interview-guide.md`)**](interview-guide.md) | 30-second elevator pitch, 3-minute structured project walkthrough, and 17+ technical interview questions & model answers. |
 | [**7. ADR-001: AI Chatbot & RAG Engine (`adr/ADR-001-ai-chatbot-rag-knowledge-engine.md`)**](adr/ADR-001-ai-chatbot-rag-knowledge-engine.md) | Architecture Decision Record for local Ollama `gemma4:e4b` integration, RAG knowledge store, and Admin document ingestion. |
 | [**8. AI Vertical-Slice Tickets (`tickets/ai-chatbot-vertical-slices.md`)**](tickets/ai-chatbot-vertical-slices.md) | Full 6-ticket dependency graph and execution plan (CC-AI-01 through CC-AI-06) for the AI Chatbot subsystem. |
+| [**9. Formal Specification: GradBot AI (`specs/ai-chatbot-rag-engine.spec.md`)**](specs/ai-chatbot-rag-engine.spec.md) | Formal engineering specification (Problem, Solution, Personas, User Stories with EARS/Gherkin, Implementation, Testing, and Out of Scope). |
+
 
 
