@@ -123,4 +123,20 @@ class BotControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer").value("Please ask a question about BVICAM courses, placements, events, notices, or batchmates."));
     }
+
+    @Test
+    @DisplayName("GET /api/bot/health returns status of AI runner")
+    void checkHealth_returnsStatusMap() throws Exception {
+        when(campusAiService.getHealthStatus())
+                .thenReturn(Map.of(
+                        "status", "ONLINE",
+                        "model", "gemma4:e4b",
+                        "mode", "Mac AI Runner Connected (gemma4:e4b)"
+                ));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/bot/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ONLINE"))
+                .andExpect(jsonPath("$.model").value("gemma4:e4b"));
+    }
 }

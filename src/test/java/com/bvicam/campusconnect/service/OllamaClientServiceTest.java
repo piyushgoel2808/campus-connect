@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link OllamaClientService}.
- * Verifies defensive handling of blank prompts and offline daemon fallback.
+ * Verifies defensive handling of blank prompts, auth header configuration, and offline daemon fallback.
  */
 class OllamaClientServiceTest {
 
@@ -44,7 +44,7 @@ class OllamaClientServiceTest {
         );
 
         String response = service.generateChatResponse("System", "Hello");
-        assertThat(response).contains("offline mode");
+        assertThat(response).contains("standby mode");
     }
 
     @Test
@@ -60,5 +60,38 @@ class OllamaClientServiceTest {
 
         List<Double> embedding = service.generateEmbedding("   ");
         assertThat(embedding).isEmpty();
+    }
+
+    @Test
+    @DisplayName("isHealthy returns false when base URL daemon is unreachable")
+    void isHealthy_offlineDaemon_returnsFalse() {
+        OllamaClientService service = new OllamaClientService(
+                "https://192.0.2.1:443",
+                "gemma4:e4b",
+                "nomic-embed-text",
+                1,
+                "X-GradBot-Key",
+                "secret-token-123",
+                objectMapper
+        );
+
+        assertThat(service.isHealthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("constructor rejects non-loopback insecure HTTP URL when auth token is set")
+    void constructor_insecureHttpWithToken_throwsException() {
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new OllamaClientService(
+                        "http://example.com:11434",
+                        "gemma4:e4b",
+                        "nomic-embed-text",
+                        1,
+                        "X-GradBot-Key",
+                        "my-secret-token",
+                        objectMapper
+                )
+        );
     }
 }

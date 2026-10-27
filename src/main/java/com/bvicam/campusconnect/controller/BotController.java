@@ -48,4 +48,12 @@ public class BotController {
         String rawQuestion = payload != null ? payload.get("question") : null;
         return campusAiService.answerQuestion(rawQuestion);
     }
+
+    /**
+     * Reports real-time connectivity status of the AI runner (Ollama daemon / Cloudflare tunnel).
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/health")
+    public Map<String, Object> checkHealth() {
+        return campusAiService.getHealthStatus();
+    }
 }

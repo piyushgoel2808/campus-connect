@@ -28,6 +28,7 @@ Comprehensive architectural, dataflow, database, and codebase guides are located
 | 🏛️ **[ADR-001: AI Chatbot & RAG Engine (`docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md`)](docs/adr/ADR-001-ai-chatbot-rag-knowledge-engine.md)** | Architecture Decision Record for local Ollama `gemma4:e4b` integration, RAG knowledge store, and Admin document ingestion |
 | 🎟️ **[AI Vertical-Slice Tickets (`docs/tickets/ai-chatbot-vertical-slices.md`)](docs/tickets/ai-chatbot-vertical-slices.md)** | Execution plan with 6 vertical slices (CC-AI-01 through CC-AI-06) for end-to-end AI chatbot integration |
 | 📋 **[Formal Specification: GradBot AI (`docs/specs/ai-chatbot-rag-engine.spec.md`)](docs/specs/ai-chatbot-rag-engine.spec.md)** | Formal engineering specification covering Problem, Solution, User Stories, Architecture, Testing, and Out of Scope |
+| 💻 **[Hybrid AI Runner Guide (`docs/guides/local-ai-runner-guide.md`)](docs/guides/local-ai-runner-guide.md)** | Guide for running Gemma 4 & Nomic Embed Text locally on your Mac GPU and tunneling to Render with Cloudflare Tunnel & zero-trust auth |
 
 
 
@@ -165,6 +166,15 @@ docker compose down
 # Run with Maven Wrapper
 ./mvnw spring-boot:run
 ```
+
+### Option 3: Hybrid AI Runner (Local Mac GPU + Render Cloud)
+Execute Large Language Model (`gemma4:e4b`) and vector embedding (`nomic-embed-text`) inference directly on your Mac GPU and tunnel it to the Render production deployment via Cloudflare:
+
+```bash
+# Start Ollama check, reverse auth proxy, and Cloudflare HTTPS tunnel
+./start-ai-runner.sh
+```
+See the full guide in [**`docs/guides/local-ai-runner-guide.md`**](docs/guides/local-ai-runner-guide.md).
 
 ---
 

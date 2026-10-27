@@ -121,6 +121,26 @@ public class CampusAiService {
     }
 
     /**
+     * Checks if the external local AI runner (or local Ollama daemon) is active and reachable.
+     */
+    public Map<String, Object> getHealthStatus() {
+        boolean healthy = ollamaClientService != null && ollamaClientService.isHealthy();
+        String model = ollamaClientService != null && ollamaClientService.getChatModel() != null
+                ? ollamaClientService.getChatModel()
+                : "gemma4:e4b";
+        String embedding = ollamaClientService != null && ollamaClientService.getEmbeddingModel() != null
+                ? ollamaClientService.getEmbeddingModel()
+                : "nomic-embed-text";
+
+        return Map.of(
+                "status", healthy ? "ONLINE" : "STANDBY",
+                "model", model,
+                "embeddingModel", embedding,
+                "mode", healthy ? "Mac AI Runner Connected (gemma4:e4b)" : "Standby (Rule-Based Fallback)"
+        );
+    }
+
+    /**
      * Computes query vector embedding and ranks indexed chunks by cosine similarity.
      */
     private List<ScoredChunk> findRelevantChunks(String question) {
