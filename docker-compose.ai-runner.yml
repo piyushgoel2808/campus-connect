@@ -1,0 +1,96 @@
+# ==============================================================================
+# Campus Connect - Portable AI Runner (Cross-Platform Docker Stack)
+# ==============================================================================
+# Purpose:
+#   Runs the complete GradBot AI Edge Node on ANY laptop (macOS, Windows, Linux)
+#   with a single command, bridging local compute to the Render production cloud:
+#     1. ollama:      Local LLM & Embedding engine (gemma4:e4b, embeddinggemma-2:latest)
+#     2. qdrant:      HNSW Vector Database for campus knowledge chunks (/qdrant/*)
+#     3. ai-proxy:    Zero-dependency multiplexer enforcing X-GradBot-Key (port 11435)
+#     4. cloudflared: Zero-config Cloudflare HTTPS Tunnel forwarding to Render
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Vector Database: Qdrant (HNSW Vector Indexing)
+  # ----------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: campus-ai-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------------
+  # 2. LLM Engine: Ollama (Inference & Embeddings)
+  # ----------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: campus-ai-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # To enable NVIDIA GPU on Linux or Windows WSL2, uncomment the block below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ----------------------------------------------------------------------------
+  # 3. Secure Multiplexer Proxy: ai_proxy.py
+  # ----------------------------------------------------------------------------
+  ai-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai-proxy
+    container_name: campus-ai-proxy
+    restart: unless-stopped
+    ports:
+      - "11435:11435"
+    environment:
+      - PROXY_BIND_HOST=0.0.0.0
+      - PROXY_PORT=11435
+      - TARGET_HOST=http://ollama:11434
+      - QDRANT_HOST=http://qdrant:6333
+      - AUTH_HEADER=X-GradBot-Key
+      - GRADBOT_SECRET_KEY=${GRADBOT_SECRET_KEY}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ----------------------------------------------------------------------------
+  # 4. Zero-Trust Cloudflare Tunnel (TryCloudflare)
+  # ----------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: campus-ai-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://ai-proxy:11435
+    depends_on:
+      - ai-proxy
+
+volumes:
+  qdrant_data:
+    name: campus_ai_qdrant_data
+  ollama_data:
+    name: campus_ai_ollama_data

@@ -175,11 +175,12 @@ def main():
     global TARGET_HOST, QDRANT_HOST, AUTH_HEADER, AUTH_SECRET
 
     parser = argparse.ArgumentParser(description="GradBot Secure Ollama & Qdrant Proxy")
-    parser.add_argument("--port", type=int, default=11435, help="Port to listen on (default: 11435)")
-    parser.add_argument("--target", default="http://127.0.0.1:11434", help="Local Ollama endpoint")
-    parser.add_argument("--qdrant-target", default="http://127.0.0.1:6333", help="Local Qdrant endpoint")
-    parser.add_argument("--secret", default=os.getenv("GRADBOT_SECRET_KEY", ""), help="Required secret token")
-    parser.add_argument("--header", default="X-GradBot-Key", help="Header name (default: X-GradBot-Key)")
+    parser.add_argument("--bind", default=os.getenv("PROXY_BIND_HOST", "0.0.0.0"), help="Host address to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=int(os.getenv("PROXY_PORT", "11435")), help="Port to listen on (default: 11435)")
+    parser.add_argument("--target", default=os.getenv("TARGET_HOST", os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")), help="Ollama endpoint")
+    parser.add_argument("--qdrant-target", default=os.getenv("QDRANT_HOST", "http://127.0.0.1:6333"), help="Qdrant endpoint")
+    parser.add_argument("--secret", default=os.getenv("GRADBOT_SECRET_KEY", os.getenv("AUTH_SECRET", "")), help="Required secret token")
+    parser.add_argument("--header", default=os.getenv("AUTH_HEADER", "X-GradBot-Key"), help="Header name (default: X-GradBot-Key)")
 
     args = parser.parse_args()
 
@@ -192,8 +193,8 @@ def main():
         sys.stderr.write("❌ ERROR: A security secret must be provided via --secret or GRADBOT_SECRET_KEY!\n")
         sys.exit(1)
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), AuthenticatedProxyHandler)
-    print(f"🔒 GradBot Auth Proxy listening on http://127.0.0.1:{args.port}")
+    server = ThreadingHTTPServer((args.bind, args.port), AuthenticatedProxyHandler)
+    print(f"🔒 GradBot Auth Proxy listening on http://{args.bind}:{args.port}")
     print(f"👉 Forwarding Ollama calls to {TARGET_HOST}")
     print(f"👉 Forwarding Qdrant calls to {QDRANT_HOST}")
     print(f"🛡️  Enforcing header '{AUTH_HEADER}'\n")

@@ -1,0 +1,24 @@
+# ==============================================================================
+# GradBot Secure AI Authentication & Multiplexing Proxy
+# ==============================================================================
+# Lightweight Python reverse proxy enforcing shared secret authentication
+# (X-GradBot-Key) and multiplexing requests between Ollama (/api/*) and
+# Qdrant Vector DB (/qdrant/*).
+# ==============================================================================
+FROM python:3.11-alpine
+
+WORKDIR /app
+
+COPY scripts/ai_proxy.py /app/ai_proxy.py
+
+# Default listening port
+EXPOSE 11435
+
+# Proxy configuration defaults
+ENV PROXY_BIND_HOST="0.0.0.0" \
+    PROXY_PORT=11435 \
+    TARGET_HOST="http://ollama:11434" \
+    QDRANT_HOST="http://qdrant:6333"
+
+# Run proxy script directly with unbuffered python output
+ENTRYPOINT ["python3", "-u", "/app/ai_proxy.py"]

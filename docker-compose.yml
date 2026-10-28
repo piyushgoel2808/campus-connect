@@ -3,13 +3,14 @@
 # ==============================================================================
 # Purpose:
 #   Defines the local multi-container development and deployment stack:
-#     1. mysql: Persistent MySQL 8.0 relational database instance.
-#     2. app:   The Campus Connect Spring Boot web & WebSocket server.
+#     1. mysql:  Persistent MySQL 8.0 relational database instance.
+#     2. qdrant: Persistent Qdrant vector database for GradBot AI embeddings.
+#     3. app:    The Campus Connect Spring Boot web & WebSocket server.
 #
 # Key Relationships & Networking:
-#   - Both services share a default Docker bridge network, allowing `app` to
-#     connect to the database via hostname `mysql` on internal port 3306.
-#   - `app` waits for `mysql` to pass its readiness healthcheck before starting.
+#   - Services share a default Docker bridge network, allowing `app` to
+#     connect to MySQL at `mysql:3306` and Qdrant at `qdrant:6333`.
+#   - `app` waits for `mysql` and `qdrant` to pass readiness healthchecks before starting.
 # ==============================================================================
 
 services:
@@ -38,6 +39,23 @@ services:
       retries: 10
 
   # ----------------------------------------------------------------------------
+  # Vector Database: Qdrant (HNSW Vector Indexing)
+  # ----------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: campus-connect-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - campus_qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------------
   # Application Service: Campus Connect Spring Boot Server
   # ----------------------------------------------------------------------------
   app:
@@ -48,7 +66,8 @@ services:
     restart: unless-stopped
     depends_on:
       mysql:
-        # Prevents Spring Boot JPA/Hibernate from failing on startup while MySQL initializes
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     ports:
       # Exposes the web UI, REST APIs, and STOMP WebSocket endpoints at http://localhost:8080
@@ -59,6 +78,7 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: admin@123
       UPLOAD_DIR: /app/uploads
+      QDRANT_BASE_URL: http://qdrant:6333
       # Connects containerized Spring Boot to host machine's Ollama daemon.
       # Note: Ensure host Ollama is started with OLLAMA_HOST=0.0.0.0 if running on Linux hosts.
       OLLAMA_BASE_URL: http://host.docker.internal:11434
@@ -73,4 +93,4 @@ services:
 # ------------------------------------------------------------------------------
 volumes:
   campus_mysql_data:
-
+  campus_qdrant_data:

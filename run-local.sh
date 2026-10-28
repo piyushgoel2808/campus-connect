@@ -4,7 +4,7 @@
 # ==============================================================================
 # Runs the full Spring Boot application locally with:
 #   1. Zero external database requirement (persistent embedded H2 in MySQL mode)
-#   2. Local Mac Ollama Gemma 4 & nomic-embed-text
+#   2. Local Ollama (gemma4:e4b + embeddinggemma-2:latest) & Qdrant Vector DB
 #   3. Web UI at http://localhost:8080
 # ==============================================================================
 

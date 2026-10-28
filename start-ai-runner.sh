@@ -44,8 +44,15 @@ fi
 # Check cloudflared
 if ! command -v cloudflared &>/dev/null; then
     echo -e "${YELLOW}⚠️  cloudflared is not installed.${NC}"
-    echo "Installing via Homebrew: brew install cloudflared"
-    brew install cloudflared
+    if command -v brew &>/dev/null; then
+        echo "Installing via Homebrew: brew install cloudflared"
+        brew install cloudflared
+    else
+        echo -e "${YELLOW}Homebrew not detected.${NC}"
+        echo -e "💡 ${BOLD}Tip:${NC} You can run ${CYAN}./start-ai-runner-docker.sh${NC} which bundles cloudflared and Qdrant in Docker automatically!"
+        echo "Or install cloudflared manually: https://github.com/cloudflare/cloudflared/releases"
+        exit 1
+    fi
 fi
 
 # Check local Ollama daemon
@@ -80,19 +87,39 @@ QDRANT_PID=""
 if ! curl -s http://localhost:6333/ &>/dev/null; then
     echo -e "${YELLOW}⚠️  Qdrant vector DB is not running on port 6333.${NC}"
     if [ ! -f "bin/qdrant" ]; then
-        echo -e "${CYAN}Downloading standalone Qdrant binary for Apple Silicon...${NC}"
-        mkdir -p bin
-        curl -sL "https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-aarch64-apple-darwin.tar.gz" | tar -xz -C bin/
-        chmod +x bin/qdrant
+        ARCH=$(uname -m)
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        QDRANT_URL=""
+        if [ "$OS" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
+            QDRANT_URL="https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-aarch64-apple-darwin.tar.gz"
+        elif [ "$OS" = "darwin" ] && [ "$ARCH" = "x86_64" ]; then
+            QDRANT_URL="https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-x86_64-apple-darwin.tar.gz"
+        elif [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
+            QDRANT_URL="https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-x86_64-unknown-linux-gnu.tar.gz"
+        elif [ "$OS" = "linux" ] && [ "$ARCH" = "aarch64" ]; then
+            QDRANT_URL="https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-aarch64-unknown-linux-gnu.tar.gz"
+        fi
+
+        if [ -n "$QDRANT_URL" ]; then
+            echo -e "${CYAN}Downloading standalone Qdrant binary for ${OS} ${ARCH}...${NC}"
+            mkdir -p bin
+            curl -sL "$QDRANT_URL" | tar -xz -C bin/
+            chmod +x bin/qdrant
+        else
+            echo -e "${YELLOW}Could not determine prebuilt binary for ${OS} ${ARCH}.${NC}"
+            echo -e "💡 ${BOLD}Tip:${NC} Run ${CYAN}./start-ai-runner-docker.sh${NC} to run Qdrant inside Docker!"
+        fi
     fi
-    echo "Starting Qdrant in the background..."
-    ./bin/qdrant > /dev/null 2>&1 &
-    QDRANT_PID=$!
-    sleep 2
-    if ! curl -s http://localhost:6333/ &>/dev/null; then
-        echo -e "${YELLOW}⚠️  Could not connect to Qdrant at http://localhost:6333. Proceeding in standby...${NC}"
-    else
-        echo -e "${GREEN}✓ Qdrant Vector DB started on http://localhost:6333 (PID: $QDRANT_PID)${NC}"
+    if [ -f "bin/qdrant" ]; then
+        echo "Starting Qdrant in the background..."
+        ./bin/qdrant > /dev/null 2>&1 &
+        QDRANT_PID=$!
+        sleep 2
+        if ! curl -s http://localhost:6333/ &>/dev/null; then
+            echo -e "${YELLOW}⚠️  Could not connect to Qdrant at http://localhost:6333. Proceeding in standby...${NC}"
+        else
+            echo -e "${GREEN}✓ Qdrant Vector DB started on http://localhost:6333 (PID: $QDRANT_PID)${NC}"
+        fi
     fi
 else
     echo -e "${GREEN}✓ Qdrant Vector DB is running at http://localhost:6333${NC}"
