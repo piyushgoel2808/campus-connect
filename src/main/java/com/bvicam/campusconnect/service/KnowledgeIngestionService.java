@@ -1,6 +1,7 @@
 package com.bvicam.campusconnect.service;
 
 import com.bvicam.campusconnect.dto.KnowledgeDocumentDto;
+import com.bvicam.campusconnect.dto.QdrantPointDto;
 import com.bvicam.campusconnect.entity.DocumentCategory;
 import com.bvicam.campusconnect.entity.DocumentChunk;
 import com.bvicam.campusconnect.entity.KnowledgeDocument;
@@ -15,6 +16,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,10 +25,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service managing document extraction (PDF, text, web HTML), chunking,
- * vector embedding generation via Ollama, and knowledge persistence.
+ * vector embedding generation via Ollama, and synchronization with relational storage & Qdrant.
  */
 @Service
 public class KnowledgeIngestionService {
@@ -36,13 +39,23 @@ public class KnowledgeIngestionService {
     private final KnowledgeDocumentRepository documentRepository;
     private final DocumentChunkRepository chunkRepository;
     private final OllamaClientService ollamaClientService;
+    private final QdrantClientService qdrantClientService;
+
+    @Autowired
+    public KnowledgeIngestionService(KnowledgeDocumentRepository documentRepository,
+                                     DocumentChunkRepository chunkRepository,
+                                     OllamaClientService ollamaClientService,
+                                     QdrantClientService qdrantClientService) {
+        this.documentRepository = documentRepository;
+        this.chunkRepository = chunkRepository;
+        this.ollamaClientService = ollamaClientService;
+        this.qdrantClientService = qdrantClientService;
+    }
 
     public KnowledgeIngestionService(KnowledgeDocumentRepository documentRepository,
                                      DocumentChunkRepository chunkRepository,
                                      OllamaClientService ollamaClientService) {
-        this.documentRepository = documentRepository;
-        this.chunkRepository = chunkRepository;
-        this.ollamaClientService = ollamaClientService;
+        this(documentRepository, chunkRepository, ollamaClientService, null);
     }
 
     /**
@@ -102,9 +115,10 @@ public class KnowledgeIngestionService {
             chunkEntities.add(chunk);
         }
 
-        chunkRepository.saveAll(chunkEntities);
+        List<DocumentChunk> savedChunks = chunkRepository.saveAll(chunkEntities);
+        syncToQdrant(savedDoc, savedChunks);
         log.info("Successfully ingested document id={}, title='{}' with {} chunks",
-                savedDoc.getId(), savedDoc.getTitle(), chunkEntities.size());
+                savedDoc.getId(), savedDoc.getTitle(), savedChunks.size());
 
         return KnowledgeDocumentDto.fromEntity(savedDoc);
     }
@@ -168,9 +182,10 @@ public class KnowledgeIngestionService {
             chunkEntities.add(chunk);
         }
 
-        chunkRepository.saveAll(chunkEntities);
+        List<DocumentChunk> savedChunks = chunkRepository.saveAll(chunkEntities);
+        syncToQdrant(savedDoc, savedChunks);
         log.info("Successfully scraped & indexed URL '{}' as document id={}, chunks={}",
-                url, savedDoc.getId(), chunkEntities.size());
+                url, savedDoc.getId(), savedChunks.size());
 
         return KnowledgeDocumentDto.fromEntity(savedDoc);
     }
@@ -189,14 +204,48 @@ public class KnowledgeIngestionService {
     }
 
     /**
-     * Deletes a knowledge document and its associated vector chunks.
+     * Deletes a knowledge document and its associated vector chunks from MySQL and Qdrant.
      *
      * @param documentId document ID
      */
     @Transactional
     public void deleteDocument(Long documentId) {
         documentRepository.deleteById(documentId);
+        if (qdrantClientService != null && qdrantClientService.isHealthy()) {
+            qdrantClientService.deleteByDocumentId(documentId);
+        }
         log.info("Deleted knowledge document id={}", documentId);
+    }
+
+    private void syncToQdrant(KnowledgeDocument doc, List<DocumentChunk> chunks) {
+        if (qdrantClientService != null && qdrantClientService.isHealthy()) {
+            qdrantClientService.ensureCollection(768);
+            List<QdrantPointDto> points = new ArrayList<>();
+            for (DocumentChunk chunk : chunks) {
+                double[] chunkArr = VectorUtil.fromJson(chunk.getEmbeddingJson());
+                if (chunkArr.length > 0) {
+                    List<Double> vector = new ArrayList<>(chunkArr.length);
+                    for (double d : chunkArr) {
+                        vector.add(d);
+                    }
+                    Map<String, Object> payload = Map.of(
+                            "chunk_id", chunk.getId(),
+                            "document_id", doc.getId(),
+                            "chunk_index", chunk.getChunkIndex(),
+                            "title", doc.getTitle(),
+                            "category", doc.getCategory().name(),
+                            "chunk_text", chunk.getChunkText(),
+                            "source_info", doc.getSourceUrl() != null ? doc.getSourceUrl()
+                                    : doc.getOriginalFileName() != null ? doc.getOriginalFileName() : "Document"
+                    );
+                    points.add(new QdrantPointDto(chunk.getId(), vector, payload));
+                }
+            }
+            if (!points.isEmpty()) {
+                qdrantClientService.upsertPoints(points);
+                log.info("Synced {} points to Qdrant collection '{}' for doc id={}", points.size(), qdrantClientService.getCollectionName(), doc.getId());
+            }
+        }
     }
 
     /**

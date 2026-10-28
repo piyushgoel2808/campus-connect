@@ -75,6 +75,29 @@ if ! echo "$TAGS_JSON" | grep -q "embeddinggemma-2"; then
 fi
 echo -e "${GREEN}✓ Embedding model 'embeddinggemma-2' is available${NC}"
 
+# Check local Qdrant Vector Database
+QDRANT_PID=""
+if ! curl -s http://localhost:6333/ &>/dev/null; then
+    echo -e "${YELLOW}⚠️  Qdrant vector DB is not running on port 6333.${NC}"
+    if [ ! -f "bin/qdrant" ]; then
+        echo -e "${CYAN}Downloading standalone Qdrant binary for Apple Silicon...${NC}"
+        mkdir -p bin
+        curl -sL "https://github.com/qdrant/qdrant/releases/download/v1.20.0/qdrant-aarch64-apple-darwin.tar.gz" | tar -xz -C bin/
+        chmod +x bin/qdrant
+    fi
+    echo "Starting Qdrant in the background..."
+    ./bin/qdrant > /dev/null 2>&1 &
+    QDRANT_PID=$!
+    sleep 2
+    if ! curl -s http://localhost:6333/ &>/dev/null; then
+        echo -e "${YELLOW}⚠️  Could not connect to Qdrant at http://localhost:6333. Proceeding in standby...${NC}"
+    else
+        echo -e "${GREEN}✓ Qdrant Vector DB started on http://localhost:6333 (PID: $QDRANT_PID)${NC}"
+    fi
+else
+    echo -e "${GREEN}✓ Qdrant Vector DB is running at http://localhost:6333${NC}"
+fi
+
 # ------------------------------------------------------------------------------
 # 2. SHARED SECRET GENERATION & PERSISTENCE
 # ------------------------------------------------------------------------------
@@ -128,6 +151,9 @@ cleanup() {
     fi
     if [ -n "$TUNNEL_PID" ]; then
         kill -9 "$TUNNEL_PID" 2>/dev/null || true
+    fi
+    if [ -n "$QDRANT_PID" ]; then
+        kill -9 "$QDRANT_PID" 2>/dev/null || true
     fi
     if [ -n "$TUNNEL_LOG" ] && [ -f "$TUNNEL_LOG" ]; then
         rm -f "$TUNNEL_LOG"
@@ -250,6 +276,8 @@ echo -e "  ${BOLD}Auth Header Key   :${NC} ${YELLOW}${AUTH_HEADER}${NC}"
 echo -e "  ${BOLD}Auth Secret Token :${NC} ${YELLOW}${GRADBOT_SECRET_KEY}${NC}"
 echo -e "  ${BOLD}Chat Model        :${NC} gemma4:e4b (Running on local Mac GPU)"
 echo -e "  ${BOLD}Embedding Model   :${NC} embeddinggemma-2:latest (Running on local Mac)"
+echo -e "  ${BOLD}Vector Database   :${NC} Qdrant (HNSW Vector Index on Port 6333)"
+echo -e "  ${BOLD}Tunnel Multiplex  :${NC} Ollama (/api/*) & Qdrant (/qdrant/*, /collections/*)"
 echo -e "${BOLD}${GREEN}────────────────────────────────────────────────────────────────${NC}"
 
 if [ "$RENDER_SYNCED" = false ]; then

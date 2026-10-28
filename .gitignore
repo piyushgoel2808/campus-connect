@@ -37,3 +37,7 @@ build/
 __pycache__/
 *.pyc
 data/
+bin/
+storage/
+snapshots/
+.qdrant-initialized

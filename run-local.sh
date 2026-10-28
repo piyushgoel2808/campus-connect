@@ -41,6 +41,15 @@ else
     sleep 2
 fi
 
+# 3. Check Qdrant Vector DB
+if curl -s http://localhost:6333/ &>/dev/null; then
+    echo -e "${GREEN}✓ Local Qdrant Vector DB detected at http://localhost:6333${NC}"
+elif [ -f "./bin/qdrant" ]; then
+    echo -e "${CYAN}Starting local Qdrant Vector DB in background...${NC}"
+    ./bin/qdrant > /dev/null 2>&1 &
+    sleep 2
+fi
+
 echo -e "\n${CYAN}Starting Spring Boot on http://localhost:8080 (Profile: local)...${NC}"
 echo -e "${BOLD}Pre-seeded Accounts:${NC}"
 echo -e "  • Admin   : ${YELLOW}admin@bvicam.in${NC}  / Password: ${YELLOW}admin123${NC}"

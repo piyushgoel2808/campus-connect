@@ -2,9 +2,8 @@ package com.bvicam.campusconnect.service;
 
 import com.bvicam.campusconnect.dto.BotAskResponse;
 import com.bvicam.campusconnect.dto.CitationDto;
-import com.bvicam.campusconnect.entity.DocumentChunk;
-import com.bvicam.campusconnect.entity.Job;
-import com.bvicam.campusconnect.entity.KnowledgeDocument;
+import com.bvicam.campusconnect.dto.QdrantSearchResultDto;
+import com.bvicam.campusconnect.entity.*;
 import com.bvicam.campusconnect.repository.DocumentChunkRepository;
 import com.bvicam.campusconnect.repository.EventRepository;
 import com.bvicam.campusconnect.repository.JobRepository;
@@ -12,6 +11,7 @@ import com.bvicam.campusconnect.repository.UserRepository;
 import com.bvicam.campusconnect.util.VectorUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,8 +22,8 @@ import java.util.regex.Pattern;
 
 /**
  * Core AI and RAG orchestration service for GradBot.
- * Coordinates vector similarity search, live database context injection,
- * prompt engineering, and Ollama inference.
+ * Coordinates vector similarity search (Qdrant with Relational DB fallback),
+ * live database context injection, prompt engineering, and Ollama inference.
  */
 @Service
 public class CampusAiService {
@@ -38,17 +38,29 @@ public class CampusAiService {
     private final JobRepository jobRepository;
     private final UserRepository userRepository;
     private final OllamaClientService ollamaClientService;
+    private final QdrantClientService qdrantClientService;
+
+    @Autowired
+    public CampusAiService(DocumentChunkRepository chunkRepository,
+                           EventRepository eventRepository,
+                           JobRepository jobRepository,
+                           UserRepository userRepository,
+                           OllamaClientService ollamaClientService,
+                           QdrantClientService qdrantClientService) {
+        this.chunkRepository = chunkRepository;
+        this.eventRepository = eventRepository;
+        this.jobRepository = jobRepository;
+        this.userRepository = userRepository;
+        this.ollamaClientService = ollamaClientService;
+        this.qdrantClientService = qdrantClientService;
+    }
 
     public CampusAiService(DocumentChunkRepository chunkRepository,
                            EventRepository eventRepository,
                            JobRepository jobRepository,
                            UserRepository userRepository,
                            OllamaClientService ollamaClientService) {
-        this.chunkRepository = chunkRepository;
-        this.eventRepository = eventRepository;
-        this.jobRepository = jobRepository;
-        this.userRepository = userRepository;
-        this.ollamaClientService = ollamaClientService;
+        this(chunkRepository, eventRepository, jobRepository, userRepository, ollamaClientService, null);
     }
 
     /**
@@ -121,33 +133,83 @@ public class CampusAiService {
     }
 
     /**
-     * Checks if the external local AI runner (or local Ollama daemon) is active and reachable.
+     * Checks if the external local AI runner (Ollama & Qdrant) is active and reachable.
      */
     public Map<String, Object> getHealthStatus() {
-        boolean healthy = ollamaClientService != null && ollamaClientService.isHealthy();
+        boolean ollamaHealthy = ollamaClientService != null && ollamaClientService.isHealthy();
+        boolean qdrantHealthy = qdrantClientService != null && qdrantClientService.isHealthy();
         String model = ollamaClientService != null && ollamaClientService.getChatModel() != null
                 ? ollamaClientService.getChatModel()
                 : "gemma4:e4b";
         String embedding = ollamaClientService != null && ollamaClientService.getEmbeddingModel() != null
                 ? ollamaClientService.getEmbeddingModel()
-                : "nomic-embed-text";
+                : "embeddinggemma-2:latest";
 
-        return Map.of(
-                "status", healthy ? "ONLINE" : "STANDBY",
-                "model", model,
-                "embeddingModel", embedding,
-                "mode", healthy ? "Mac AI Runner Connected (gemma4:e4b)" : "Standby (Rule-Based Fallback)"
-        );
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("status", ollamaHealthy ? "ONLINE" : "STANDBY");
+        status.put("model", model);
+        status.put("embeddingModel", embedding);
+        status.put("vectorDb", qdrantHealthy ? "Qdrant (HNSW Vector Engine)" : "Relational Cosine Fallback");
+        status.put("vectorDbStatus", qdrantHealthy ? "ONLINE" : "OFFLINE");
+        status.put("mode", ollamaHealthy
+                ? (qdrantHealthy ? "Mac AI Runner Connected (gemma4:e4b + Qdrant)" : "Mac AI Runner Connected (gemma4:e4b)")
+                : "Standby (Rule-Based Fallback)");
+        return status;
     }
 
     /**
-     * Computes query vector embedding and ranks indexed chunks by cosine similarity.
+     * Computes query vector embedding and retrieves top matching chunks.
+     * Uses high-speed Qdrant HNSW vector index when available, with automatic
+     * fallback to relational database cosine similarity if Qdrant is offline.
      */
     private List<ScoredChunk> findRelevantChunks(String question) {
         try {
             List<Double> queryVec = ollamaClientService.generateEmbedding(question);
-            double[] queryArr = VectorUtil.toArray(queryVec);
+            if (queryVec == null || queryVec.isEmpty()) {
+                return Collections.emptyList();
+            }
 
+            // 1. Try Qdrant Vector Engine First
+            if (qdrantClientService != null && qdrantClientService.isHealthy()) {
+                List<QdrantSearchResultDto> hits = qdrantClientService.search(queryVec, TOP_K_CHUNKS, SIMILARITY_THRESHOLD);
+                if (hits != null && !hits.isEmpty()) {
+                    List<ScoredChunk> qdrantScored = new ArrayList<>();
+                    for (QdrantSearchResultDto hit : hits) {
+                        Map<String, Object> payload = hit.payload();
+                        String chunkText = payload.containsKey("chunk_text") ? String.valueOf(payload.get("chunk_text")) : "";
+                        String title = payload.containsKey("title") ? String.valueOf(payload.get("title")) : "Knowledge Document";
+                        String catStr = payload.containsKey("category") ? String.valueOf(payload.get("category")) : "GENERAL";
+                        String sourceInfo = payload.containsKey("source_info") ? String.valueOf(payload.get("source_info")) : "Campus Knowledge";
+                        Long docId = payload.get("document_id") != null ? Long.valueOf(payload.get("document_id").toString()) : hit.id();
+
+                        KnowledgeDocument doc = new KnowledgeDocument();
+                        doc.setId(docId);
+                        doc.setTitle(title);
+                        try {
+                            doc.setCategory(DocumentCategory.valueOf(catStr));
+                        } catch (Exception ex) {
+                            doc.setCategory(DocumentCategory.GENERAL);
+                        }
+                        if (sourceInfo.startsWith("http")) {
+                            doc.setSourceUrl(sourceInfo);
+                            doc.setSourceType(SourceType.WEB_URL);
+                        } else {
+                            doc.setOriginalFileName(sourceInfo);
+                            doc.setSourceType(SourceType.FILE_UPLOAD);
+                        }
+
+                        DocumentChunk chunk = new DocumentChunk();
+                        chunk.setId(hit.id());
+                        chunk.setDocument(doc);
+                        chunk.setChunkText(chunkText);
+                        qdrantScored.add(new ScoredChunk(chunk, hit.score()));
+                    }
+                    return qdrantScored;
+                }
+            }
+
+            // 2. Relational Database Fallback (In-memory Cosine Similarity)
+            double[] queryArr = VectorUtil.toArray(queryVec);
             if (queryArr.length == 0) {
                 return Collections.emptyList();
             }

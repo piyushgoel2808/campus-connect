@@ -20,6 +20,7 @@ from datetime import datetime
 
 # Global configuration initialized in main()
 TARGET_HOST = "http://127.0.0.1:11434"
+QDRANT_HOST = "http://127.0.0.1:6333"
 AUTH_HEADER = "X-GradBot-Key"
 AUTH_SECRET = ""
 
@@ -35,16 +36,32 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
         """Handle CORS pre-flight requests gracefully."""
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", f"Content-Type, {AUTH_HEADER}")
         self.end_headers()
 
     def do_GET(self):
-        # Health check endpoint does not leak model data
+        # Health check endpoint reports status of both Ollama and Qdrant
         if self.path in ("/", "/health"):
+            ollama_ok = False
+            try:
+                with urllib.request.urlopen(f"{TARGET_HOST}/api/tags", timeout=2) as r:
+                    ollama_ok = (r.status == 200)
+            except Exception:
+                pass
+
+            qdrant_ok = False
+            try:
+                with urllib.request.urlopen(f"{QDRANT_HOST}/readyz", timeout=2) as r:
+                    qdrant_ok = (r.status == 200)
+            except Exception:
+                pass
+
             payload = json.dumps({
-                "status": "ONLINE",
+                "status": "ONLINE" if (ollama_ok or qdrant_ok) else "OFFLINE",
                 "service": "GradBot-AI-Secure-Proxy",
+                "ollama": "ONLINE" if ollama_ok else "OFFLINE",
+                "qdrant": "ONLINE" if qdrant_ok else "OFFLINE",
                 "timestamp": datetime.now().isoformat()
             }).encode("utf-8")
             self.send_response(200)
@@ -59,6 +76,12 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self._proxy_request("POST")
+
+    def do_PUT(self):
+        self._proxy_request("PUT")
+
+    def do_DELETE(self):
+        self._proxy_request("DELETE")
 
     def _proxy_request(self, method):
         # 1. Enforce Shared Secret Authentication
@@ -80,8 +103,15 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else None
 
-        # 3. Construct Upstream Request to Local Ollama
-        target_url = f"{TARGET_HOST}{self.path}"
+        # 3. Multiplex Upstream Request (Ollama vs Qdrant)
+        if self.path.startswith("/qdrant/"):
+            upstream_path = self.path[len("/qdrant"):]
+            target_url = f"{QDRANT_HOST}{upstream_path}"
+        elif self.path.startswith("/collections") or self.path.startswith("/aliases"):
+            target_url = f"{QDRANT_HOST}{self.path}"
+        else:
+            target_url = f"{TARGET_HOST}{self.path}"
+
         req = urllib.request.Request(target_url, data=body, method=method)
 
         for key, value in self.headers.items():
@@ -142,17 +172,19 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    global TARGET_HOST, AUTH_HEADER, AUTH_SECRET
+    global TARGET_HOST, QDRANT_HOST, AUTH_HEADER, AUTH_SECRET
 
-    parser = argparse.ArgumentParser(description="GradBot Secure Ollama Proxy")
+    parser = argparse.ArgumentParser(description="GradBot Secure Ollama & Qdrant Proxy")
     parser.add_argument("--port", type=int, default=11435, help="Port to listen on (default: 11435)")
     parser.add_argument("--target", default="http://127.0.0.1:11434", help="Local Ollama endpoint")
+    parser.add_argument("--qdrant-target", default="http://127.0.0.1:6333", help="Local Qdrant endpoint")
     parser.add_argument("--secret", default=os.getenv("GRADBOT_SECRET_KEY", ""), help="Required secret token")
     parser.add_argument("--header", default="X-GradBot-Key", help="Header name (default: X-GradBot-Key)")
 
     args = parser.parse_args()
 
     TARGET_HOST = args.target.rstrip("/")
+    QDRANT_HOST = args.qdrant_target.rstrip("/")
     AUTH_HEADER = args.header
     AUTH_SECRET = args.secret
 
@@ -162,7 +194,8 @@ def main():
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), AuthenticatedProxyHandler)
     print(f"🔒 GradBot Auth Proxy listening on http://127.0.0.1:{args.port}")
-    print(f"👉 Forwarding verified calls to {TARGET_HOST}")
+    print(f"👉 Forwarding Ollama calls to {TARGET_HOST}")
+    print(f"👉 Forwarding Qdrant calls to {QDRANT_HOST}")
     print(f"🛡️  Enforcing header '{AUTH_HEADER}'\n")
 
     try:

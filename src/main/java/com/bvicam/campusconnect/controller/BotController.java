@@ -45,7 +45,10 @@ public class BotController {
      */
     @PostMapping("/ask")
     public BotAskResponse askBot(@RequestBody(required = false) Map<String, String> payload) {
-        String rawQuestion = payload != null ? payload.get("question") : null;
+        String rawQuestion = null;
+        if (payload != null) {
+            rawQuestion = payload.containsKey("question") ? payload.get("question") : payload.get("message");
+        }
         return campusAiService.answerQuestion(rawQuestion);
     }
 
