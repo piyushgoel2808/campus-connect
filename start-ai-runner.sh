@@ -176,7 +176,7 @@ TUNNEL_PID=$!
 
 echo -n "Waiting for public tunnel URL"
 TUNNEL_URL=""
-for i in {1..20}; do
+for i in {1..30}; do
     if [ -f "$TUNNEL_LOG" ]; then
         FOUND_URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' "$TUNNEL_LOG" | head -n 1 || true)
         if [ -n "$FOUND_URL" ]; then
@@ -190,7 +190,7 @@ done
 echo ""
 
 if [ -z "$TUNNEL_URL" ]; then
-    echo -e "${RED}❌ Could not obtain Cloudflare tunnel URL within 20 seconds.${NC}"
+    echo -e "${RED}❌ Could not obtain Cloudflare tunnel URL within 30 seconds.${NC}"
     cat "$TUNNEL_LOG"
     cleanup
 fi

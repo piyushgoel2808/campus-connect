@@ -42,15 +42,17 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         # Health check endpoint does not leak model data
         if self.path in ("/", "/health"):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            payload = {
+            payload = json.dumps({
                 "status": "ONLINE",
                 "service": "GradBot-AI-Secure-Proxy",
                 "timestamp": datetime.now().isoformat()
-            }
-            self.wfile.write(json.dumps(payload).encode("utf-8"))
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
             return
 
         self._proxy_request("GET")
@@ -62,14 +64,16 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
         # 1. Enforce Shared Secret Authentication
         provided_token = self.headers.get(AUTH_HEADER)
         if not AUTH_SECRET or provided_token != AUTH_SECRET:
-            self.send_response(401)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            err_payload = {
+            err_payload = json.dumps({
                 "error": "Unauthorized: invalid or missing security token.",
                 "hint": f"Provide '{AUTH_HEADER}' header matching your runner secret."
-            }
-            self.wfile.write(json.dumps(err_payload).encode("utf-8"))
+            }).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err_payload)))
+            self.end_headers()
+            self.wfile.write(err_payload)
+            self.wfile.flush()
             return
 
         # 2. Read Request Body (if any)
@@ -130,9 +134,11 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_response(502)
             self.send_header("Content-Type", "application/json")
-            self.end_headers()
             msg = json.dumps({"error": f"Failed to reach local Ollama: {str(e)}"}).encode("utf-8")
+            self.send_header("Content-Length", str(len(msg)))
+            self.end_headers()
             self.wfile.write(msg)
+            self.wfile.flush()
 
 
 def main():
