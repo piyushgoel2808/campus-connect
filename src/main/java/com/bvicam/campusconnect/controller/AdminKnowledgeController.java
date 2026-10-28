@@ -68,6 +68,11 @@ public class AdminKnowledgeController {
         return ResponseEntity.ok(Map.of("message", "Document deleted successfully"));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    }
+
     /**
      * DTO payload for web URL scraping request.
      */

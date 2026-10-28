@@ -45,7 +45,7 @@ public class OllamaClientService {
     public OllamaClientService(
             @Value("${ollama.base-url:http://localhost:11434}") String baseUrl,
             @Value("${ollama.chat-model:gemma4:e4b}") String chatModel,
-            @Value("${ollama.embedding-model:nomic-embed-text}") String embeddingModel,
+            @Value("${ollama.embedding-model:embeddinggemma-2:latest}") String embeddingModel,
             @Value("${ollama.timeout-seconds:60}") int timeoutSeconds,
             @Value("${ollama.auth-header:X-GradBot-Key}") String authHeader,
             @Value("${ollama.auth-token:}") String authToken) {

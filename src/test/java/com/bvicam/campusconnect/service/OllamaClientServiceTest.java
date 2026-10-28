@@ -22,7 +22,7 @@ class OllamaClientServiceTest {
         OllamaClientService service = new OllamaClientService(
                 "http://localhost:11434",
                 "gemma4:e4b",
-                "nomic-embed-text",
+                "embeddinggemma-2:latest",
                 5,
                 objectMapper
         );
@@ -38,7 +38,7 @@ class OllamaClientServiceTest {
         OllamaClientService service = new OllamaClientService(
                 "http://192.0.2.1:80",
                 "gemma4:e4b",
-                "nomic-embed-text",
+                "embeddinggemma-2:latest",
                 1,
                 objectMapper
         );
@@ -53,7 +53,7 @@ class OllamaClientServiceTest {
         OllamaClientService service = new OllamaClientService(
                 "http://localhost:11434",
                 "gemma4:e4b",
-                "nomic-embed-text",
+                "embeddinggemma-2:latest",
                 5,
                 objectMapper
         );
@@ -68,7 +68,7 @@ class OllamaClientServiceTest {
         OllamaClientService service = new OllamaClientService(
                 "https://192.0.2.1:443",
                 "gemma4:e4b",
-                "nomic-embed-text",
+                "embeddinggemma-2:latest",
                 1,
                 "X-GradBot-Key",
                 "secret-token-123",
@@ -86,7 +86,7 @@ class OllamaClientServiceTest {
                 () -> new OllamaClientService(
                         "http://example.com:11434",
                         "gemma4:e4b",
-                        "nomic-embed-text",
+                        "embeddinggemma-2:latest",
                         1,
                         "X-GradBot-Key",
                         "my-secret-token",

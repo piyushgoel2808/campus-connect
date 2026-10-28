@@ -700,8 +700,14 @@ window.uploadKnowledgeDocument = async function() {
             setVal("knowledgeDocTitle", "");
             window.loadAdminKnowledge();
         } else {
-            const errorText = await res.text();
-            alert("❌ Upload Failed: " + errorText);
+            let errorMsg = "Upload failed.";
+            try {
+                const errObj = await res.json();
+                errorMsg = errObj.error || errObj.message || JSON.stringify(errObj);
+            } catch (ignored) {
+                errorMsg = await res.text();
+            }
+            alert("❌ Upload Failed: " + errorMsg);
         }
     } catch (e) {
         console.error(e);

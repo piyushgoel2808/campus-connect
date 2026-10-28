@@ -17,7 +17,7 @@ Modern Large Language Models like **Google Gemma 4 (`gemma4:e4b`)** (6.6 GB) and
 ### The Hybrid Cloud Solution
 **Campus Connect** implements a **Hybrid Cloud Architecture**:
 1. **Cloud Production Host (Render):** Hosts the main Java 17 / Spring Boot backend, STOMP WebSockets, static HTML5/ES6 SPA frontend, and connects to **TiDB Cloud**.
-2. **Edge Hardware Accelerator (Your Mac Laptop):** Runs the local Ollama daemon leveraging your Mac's Apple Silicon unified memory / GPU to run `gemma4:e4b` and `nomic-embed-text` with zero cloud compute cost.
+2. **Edge Hardware Accelerator (Your Mac Laptop):** Runs the local Ollama daemon leveraging your Mac's Apple Silicon unified memory / GPU to run `gemma4:e4b` and `embeddinggemma-2:latest` with zero cloud compute cost.
 3. **Zero-Trust Encrypted Tunnel (Cloudflare):** A one-command terminal script (`./start-ai-runner.sh`) spins up an authenticated local reverse proxy enforcing a shared secret token (`X-GradBot-Key`) and connects via an ephemeral HTTPS Cloudflare Tunnel directly to Render.
 4. **Graceful Standby Fallback:** When your laptop is closed or offline, Render's backend automatically falls back to smart rule-based campus data without failing or throwing 500 errors.
 
@@ -44,7 +44,7 @@ flowchart TB
         Proxy["scripts/ai_proxy.py\n(Port 11435 Authentication Proxy)"]
         Ollama["Local Ollama Daemon\n(Port 11434)"]
         ChatModel["Chat Model: gemma4:e4b (6.6 GB GPU)"]
-        EmbedModel["Embedding: nomic-embed-text (768-dim)"]
+        EmbedModel["Embedding: embeddinggemma-2:latest (768-dim)"]
     end
 
     SPA -->|POST /api/bot/ask| Backend
@@ -75,7 +75,7 @@ Open a terminal in your project directory on your Mac and run:
 
 The script will automatically:
 1. Verify that **Ollama** is running on your Mac.
-2. Verify models `gemma4:e4b` and `nomic-embed-text` are ready.
+2. Verify models `gemma4:e4b` and `embeddinggemma-2:latest` are ready.
 3. Check and use your shared secret from `.env.ai-runner` (or generate a secure random 48-character token if first time).
 4. Launch the local Python reverse proxy on port `11435` enforcing the `X-GradBot-Key` header.
 5. Create a secure Cloudflare HTTPS Tunnel and print your public URL.
@@ -102,7 +102,7 @@ In your [Render Dashboard](https://dashboard.render.com):
    {
      "status": "ONLINE",
      "model": "gemma4:e4b",
-     "embeddingModel": "nomic-embed-text",
+     "embeddingModel": "embeddinggemma-2:latest",
      "mode": "Mac AI Runner Connected (gemma4:e4b)"
    }
    ```

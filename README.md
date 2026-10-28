@@ -111,7 +111,7 @@ The primary aim of Campus Connect is to provide an exclusive, secure, and centra
 
 ### 6. 🤖 GradBot AI Campus Assistant & Hybrid RAG Engine
 - **Local Ollama Inference (`gemma4:e4b`):** 100% local, privacy-first AI campus assistant with zero external API fees, answering questions on BVICAM syllabus, courses, faculty, and circulars.
-- **Hybrid RAG Knowledge Retrieval:** Combines vector similarity search over 768-dimensional embeddings (`nomic-embed-text`) with real-time MySQL database queries for upcoming events, active job referrals, and alumni directory lookups.
+- **Hybrid RAG Knowledge Retrieval:** Combines vector similarity search over 768-dimensional embeddings (`embeddinggemma-2:latest`) with real-time MySQL database queries for upcoming events, active job referrals, and alumni directory lookups.
 - **Admin Document & URL Ingestion:** Administrators can upload notice PDFs via **Apache PDFBox** and crawl official `bvicam.in` URLs via **Jsoup** directly from the Admin Workspace.
 - **Verified Citations & Dual-Layer XSS Defense:** Delivers answers with verified clickable HTTP/HTTPS citation links and document badges, rendered via DOMPurify sanitization.
 
@@ -127,7 +127,7 @@ The primary aim of Campus Connect is to provide an exclusive, secure, and centra
 | Layer | Technologies |
 | :--- | :--- |
 | **Backend** | Java 17, Spring Boot 3.2.5, Spring Security 6, Spring Data JPA (Hibernate), Spring WebSocket (STOMP + SockJS), Spring Mail, JJWT `0.11.5`, Apache POI `5.2.5`, Apache PDFBox `3.0.3`, Jsoup `1.18.3`, Jackson Databind, Lombok |
-| **AI / RAG Engine** | Local Ollama (`http://localhost:11434`), Chat Model: `gemma4:e4b` (6.6 GB), Embedding Model: `nomic-embed-text` (768 dimensions), In-Memory Cosine Similarity Vector Ranking |
+| **AI / RAG Engine** | Local Ollama (`http://localhost:11434`), Chat Model: `gemma4:e4b` (6.6 GB), Embedding Model: `embeddinggemma-2:latest` (768 dimensions), In-Memory Cosine Similarity Vector Ranking |
 | **Frontend** | HTML5, CSS3 (Custom Design System), Vanilla JavaScript (ES6+), Bootstrap 5.3, Bootstrap Icons, FontAwesome 6, DOMPurify 3.0.9, SockJS Client, Stomp.js |
 | **Database** | MySQL 8.0 (Local & Docker Compose) / TiDB Cloud Serverless (Production) |
 | **Deployment** | Multi-stage [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml), Render Cloud ([https://campus-connect-live.onrender.com](https://campus-connect-live.onrender.com)) |
@@ -168,7 +168,7 @@ docker compose down
 ```
 
 ### Option 3: Hybrid AI Runner (Local Mac GPU + Render Cloud)
-Execute Large Language Model (`gemma4:e4b`) and vector embedding (`nomic-embed-text`) inference directly on your Mac GPU and tunnel it to the Render production deployment via Cloudflare:
+Execute Large Language Model (`gemma4:e4b`) and vector embedding (`embeddinggemma-2:latest`) inference directly on your Mac GPU and tunnel it to the Render production deployment via Cloudflare:
 
 ```bash
 # Start Ollama check, reverse auth proxy, and Cloudflare HTTPS tunnel

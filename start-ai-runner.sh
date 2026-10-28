@@ -69,11 +69,11 @@ if ! echo "$TAGS_JSON" | grep -q "gemma4:e4b"; then
 fi
 echo -e "${GREEN}✓ Chat model 'gemma4:e4b' is available${NC}"
 
-if ! echo "$TAGS_JSON" | grep -q "nomic-embed-text"; then
-    echo -e "${YELLOW}⚠️  Model 'nomic-embed-text' not found in Ollama. Pulling now...${NC}"
-    ollama pull nomic-embed-text
+if ! echo "$TAGS_JSON" | grep -q "embeddinggemma-2"; then
+    echo -e "${YELLOW}⚠️  Model 'embeddinggemma-2' not found in Ollama. Pulling now...${NC}"
+    ollama pull embeddinggemma-2
 fi
-echo -e "${GREEN}✓ Embedding model 'nomic-embed-text' is available${NC}"
+echo -e "${GREEN}✓ Embedding model 'embeddinggemma-2' is available${NC}"
 
 # ------------------------------------------------------------------------------
 # 2. SHARED SECRET GENERATION & PERSISTENCE
@@ -249,7 +249,7 @@ echo -e "  ${BOLD}Public Tunnel URL :${NC} ${CYAN}${TUNNEL_URL}${NC}"
 echo -e "  ${BOLD}Auth Header Key   :${NC} ${YELLOW}${AUTH_HEADER}${NC}"
 echo -e "  ${BOLD}Auth Secret Token :${NC} ${YELLOW}${GRADBOT_SECRET_KEY}${NC}"
 echo -e "  ${BOLD}Chat Model        :${NC} gemma4:e4b (Running on local Mac GPU)"
-echo -e "  ${BOLD}Embedding Model   :${NC} nomic-embed-text (Running on local Mac)"
+echo -e "  ${BOLD}Embedding Model   :${NC} embeddinggemma-2:latest (Running on local Mac)"
 echo -e "${BOLD}${GREEN}────────────────────────────────────────────────────────────────${NC}"
 
 if [ "$RENDER_SYNCED" = false ]; then

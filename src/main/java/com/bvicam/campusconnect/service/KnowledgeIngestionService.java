@@ -65,7 +65,10 @@ public class KnowledgeIngestionService {
         String extractedText = extractTextFromFile(file);
 
         if (extractedText == null || extractedText.trim().isEmpty()) {
-            throw new IllegalArgumentException("Uploaded file contains no extractable text content.");
+            if (originalFilename.toLowerCase().endsWith(".pdf")) {
+                throw new IllegalArgumentException("The uploaded PDF contains no extractable digital text (it may be a scanned image). Please upload a text-searchable PDF, Markdown (.md), or plain text (.txt) file.");
+            }
+            throw new IllegalArgumentException("Uploaded file contains no readable text content.");
         }
 
         String effectiveTitle = (title != null && !title.isBlank()) ? title.trim() : originalFilename;
