@@ -95,7 +95,8 @@ public class AdminKnowledgeController {
         try {
             syncMode = BvicamPortalSyncService.SyncMode.valueOf(mode.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid sync mode '" + mode + "'. Allowed: FULL, NOTICES, SYLLABUS_AND_INFO, COURSE_MATERIALS.");
+            throw new IllegalArgumentException(
+                    "Invalid sync mode '" + mode + "'. Allowed: FULL, NOTICES, SYLLABUS_AND_INFO, COURSE_MATERIALS, COURSE_MATERIALS_MCA, COURSE_MATERIALS_BAJMC.");
         }
 
         BvicamSyncStatusDto current = portalSyncService.getStatus();

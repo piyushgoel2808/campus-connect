@@ -10,7 +10,7 @@ import { connectChat, disconnectChat, fetchRecentChats } from './modules/chat.js
 import { initNotifications } from './modules/notifications.js?v=20261110_1';
 import { fetchPosts } from './modules/wall.js?v=20261110_1';
 import './modules/feedback.js?v=20261110_1';
-import { initBot } from './modules/bot.js?v=20261110_1';
+import { initBot } from './modules/bot.js?v=20261110_2';
 
 document.addEventListener("DOMContentLoaded", async () => {
     const user = getCurrentUser();
@@ -129,7 +129,7 @@ window.switchTab = async function(tab) {
                 });
                 break;
             case 'admin':
-                import('./modules/admin.js?v=20261110_1').then(m => m.loadAdminModule());
+                import('./modules/admin.js?v=20261110_2').then(m => m.loadAdminModule());
                 break;
             case 'profile':
                 import('./modules/profile.js?v=20261110_1').then(m => m.loadProfile());
