@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -50,6 +52,7 @@ public class BvicamPortalClient {
     private final HttpTransport httpTransport;
     private final Sleeper sleeper;
     private final AtomicLong lastRequestAtMillis = new AtomicLong(0L);
+    private volatile String cachedAntiForgeryToken;
 
     @Value("${ai.sync.base-url:https://bvicam.in}")
     private String baseUrl = "https://bvicam.in";
@@ -77,7 +80,10 @@ public class BvicamPortalClient {
     }
 
     private static HttpTransport buildDefaultTransport() {
+        CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER);
         HttpClient client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .cookieHandler(cookieManager)
                 .connectTimeout(Duration.ofSeconds(12))
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
@@ -154,17 +160,87 @@ public class BvicamPortalClient {
     }
 
     /**
-     * Fetches subject entries for a given course and semester.
+     * Fetches subject entries for a given course and semester, automatically supplying the
+     * ASP.NET MVC {@code __RequestVerificationToken} form field and session cookie required by
+     * {@code GetMCASubjectData}.
      */
     public List<SubjectEntry> fetchSubjects(String courseId, String semId, boolean bajmc) throws IOException {
+        String formPagePath = bajmc ? "/Home/BajmcCourse" : "/Home/MCACourse";
         String endpoint = bajmc
                 ? "/WebsiteGetFunction/GetBajmcSubjectData"
                 : "/WebsiteGetFunction/GetMCASubjectData";
+        String targetUrl = buildPortalUrl(endpoint);
+        String refererUrl = buildPortalUrl(formPagePath);
+
+        String token = ensureAntiForgeryToken(formPagePath, false);
+        Map<String, String> form = buildSubjectForm(courseId, semId, token);
+
+        try {
+            String body = executePostForm(targetUrl, form, refererUrl);
+            return parseSubjectListJson(body, courseId, semId);
+        } catch (HttpStatusException ex) {
+            if (ex.getStatusCode() == 500 || ex.getStatusCode() == 403) {
+                log.info("Refreshing BVICAM anti-forgery token after HTTP {} on {} (courseId={}, semId={})",
+                        ex.getStatusCode(), endpoint, courseId, semId);
+                String refreshedToken = ensureAntiForgeryToken(formPagePath, true);
+                if (refreshedToken != null && !refreshedToken.isBlank()) {
+                    Map<String, String> retryForm = buildSubjectForm(courseId, semId, refreshedToken);
+                    String retryBody = executePostForm(targetUrl, retryForm, refererUrl);
+                    return parseSubjectListJson(retryBody, courseId, semId);
+                }
+            }
+            throw ex;
+        }
+    }
+
+    private static Map<String, String> buildSubjectForm(String courseId, String semId, String antiForgeryToken) {
         Map<String, String> form = new LinkedHashMap<>();
+        if (antiForgeryToken != null && !antiForgeryToken.isBlank()) {
+            form.put("__RequestVerificationToken", antiForgeryToken);
+        }
         form.put("Course_Id", courseId);
         form.put("Sem_Id", semId);
-        String body = executePostForm(buildPortalUrl(endpoint), form);
-        return parseSubjectListJson(body, courseId, semId);
+        return form;
+    }
+
+    /**
+     * Fetches the ASP.NET MVC anti-forgery hidden token (while storing its matching cookie in {@link CookieManager}).
+     */
+    String ensureAntiForgeryToken(String formPagePath, boolean forceRefresh) throws IOException {
+        String existing = cachedAntiForgeryToken;
+        if (!forceRefresh && existing != null) {
+            return existing;
+        }
+        try {
+            RawHttpResponse pageResp = executeGet(buildPortalUrl(formPagePath), DEFAULT_MAX_HTML_BYTES);
+            String html = new String(pageResp.body(), StandardCharsets.UTF_8);
+            String token = extractAntiForgeryToken(html);
+            if (token != null && !token.isEmpty()) {
+                cachedAntiForgeryToken = token;
+                return token;
+            }
+            return existing != null ? existing : "";
+        } catch (RemoteThrottleException ex) {
+            throw ex;
+        } catch (IOException ex) {
+            if (forceRefresh) {
+                throw ex;
+            }
+            log.debug("Could not pre-fetch anti-forgery token from {}: {}", formPagePath, ex.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Extracts {@code __RequestVerificationToken} from a BVICAM HTML form.
+     */
+    public static String extractAntiForgeryToken(String html) {
+        if (html == null || html.isBlank()) {
+            return "";
+        }
+        Document doc = Jsoup.parse(html);
+        Element tokenInput = doc.selectFirst("#__AjaxAntiForgeryForm input[name='__RequestVerificationToken'], input[name='__RequestVerificationToken']");
+        return tokenInput != null ? tokenInput.val().trim() : "";
     }
 
     /**
@@ -404,6 +480,10 @@ public class BvicamPortalClient {
     }
 
     private String executePostForm(String url, Map<String, String> formFields) throws IOException {
+        return executePostForm(url, formFields, null);
+    }
+
+    private String executePostForm(String url, Map<String, String> formFields, String refererUrl) throws IOException {
         URI uri = validateUrl(url);
         awaitPoliteInterval();
 
@@ -411,17 +491,19 @@ public class BvicamPortalClient {
                 .map(entry -> urlEncode(entry.getKey()) + "=" + urlEncode(entry.getValue()))
                 .collect(Collectors.joining("&"));
 
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                 .uri(uri)
                 .timeout(Duration.ofSeconds(20))
                 .header("User-Agent", USER_AGENT)
                 .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                 .header("Accept", "application/json, text/javascript, */*; q=0.01")
                 .header("X-Requested-With", "XMLHttpRequest")
-                .POST(HttpRequest.BodyPublishers.ofString(encodedBody, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(encodedBody, StandardCharsets.UTF_8));
+        if (refererUrl != null && !refererUrl.isBlank()) {
+            reqBuilder.header("Referer", refererUrl);
+        }
 
-        RawHttpResponse response = httpTransport.send(request, DEFAULT_MAX_HTML_BYTES);
+        RawHttpResponse response = httpTransport.send(reqBuilder.build(), DEFAULT_MAX_HTML_BYTES);
         checkStatusOrThrow(response.statusCode(), uri.toString());
         return new String(response.body(), StandardCharsets.UTF_8);
     }
@@ -596,7 +678,16 @@ public class BvicamPortalClient {
     }
 
     private static String normalizeRawHref(String rawHref) {
-        return rawHref.trim().replace("\\", "/").replace(" ", "%20");
+        return rawHref.trim()
+                .replace("\r", "")
+                .replace("\n", "")
+                .replace("\t", "")
+                .replace("\\", "/")
+                .replace(" ", "%20")
+                .replace("[", "%5B")
+                .replace("]", "%5D")
+                .replace("{", "%7B")
+                .replace("}", "%7D");
     }
 
     private static String firstNonBlankText(JsonNode node, String... fieldNames) {
