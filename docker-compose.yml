@@ -13,6 +13,8 @@
 #   - `app` waits for `mysql` and `qdrant` to pass readiness healthchecks before starting.
 # ==============================================================================
 
+name: campus-connect
+
 services:
   # ----------------------------------------------------------------------------
   # Database Service: MySQL 8.0

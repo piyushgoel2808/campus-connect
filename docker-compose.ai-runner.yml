@@ -10,6 +10,8 @@
 #     4. cloudflared: Zero-config Cloudflare HTTPS Tunnel forwarding to Render
 # ==============================================================================
 
+name: campus-ai-runner
+
 services:
   # ----------------------------------------------------------------------------
   # 1. Vector Database: Qdrant (HNSW Vector Indexing)
