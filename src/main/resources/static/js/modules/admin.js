@@ -458,57 +458,210 @@ window.loadAdminJobs = async function() {
     }
 };
 
-window.loadAdminKnowledge = async function() {
-    loadBvicamSyncStatus();
+let allKnowledgeDocs = [];
+const kbFilterState = {
+    category: "ALL",
+    sourceType: "ALL",
+    syncStatus: "ALL",
+    search: "",
+    page: 1,
+    pageSize: "50"
+};
+
+function updateKbCategoryKpis(docs) {
+    const counts = { total: docs.length, NOTICE: 0, COURSE_MATERIAL: 0, SYLLABUS: 0, BVICAM_WEB: 0 };
+    docs.forEach(d => {
+        if (d.category === "NOTICE") counts.NOTICE++;
+        else if (d.category === "COURSE_MATERIAL") counts.COURSE_MATERIAL++;
+        else if (d.category === "SYLLABUS") counts.SYLLABUS++;
+        else counts.BVICAM_WEB++;
+    });
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+    setTxt("kbCountTotal", counts.total);
+    setTxt("kbCountNotice", counts.NOTICE);
+    setTxt("kbCountMaterial", counts.COURSE_MATERIAL);
+    setTxt("kbCountSyllabus", counts.SYLLABUS);
+    setTxt("kbCountWeb", counts.BVICAM_WEB);
+
+    document.querySelectorAll(".kb-kpi-btn").forEach(btn => {
+        const active = btn.getAttribute("data-kb-cat") === kbFilterState.category;
+        btn.classList.toggle("border-primary", active);
+        btn.classList.toggle("border-2", active);
+        btn.classList.toggle("bg-primary-subtle", active);
+    });
+}
+
+function renderKbPaginationBar(el, totalFiltered, totalAll, page, totalPages, startIdx, endIdx) {
+    if (!el) return;
+    if (totalFiltered === 0) {
+        el.innerHTML = `<span>0 matching documents (${totalAll} total in knowledge base)</span>`;
+        return;
+    }
+    const showAll = kbFilterState.pageSize === "ALL";
+    const info = `<span>Showing <strong>${startIdx + 1}</strong>–<strong>${endIdx}</strong> of <strong>${totalFiltered}</strong> matching (${totalAll} total indexed)</span>`;
+    if (showAll || totalPages <= 1) {
+        el.innerHTML = info;
+        return;
+    }
+
+    const pages = [];
+    const maxButtons = 5;
+    let first = Math.max(1, page - 2);
+    let last = Math.min(totalPages, first + maxButtons - 1);
+    if (last - first < maxButtons - 1) {
+        first = Math.max(1, last - maxButtons + 1);
+    }
+    for (let p = first; p <= last; p++) {
+        pages.push(`<li class="page-item ${p === page ? "active" : ""}"><button type="button" class="page-link" onclick="window.setKbPage(${p})">${p}</button></li>`);
+    }
+
+    el.innerHTML = `${info}
+        <nav aria-label="Knowledge documents pagination">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item ${page <= 1 ? "disabled" : ""}">
+                    <button type="button" class="page-link" onclick="window.setKbPage(${page - 1})">&laquo;</button>
+                </li>
+                ${pages.join("")}
+                <li class="page-item ${page >= totalPages ? "disabled" : ""}">
+                    <button type="button" class="page-link" onclick="window.setKbPage(${page + 1})">&raquo;</button>
+                </li>
+            </ul>
+        </nav>`;
+}
+
+function renderKnowledgeDocsTable() {
     const tbody = document.getElementById("adminKnowledgeTable");
     if (!tbody) return;
 
-    tbody.innerHTML = "<tr><td colspan='7' class='text-center py-4'>Loading indexed documents...</td></tr>";
+    updateKbCategoryKpis(allKnowledgeDocs);
+
+    const q = kbFilterState.search.toLowerCase();
+    const filtered = allKnowledgeDocs.filter(doc => {
+        if (kbFilterState.category !== "ALL" && doc.category !== kbFilterState.category) return false;
+        if (kbFilterState.sourceType !== "ALL" && doc.sourceType !== kbFilterState.sourceType) return false;
+        if (kbFilterState.syncStatus !== "ALL" && (doc.syncStatus || "INDEXED") !== kbFilterState.syncStatus) return false;
+        if (q) {
+            const hay = `${doc.id ?? ""} ${doc.title ?? ""} ${doc.originalFileName ?? ""} ${doc.sourceUrl ?? ""} ${doc.publishedDate ?? ""} ${doc.category ?? ""}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        return true;
+    });
+
+    const summaryEl = document.getElementById("kbExplorerSummary");
+    if (summaryEl) {
+        summaryEl.textContent = `${filtered.length} matching documents out of ${allKnowledgeDocs.length} indexed in GradBot.`;
+    }
+
+    const topNav = document.getElementById("kbPaginationTop");
+    const bottomNav = document.getElementById("kbPaginationBottom");
+
+    if (filtered.length === 0) {
+        renderKbPaginationBar(topNav, 0, allKnowledgeDocs.length, 1, 1, 0, 0);
+        renderKbPaginationBar(bottomNav, 0, allKnowledgeDocs.length, 1, 1, 0, 0);
+        tbody.innerHTML = allKnowledgeDocs.length === 0
+            ? "<tr><td colspan='7' class='text-center py-4 text-muted'>No documents or URLs indexed yet. Click Sync All above to fetch BVICAM notices, syllabi &amp; course materials.</td></tr>"
+            : "<tr><td colspan='7' class='text-center py-4 text-muted'>No documents match the current search/filter criteria.</td></tr>";
+        return;
+    }
+
+    const showAll = kbFilterState.pageSize === "ALL";
+    const pageSizeNum = showAll ? filtered.length : Math.max(10, Number(kbFilterState.pageSize) || 50);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSizeNum));
+    if (kbFilterState.page > totalPages) kbFilterState.page = totalPages;
+    if (kbFilterState.page < 1) kbFilterState.page = 1;
+
+    const startIdx = showAll ? 0 : (kbFilterState.page - 1) * pageSizeNum;
+    const endIdx = showAll ? filtered.length : Math.min(filtered.length, startIdx + pageSizeNum);
+    const visibleDocs = filtered.slice(startIdx, endIdx);
+
+    renderKbPaginationBar(topNav, filtered.length, allKnowledgeDocs.length, kbFilterState.page, totalPages, startIdx, endIdx);
+    renderKbPaginationBar(bottomNav, filtered.length, allKnowledgeDocs.length, kbFilterState.page, totalPages, startIdx, endIdx);
+
+    const rowsHtml = visibleDocs.map(doc => {
+        const dateStr = doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '-';
+        const catBadgeClass = doc.category === 'NOTICE' ? 'bg-danger' :
+                              doc.category === 'SYLLABUS' ? 'bg-info text-dark' :
+                              doc.category === 'COURSE_MATERIAL' ? 'bg-warning text-dark' :
+                              doc.category === 'BVICAM_WEB' ? 'bg-success' : 'bg-secondary';
+        const sourceBadgeClass = doc.sourceType === 'AUTO_SYNC' ? 'bg-primary' :
+                                 doc.sourceType === 'WEB_URL' ? 'bg-info text-dark' : 'bg-dark';
+        const syncState = doc.syncStatus || 'INDEXED';
+        const syncBadgeClass = syncState === 'INDEXED' ? 'bg-success-subtle text-success border border-success-subtle' :
+                               syncState === 'PENDING_QDRANT_SYNC' ? 'bg-warning-subtle text-dark border border-warning-subtle' :
+                               'bg-secondary-subtle text-secondary';
+        const validSourceUrl = safeHttpUrl(doc.sourceUrl);
+        const sourceDisplay = validSourceUrl
+            ? `<a href="${escapeHtml(validSourceUrl)}" target="_blank" rel="noopener noreferrer" class="small text-truncate d-block" style="max-width: 340px;">${escapeHtml(validSourceUrl)}</a>`
+            : (doc.sourceUrl ? `<span class="small text-muted text-truncate d-block" style="max-width: 340px;">${escapeHtml(doc.sourceUrl)}</span>` : '');
+
+        return `
+            <tr>
+                <td class="text-muted fw-semibold">#${Number(doc.id) || 0}</td>
+                <td>
+                    <div class="fw-bold text-dark">${escapeHtml(doc.title || '-')}</div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-1">
+                        ${doc.publishedDate ? `<span class="badge bg-light text-dark border"><i class="far fa-calendar-alt me-1"></i>${escapeHtml(doc.publishedDate)}</span>` : ''}
+                        ${doc.originalFileName ? `<small class="text-muted"><i class="fas fa-file-pdf me-1 text-danger"></i>${escapeHtml(doc.originalFileName)}</small>` : ''}
+                    </div>
+                    ${sourceDisplay}
+                </td>
+                <td><span class="badge ${catBadgeClass}">${escapeHtml(doc.category || 'GENERAL')}</span></td>
+                <td>
+                    <div><span class="badge ${sourceBadgeClass}">${escapeHtml(doc.sourceType || 'FILE_UPLOAD')}</span></div>
+                    <div class="mt-1"><span class="badge ${syncBadgeClass}" style="font-size: 0.7rem;">${escapeHtml(syncState)}</span></div>
+                </td>
+                <td><span class="badge bg-light text-dark border">${Number(doc.chunkCount) || 0} chunks</span></td>
+                <td><small class="text-muted">${escapeHtml(dateStr)}</small></td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-danger" onclick="window.deleteKnowledgeDocument(${Number(doc.id) || 0})" title="Delete Document &amp; Chunks">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+    }).join("");
+
+    tbody.innerHTML = rowsHtml;
+}
+
+window.setKbCategoryFilter = function(category) {
+    kbFilterState.category = category || "ALL";
+    kbFilterState.page = 1;
+    const catSelect = document.getElementById("kbCategoryFilter");
+    if (catSelect) catSelect.value = kbFilterState.category;
+    renderKnowledgeDocsTable();
+};
+
+window.setKbFilter = function(field, value) {
+    kbFilterState[field] = value;
+    if (field !== "page") kbFilterState.page = 1;
+    renderKnowledgeDocsTable();
+};
+
+window.setKbPage = function(page) {
+    kbFilterState.page = page;
+    renderKnowledgeDocsTable();
+};
+
+window.loadAdminKnowledge = async function(options = {}) {
+    if (!options.skipStatus) {
+        loadBvicamSyncStatus();
+    }
+    const tbody = document.getElementById("adminKnowledgeTable");
+    if (!tbody) return;
+
+    if (!options.silent) {
+        tbody.innerHTML = "<tr><td colspan='7' class='text-center py-4'>Loading indexed documents...</td></tr>";
+    }
 
     try {
         const docs = await get('/admin/knowledge/documents');
-        tbody.innerHTML = "";
-
-        if (!docs || docs.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='7' class='text-center py-4 text-muted'>No documents or URLs indexed yet. Use the upload or scraping forms above to add sources to GradBot.</td></tr>";
-            return;
-        }
-
-        docs.forEach(doc => {
-            const dateStr = doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '-';
-            const catBadgeClass = doc.category === 'NOTICE' ? 'bg-danger' :
-                                  doc.category === 'SYLLABUS' ? 'bg-info text-dark' :
-                                  doc.category === 'COURSE_MATERIAL' ? 'bg-warning text-dark' :
-                                  doc.category === 'BVICAM_WEB' ? 'bg-success' : 'bg-secondary';
-            const sourceBadgeClass = doc.sourceType === 'AUTO_SYNC' ? 'bg-primary' :
-                                     doc.sourceType === 'WEB_URL' ? 'bg-info text-dark' : 'bg-dark';
-            const validSourceUrl = safeHttpUrl(doc.sourceUrl);
-            const sourceDisplay = validSourceUrl
-                ? `<a href="${escapeHtml(validSourceUrl)}" target="_blank" rel="noopener noreferrer" class="small text-truncate d-block" style="max-width: 260px;">${escapeHtml(validSourceUrl)}</a>`
-                : (doc.sourceUrl ? `<span class="small text-muted">${escapeHtml(doc.sourceUrl)}</span>` : '');
-
-            tbody.insertAdjacentHTML("beforeend", `
-                <tr>
-                    <td>${Number(doc.id) || 0}</td>
-                    <td>
-                        <div class="fw-bold text-dark">${escapeHtml(doc.title || '-')}</div>
-                        ${doc.originalFileName ? `<small class="text-muted"><i class="fas fa-file me-1"></i>${escapeHtml(doc.originalFileName)}</small>` : ''}
-                        ${sourceDisplay}
-                    </td>
-                    <td><span class="badge ${catBadgeClass}">${escapeHtml(doc.category || 'GENERAL')}</span></td>
-                    <td><span class="badge ${sourceBadgeClass}">${escapeHtml(doc.sourceType || 'FILE_UPLOAD')}</span></td>
-                    <td><span class="badge bg-light text-dark border">${Number(doc.chunkCount) || 0} chunks</span></td>
-                    <td><small class="text-muted">${escapeHtml(dateStr)}</small></td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-danger" onclick="window.deleteKnowledgeDocument(${doc.id})" title="Delete Document & Chunks">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>`);
-        });
+        allKnowledgeDocs = Array.isArray(docs) ? docs : [];
+        renderKnowledgeDocsTable();
     } catch (e) {
         console.error("Failed to load knowledge documents:", e);
-        tbody.innerHTML = "<tr><td colspan='7' class='text-danger text-center'>Error loading knowledge sources</td></tr>";
+        if (!options.silent) {
+            tbody.innerHTML = "<tr><td colspan='7' class='text-danger text-center'>Error loading knowledge sources</td></tr>";
+        }
     }
 };
 
@@ -609,17 +762,22 @@ window.deleteKnowledgeDocument = async function(id) {
 
 let bvicamSyncPollTimer = null;
 let bvicamWasRunning = false;
+let bvicamPollTicks = 0;
 
 function renderBvicamSyncStatus(status) {
     if (!status) return;
     const badgeEl = document.getElementById("bvicamSyncBadge");
     const phaseEl = document.getElementById("syncMetricPhase");
+    const activityEl = document.getElementById("bvicamSyncActivity");
     const discoveredEl = document.getElementById("syncMetricDiscovered");
     const newEl = document.getElementById("syncMetricNew");
     const scannedEl = document.getElementById("syncMetricScanned");
+    const updatedEl = document.getElementById("syncMetricUpdated");
     const skippedEl = document.getElementById("syncMetricSkipped");
     const failedEl = document.getElementById("syncMetricFailed");
     const msgEl = document.getElementById("bvicamSyncMessage");
+    const issuesBox = document.getElementById("bvicamSyncIssuesBox");
+    const issuesList = document.getElementById("bvicamSyncIssuesList");
 
     const phase = status.phase || "IDLE";
     if (badgeEl) {
@@ -631,9 +789,11 @@ function renderBvicamSyncStatus(status) {
         );
     }
     if (phaseEl) phaseEl.textContent = phase;
+    if (activityEl) activityEl.textContent = status.currentActivity || (status.running ? phase : "Idle");
     if (discoveredEl) discoveredEl.textContent = String(status.discoveredCount ?? 0);
     if (newEl) newEl.textContent = String(status.indexedNewCount ?? 0);
     if (scannedEl) scannedEl.textContent = String(status.scannedFallbackCount ?? 0);
+    if (updatedEl) updatedEl.textContent = String(status.updatedCount ?? 0);
     if (skippedEl) skippedEl.textContent = String(status.skippedExistingCount ?? 0);
     if (failedEl) failedEl.textContent = String(status.failedCount ?? 0);
 
@@ -645,12 +805,28 @@ function renderBvicamSyncStatus(status) {
         msgEl.textContent = text;
     }
 
+    if (issuesBox && issuesList) {
+        const issues = Array.isArray(status.recentIssues) ? status.recentIssues : [];
+        if (issues.length > 0) {
+            issuesBox.classList.remove("d-none");
+            issuesList.innerHTML = issues.map(item => `<li>${escapeHtml(String(item))}</li>`).join("");
+        } else {
+            issuesBox.classList.add("d-none");
+            issuesList.innerHTML = "";
+        }
+    }
+
     if (status.running) {
         bvicamWasRunning = true;
         if (!bvicamSyncPollTimer) {
+            bvicamPollTicks = 0;
             bvicamSyncPollTimer = setInterval(() => {
+                bvicamPollTicks++;
                 window.loadBvicamSyncStatus();
-            }, 4000);
+                if (bvicamPollTicks % 4 === 0 && typeof window.loadAdminKnowledge === "function") {
+                    window.loadAdminKnowledge({ silent: true, skipStatus: true });
+                }
+            }, 3000);
         }
     } else {
         if (bvicamSyncPollTimer) {
@@ -660,7 +836,7 @@ function renderBvicamSyncStatus(status) {
         if (bvicamWasRunning) {
             bvicamWasRunning = false;
             if (typeof window.loadAdminKnowledge === "function") {
-                window.loadAdminKnowledge();
+                window.loadAdminKnowledge({ silent: true, skipStatus: true });
             }
         }
     }
