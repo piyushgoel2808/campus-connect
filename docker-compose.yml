@@ -26,8 +26,8 @@ services:
       MYSQL_ROOT_PASSWORD: admin@123
       MYSQL_DATABASE: campus_connect_db
     ports:
-      # Maps host port 3307 -> container port 3306 to avoid clashes with a local MySQL install
-      - "3307:3306"
+      # Maps host port 3307 (or MYSQL_PORT) -> container port 3306
+      - "${MYSQL_PORT:-3307}:3306"
     volumes:
       # Persists database tables and records across container restarts
       - campus_mysql_data:/var/lib/mysql
@@ -46,7 +46,7 @@ services:
     container_name: campus-connect-qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"
+      - "${QDRANT_PORT:-6333}:6333"
     volumes:
       - campus_qdrant_data:/qdrant/storage
     healthcheck:
@@ -70,8 +70,8 @@ services:
       qdrant:
         condition: service_healthy
     ports:
-      # Exposes the web UI, REST APIs, and STOMP WebSocket endpoints at http://localhost:8080
-      - "8080:8080"
+      # Exposes the web UI, REST APIs, and STOMP WebSocket endpoints (default http://localhost:8080)
+      - "${APP_PORT:-8080}:8080"
     environment:
       # Overrides application.properties with container-aware JDBC connection and upload directory settings
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/campus_connect_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
@@ -81,7 +81,7 @@ services:
       QDRANT_BASE_URL: http://qdrant:6333
       # Connects containerized Spring Boot to host machine's Ollama daemon.
       # Note: Ensure host Ollama is started with OLLAMA_HOST=0.0.0.0 if running on Linux hosts.
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

@@ -2,8 +2,10 @@
 # ==============================================================================
 # GradBot Portable Docker AI Runner (BVICAM | Campus Connect)
 # ==============================================================================
-# Runs the full AI Edge Node (Ollama + Qdrant + Multiplexer Proxy + Cloudflare Tunnel)
-# inside Docker containers on ANY laptop (macOS, Windows with WSL/Docker, Linux).
+# Runs the AI Edge Node (Ollama + Qdrant + Multiplexer Proxy + Cloudflare Tunnel)
+# via Docker on ANY laptop (macOS, Windows with WSL/Docker, Linux).
+# Automatically uses host GPU Ollama if already running (e.g., Apple Metal MLX),
+# or spins up the full containerized Ollama service on a fresh machine.
 #
 # Usage:
 #   ./start-ai-runner-docker.sh
@@ -29,6 +31,29 @@ echo "║      🐳 GradBot Docker AI Runner (Portable Edge Node)          ║"
 echo "║    Bridging Local AI (Ollama + Qdrant) to Render Cloud          ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
+
+# Helper to find first available TCP port starting from a preferred port
+find_free_port() {
+    local start_port=$1
+    local port=$start_port
+    while :; do
+        if command -v lsof &>/dev/null; then
+            if ! lsof -iTCP:"$port" -sTCP:LISTEN &>/dev/null; then
+                echo "$port"
+                return
+            fi
+        elif command -v python3 &>/dev/null; then
+            if python3 -c "import socket,sys; s=socket.socket(); r=s.connect_ex(('127.0.0.1',$port)); s.close(); sys.exit(0 if r!=0 else 1)" 2>/dev/null; then
+                echo "$port"
+                return
+            fi
+        else
+            echo "$port"
+            return
+        fi
+        port=$((port + 1))
+    done
+}
 
 # ------------------------------------------------------------------------------
 # 1. PREREQUISITE CHECKS (Docker Engine & Compose)
@@ -67,7 +92,6 @@ ENV_FILE=".env.ai-runner"
 AUTH_HEADER="X-GradBot-Key"
 
 if [ -f "$ENV_FILE" ]; then
-    # Load existing secrets
     set -a
     # shellcheck disable=SC1090
     source "$ENV_FILE"
@@ -104,48 +128,101 @@ export GRADBOT_SECRET_KEY
 export AUTH_HEADER
 
 # ------------------------------------------------------------------------------
-# 3. LAUNCH DOCKER CONTAINERS
+# 3. LAUNCH DOCKER CONTAINERS (SMART HOST OLLAMA & PORT DETECTION)
 # ------------------------------------------------------------------------------
-echo -e "\n${CYAN}[3/5] Starting containerized AI stack (Qdrant, Ollama, Proxy, Cloudflare)...${NC}"
-$COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build
+echo -e "\n${CYAN}[3/5] Detecting runtime topology & launching Docker containers...${NC}"
+
+# Avoid Qdrant port conflict if another project holds port 6333 on host
+if [ -z "$AI_QDRANT_PORT" ]; then
+    # Check if existing campus-ai-qdrant container already owns its bound port
+    EXISTING_QDRANT_PORT=$(docker port campus-ai-qdrant 6333/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}' || true)
+    if [ -n "$EXISTING_QDRANT_PORT" ]; then
+        AI_QDRANT_PORT="$EXISTING_QDRANT_PORT"
+    else
+        AI_QDRANT_PORT=$(find_free_port 6333)
+    fi
+fi
+export AI_QDRANT_PORT
+
+if [ -z "$AI_PROXY_PORT" ]; then
+    EXISTING_PROXY_PORT=$(docker port campus-ai-proxy 11435/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}' || true)
+    if [ -n "$EXISTING_PROXY_PORT" ]; then
+        AI_PROXY_PORT="$EXISTING_PROXY_PORT"
+    else
+        AI_PROXY_PORT=$(find_free_port 11435)
+    fi
+fi
+export AI_PROXY_PORT
+
+USE_HOST_OLLAMA=false
+if [ "${FORCE_DOCKER_OLLAMA:-false}" != "true" ] && curl -s http://127.0.0.1:11434/api/tags &>/dev/null; then
+    # Check if port 11434 belongs to host daemon (not an existing campus-ai-ollama container)
+    CONTAINER_OLLAMA_RUNNING=$(docker ps --filter "name=^campus-ai-ollama$" --format "{{.Names}}" 2>/dev/null || true)
+    if [ -z "$CONTAINER_OLLAMA_RUNNING" ]; then
+        USE_HOST_OLLAMA=true
+    fi
+fi
+
+if [ "$USE_HOST_OLLAMA" = true ]; then
+    echo -e "${GREEN}✓ Native host Ollama detected on port 11434 (preserving GPU acceleration & cached models)${NC}"
+    export AI_OLLAMA_TARGET="http://host.docker.internal:11434"
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build qdrant ai-proxy cloudflared
+    OLLAMA_MODE_LABEL="Host Native GPU (http://host.docker.internal:11434)"
+else
+    export AI_OLLAMA_TARGET="http://ollama:11434"
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build
+    OLLAMA_MODE_LABEL="Docker Container (campus-ai-ollama)"
+fi
 
 echo -e "${GREEN}✓ Containers deployed:${NC}"
-echo -e "   • Qdrant Vector Engine   : container ${BOLD}campus-ai-qdrant${NC} (port 6333)"
-echo -e "   • Ollama Inference Node  : container ${BOLD}campus-ai-ollama${NC} (port 11434)"
-echo -e "   • Security Auth Proxy    : container ${BOLD}campus-ai-proxy${NC} (port 11435)"
+echo -e "   • Qdrant Vector Engine   : container ${BOLD}campus-ai-qdrant${NC} (host port ${AI_QDRANT_PORT} -> 6333)"
+echo -e "   • Ollama Inference Node  : ${BOLD}${OLLAMA_MODE_LABEL}${NC}"
+echo -e "   • Security Auth Proxy    : container ${BOLD}campus-ai-proxy${NC} (host port ${AI_PROXY_PORT} -> 11435)"
 echo -e "   • Cloudflare Edge Tunnel : container ${BOLD}campus-ai-tunnel${NC}"
 
 # ------------------------------------------------------------------------------
-# 4. MODEL VERIFICATION INSIDE OLLAMA CONTAINER
+# 4. MODEL VERIFICATION (HOST OR CONTAINER)
 # ------------------------------------------------------------------------------
-echo -e "\n${CYAN}[4/5] Verifying AI models in Ollama container...${NC}"
+echo -e "\n${CYAN}[4/5] Verifying AI models...${NC}"
 
-# Wait for Ollama to accept commands
-echo "Waiting for Ollama service readiness..."
-for i in {1..30}; do
-    if docker exec campus-ai-ollama ollama list &>/dev/null; then
-        break
+if [ "$USE_HOST_OLLAMA" = true ]; then
+    TAGS_JSON=$(curl -s http://127.0.0.1:11434/api/tags || true)
+    if ! echo "$TAGS_JSON" | grep -q "embeddinggemma-2"; then
+        echo -e "${YELLOW}⚠️  Pulling 'embeddinggemma-2:latest' on host Ollama...${NC}"
+        ollama pull embeddinggemma-2:latest
     fi
-    sleep 1
-done
+    echo -e "${GREEN}✓ Embedding model 'embeddinggemma-2:latest' is ready on host${NC}"
 
-OLLAMA_MODELS=$(docker exec campus-ai-ollama ollama list || true)
+    if ! echo "$TAGS_JSON" | grep -q "gemma4:e4b"; then
+        echo -e "${YELLOW}⚠️  Pulling 'gemma4:e4b' on host Ollama...${NC}"
+        ollama pull gemma4:e4b
+    fi
+    echo -e "${GREEN}✓ Chat model 'gemma4:e4b' is ready on host${NC}"
+else
+    echo "Waiting for Ollama container readiness..."
+    for i in {1..30}; do
+        if docker exec campus-ai-ollama ollama list &>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
 
-# 1. Embedding Model
-if ! echo "$OLLAMA_MODELS" | grep -q "embeddinggemma-2"; then
-    echo -e "${YELLOW}⚠️  Embedding model 'embeddinggemma-2:latest' not found in container.${NC}"
-    echo "Downloading embeddinggemma-2:latest (~768-dim vector embeddings)..."
-    docker exec -it campus-ai-ollama ollama pull embeddinggemma-2:latest
+    OLLAMA_MODELS=$(docker exec campus-ai-ollama ollama list || true)
+
+    if ! echo "$OLLAMA_MODELS" | grep -q "embeddinggemma-2"; then
+        echo -e "${YELLOW}⚠️  Embedding model 'embeddinggemma-2:latest' not found in container.${NC}"
+        echo "Downloading embeddinggemma-2:latest (~768-dim vector embeddings)..."
+        docker exec campus-ai-ollama ollama pull embeddinggemma-2:latest
+    fi
+    echo -e "${GREEN}✓ Embedding model 'embeddinggemma-2:latest' is ready${NC}"
+
+    if ! echo "$OLLAMA_MODELS" | grep -q "gemma4:e4b"; then
+        echo -e "${YELLOW}⚠️  Chat model 'gemma4:e4b' not found in container.${NC}"
+        echo "Downloading gemma4:e4b..."
+        docker exec campus-ai-ollama ollama pull gemma4:e4b
+    fi
+    echo -e "${GREEN}✓ Chat model 'gemma4:e4b' is ready${NC}"
 fi
-echo -e "${GREEN}✓ Embedding model 'embeddinggemma-2:latest' is ready${NC}"
-
-# 2. Chat Model
-if ! echo "$OLLAMA_MODELS" | grep -q "gemma4:e4b"; then
-    echo -e "${YELLOW}⚠️  Chat model 'gemma4:e4b' not found in container.${NC}"
-    echo "Downloading gemma4:e4b (~6.6 GB)..."
-    docker exec -it campus-ai-ollama ollama pull gemma4:e4b
-fi
-echo -e "${GREEN}✓ Chat model 'gemma4:e4b' is ready${NC}"
 
 # ------------------------------------------------------------------------------
 # 5. RETRIEVE PUBLIC CLOUDFLARE TUNNEL URL & TEST
@@ -203,7 +280,7 @@ echo -e "${BOLD}${GREEN}──────────────────�
 echo -e "  ${BOLD}Public Tunnel URL :${NC} ${CYAN}${TUNNEL_URL}${NC}"
 echo -e "  ${BOLD}Auth Header Key   :${NC} ${YELLOW}${AUTH_HEADER}${NC}"
 echo -e "  ${BOLD}Auth Secret Token :${NC} ${YELLOW}${GRADBOT_SECRET_KEY}${NC}"
-echo -e "  ${BOLD}Chat Model        :${NC} gemma4:e4b (Running in container campus-ai-ollama)"
+echo -e "  ${BOLD}Chat Model        :${NC} gemma4:e4b (${OLLAMA_MODE_LABEL})"
 echo -e "  ${BOLD}Embedding Model   :${NC} embeddinggemma-2:latest (768 dimensions)"
 echo -e "  ${BOLD}Vector Database   :${NC} Qdrant (HNSW Vector Engine in campus-ai-qdrant)"
 echo -e "  ${BOLD}Tunnel Multiplex  :${NC} Ollama (/api/*) & Qdrant (/qdrant/*, /collections/*)"
