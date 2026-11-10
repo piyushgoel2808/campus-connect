@@ -6,5 +6,6 @@ package com.bvicam.campusconnect.entity;
 public enum SourceType {
     FILE_UPLOAD,
     WEB_URL,
-    MANUAL_TEXT
+    MANUAL_TEXT,
+    AUTO_SYNC
 }

@@ -83,7 +83,7 @@ class CampusAiServiceTest {
         // Chunk vector: [0.95, 0.05] (high cosine similarity)
         chunk.setEmbeddingJson(VectorUtil.toJson(List.of(0.95, 0.05)));
 
-        when(chunkRepository.findAllWithDocument()).thenReturn(List.of(chunk));
+        when(chunkRepository.findRecentWithDocument(any())).thenReturn(List.of(chunk));
 
         when(ollamaClientService.generateChatResponse(anyString(), eq("When is MCA semester 3 exam?")))
                 .thenReturn("The MCA 3rd semester examinations will begin on November 20, 2026 as per the Exam Schedule Notice.");
@@ -109,7 +109,7 @@ class CampusAiServiceTest {
         when(ollamaClientService.generateEmbedding("Any upcoming events?"))
                 .thenReturn(List.of(0.5, 0.5));
         when(ollamaClientService.getChatModel()).thenReturn("gemma4:e4b");
-        when(chunkRepository.findAllWithDocument()).thenReturn(List.of());
+        when(chunkRepository.findRecentWithDocument(any())).thenReturn(List.of());
 
         Event event = new Event();
         event.setTitle("INDIACom 2026 Conference");

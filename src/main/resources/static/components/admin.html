@@ -188,14 +188,55 @@
              TAB 5: GRADBOT KNOWLEDGE BASE (Document Upload & URL Scraper)
              ================================================================= -->
         <div class="tab-pane fade" id="admin-knowledge">
+            <div class="card border-primary border-opacity-25 shadow-sm mb-4">
+                <div class="card-header bg-primary bg-opacity-10 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-primary">
+                            <i class="fas fa-sync-alt me-2"></i>BVICAM Automated Portal Sync (Past &amp; Latest)
+                        </h6>
+                        <small class="text-muted">
+                            Read-only connector: checks notices every <strong>24h</strong> (02:00 AM), syllabi &amp; course materials weekly, with polite 1.2s+ pacing and automatic skip of already-indexed PDFs.
+                        </small>
+                    </div>
+                    <span class="badge bg-secondary" id="bvicamSyncBadge">IDLE</span>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="triggerBvicamSync('FULL', this)">
+                            <i class="fas fa-cloud-download-alt me-1"></i>Sync All (Past + Latest)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="triggerBvicamSync('NOTICES', this)">
+                            <i class="fas fa-bell me-1"></i>Sync Notices
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info" onclick="triggerBvicamSync('SYLLABUS_AND_INFO', this)">
+                            <i class="fas fa-book me-1"></i>Sync Syllabus &amp; Fees
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="triggerBvicamSync('COURSE_MATERIALS', this)">
+                            <i class="fas fa-folder-open me-1"></i>Sync Course Materials
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadBvicamSyncStatus()">
+                            <i class="fas fa-redo me-1"></i>Refresh Status
+                        </button>
+                    </div>
+                    <div class="row g-2 text-center small mb-2" id="bvicamSyncMetrics">
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Phase</div><strong id="syncMetricPhase">IDLE</strong></div></div>
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Discovered</div><strong id="syncMetricDiscovered">0</strong></div></div>
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">New Indexed</div><strong class="text-success" id="syncMetricNew">0</strong></div></div>
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Scanned Stubs</div><strong class="text-warning" id="syncMetricScanned">0</strong></div></div>
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Skipped</div><strong class="text-secondary" id="syncMetricSkipped">0</strong></div></div>
+                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Failed</div><strong class="text-danger" id="syncMetricFailed">0</strong></div></div>
+                    </div>
+                    <div class="small text-muted" id="bvicamSyncMessage">Loading BVICAM sync status...</div>
+                </div>
+            </div>
             <div class="row g-4 mb-4">
                 <!-- Section 1: Upload Notice / PDF / Circular Document -->
                 <div class="col-lg-6">
                     <div class="card h-100 border-0 shadow-sm p-3">
                         <h6 class="fw-bold text-primary mb-2">
-                            <i class="fas fa-file-upload me-1"></i> Ingest Document (PDF / Notice)
+                            <i class="fas fa-file-upload me-1"></i> Ingest Document (PDF / Notice / Image)
                         </h6>
-                        <p class="small text-muted mb-3">Upload examination notices, academic circulars, or syllabi. GradBot chunks and vectorizes them automatically.</p>
+                        <p class="small text-muted mb-3">Upload examination notices, date sheets, circulars, or syllabi. Scanned PDFs &amp; images are read automatically via Gemma 4 Vision OCR.</p>
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Document Title</label>
                             <input type="text" class="form-control" id="knowledgeDocTitle" placeholder="e.g. End Term Exam Schedule 2026">
@@ -205,12 +246,13 @@
                             <select class="form-select" id="knowledgeDocCategory">
                                 <option value="NOTICE">Notice / Circular</option>
                                 <option value="SYLLABUS">Syllabus / Curriculum</option>
+                                <option value="COURSE_MATERIAL">Course Material / Notes</option>
                                 <option value="GENERAL">General Campus Info</option>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">File (.pdf, .txt, .md)</label>
-                            <input type="file" class="form-control" id="knowledgeFileInput" accept=".pdf,.txt,.md">
+                            <label class="form-label small fw-bold">File (.pdf, .png, .jpg, .txt, .md)</label>
+                            <input type="file" class="form-control" id="knowledgeFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.csv,.html">
                         </div>
                         <button class="btn btn-primary w-100 mt-auto" id="btnUploadDoc" onclick="window.uploadKnowledgeDocument()">
                             <i class="fas fa-upload me-1"></i> Upload & Vectorize

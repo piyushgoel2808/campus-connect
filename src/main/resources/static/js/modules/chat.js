@@ -1,86 +1,45 @@
 /**
- * ============================================================================
- * FILE: src/main/resources/static/js/modules/chat.js
- * PURPOSE: Real-time STOMP over SockJS WebSocket client for Global Chat,
- *          1-on-1 Direct Messaging, Typing Indicators, and Push Notifications.
- *
- * OVERVIEW:
- *   Manages all real-time communication across `dashboard.html` and
- *   `components/messages.html`:
- *     1. Connects to `/ws` using SockJS + STOMP with the user's JWT Bearer token.
- *     2. Subscribes to:
- *        - `/user/queue/messages`      : Incoming private 1-on-1 messages
- *        - `/user/queue/typing`        : Incoming typing indicator events
- *        - `/user/queue/notifications` : Real-time notifications (forwarded to `notifications.js`)
- *        - `/topic/public`             : Global community chat room broadcasts
- *     3. Loads recent conversation partners (`GET /api/messages/partners`) into
- *        the `#recentChatsList` sidebar in `components/messages.html`.
- *     4. Opens the 1-on-1 `#dmModal` dialog (`window.startDirectChat`), fetches
- *        historical messages (`GET /api/messages/history?partnerEmail=...`), and
- *        publishes private messages to `/app/chat.private`.
- *
- * API & WEBSOCKET ENDPOINTS USED:
- *   - WS Handshake : `/ws`
- *   - STOMP Send   : `/app/chat.sendMessage`, `/app/chat.private`, `/app/chat.typing`
- *   - REST GET     : `/api/messages/partners`, `/api/messages/history?partnerEmail={email}`
- * ============================================================================
+ * Real-time STOMP over SockJS WebSocket client for Global Chat, 1-on-1 Direct Messaging,
+ * Typing Indicators, and Push Notifications.
  */
 
 import { get, getCurrentUser } from '../utils/api.js';
+import { escapeHtml } from '../utils/sanitize.js';
 
-// =========================================================
-// CONFIGURATION & STATE
-// =========================================================
 const WS_URL = "/ws";
 let stompClient = null;
 let currentChatPartnerEmail = null;
 const notificationListeners = [];
+let typingTimeout = null;
+let isTyping = false;
 
-/**
- * Registers a callback function to be invoked whenever a real-time notification
- * arrives on `/user/queue/notifications`. Used by `notifications.js`.
- *
- * @param {Function} handler - Callback receiving the parsed notification object.
- */
 export function onRealtimeNotification(handler) {
     if (typeof handler === 'function') {
         notificationListeners.push(handler);
     }
 }
 
-// =========================================================
-// 1. CONNECT (SECURED WITH JWT)
-// =========================================================
-/**
- * Establishes the STOMP-over-SockJS WebSocket connection if not already connected,
- * authenticates the handshake with the user's JWT token, updates `#chatStatus`,
- * and subscribes to private messages, typing events, notifications, and public chat.
- */
 export function connectChat() {
     if (stompClient && stompClient.connected) return;
 
+    const token = localStorage.getItem("jwt_token");
+    if (!token) return;
+
     const socket = new SockJS(WS_URL);
     stompClient = Stomp.over(socket);
-    stompClient.debug = null; // Hide STOMP frames in console for cleaner logs
+    stompClient.debug = null;
 
-    // FIX: Extract JWT to authenticate the WebSocket Handshake
-    const token = localStorage.getItem("jwt_token");
     const headers = {
         'Authorization': `Bearer ${token}`
     };
 
     stompClient.connect(headers, function () {
-        const userEmail = getCurrentUser().email;
-        console.log('✅ WebSocket Connected as ' + userEmail);
-
-        // Update UI status badge to Online
         const statusBadge = document.getElementById("chatStatus");
         if (statusBadge) {
             statusBadge.className = "badge bg-success";
             statusBadge.innerHTML = `<i class="fas fa-circle me-1" style="font-size: 0.55rem;"></i>Online`;
         }
 
-        // Add welcome message if chat area is empty
         const chatArea = document.getElementById("chatArea");
         if (chatArea && !chatArea.hasChildNodes()) {
             chatArea.innerHTML = `
@@ -91,18 +50,14 @@ export function connectChat() {
                 </div>`;
         }
 
-        // 1. Subscribe to YOUR private queue
         stompClient.subscribe('/user/queue/messages', function (payload) {
-            console.log("📩 Private Message Received");
             onPrivateMessageReceived(JSON.parse(payload.body));
         });
 
-        // Subscribe to Typing Queue
         stompClient.subscribe('/user/queue/typing', function (payload) {
             onTypingMessageReceived(JSON.parse(payload.body));
         });
 
-        // Subscribe to Notification Queue
         stompClient.subscribe('/user/queue/notifications', function (payload) {
             const notification = JSON.parse(payload.body);
             notificationListeners.forEach(listener => {
@@ -114,13 +69,11 @@ export function connectChat() {
             });
         });
 
-        // 2. Subscribe to Public Chat (Global Chat)
         stompClient.subscribe('/topic/public', function (payload) {
             onPublicMessageReceived(JSON.parse(payload.body));
         });
-
     }, function (err) {
-        console.error('❌ WebSocket Error:', err);
+        console.error('WebSocket Error:', err);
         const statusBadge = document.getElementById("chatStatus");
         if (statusBadge) {
             statusBadge.className = "badge bg-danger";
@@ -129,122 +82,116 @@ export function connectChat() {
     });
 }
 
-// =========================================================
-// 2. SIDEBAR HISTORY (PRESERVED)
-// =========================================================
-/**
- * Fetches the list of users with whom the current user has exchanged direct
- * messages (`GET /api/messages/partners`) and renders clickable items in `#recentChatsList`.
- */
+export function disconnectChat() {
+    clearTimeout(typingTimeout);
+    isTyping = false;
+    currentChatPartnerEmail = null;
+    if (stompClient) {
+        try {
+            if (stompClient.connected) {
+                stompClient.disconnect(() => {});
+            }
+        } catch (_) {}
+        stompClient = null;
+    }
+}
+
 export async function fetchRecentChats() {
     try {
         const users = await get('/messages/partners');
         const list = document.getElementById("recentChatsList");
-        if(!list) return;
+        if (!list) return;
         list.innerHTML = "";
 
-        users.forEach(u => {
-            list.innerHTML += `
-                <div class="chat-item p-3 border-bottom" style="cursor:pointer"
-                     onclick="window.startDirectChat('${u.id}', '${u.name}', '${u.email}')">
-                    <strong>${u.name}</strong> <br> <small>${u.role}</small>
+        if (!Array.isArray(users) || users.length === 0) {
+            list.innerHTML = `
+                <div class="cc-empty-state">
+                    <i class="fas fa-comments"></i>
+                    <h5 class="mb-2">No conversations yet</h5>
+                    <p class="mb-0">Find peers or alumni in the Directory tab to start a 1-on-1 chat.</p>
                 </div>`;
+            return;
+        }
+
+        users.forEach(u => {
+            const item = document.createElement("div");
+            item.className = "chat-item p-3 border-bottom";
+            item.style.cursor = "pointer";
+            item.innerHTML = `<strong>${escapeHtml(u.name || "Member")}</strong><br><small class="text-muted">${escapeHtml(u.role || "")}</small>`;
+            item.addEventListener("click", () => window.startDirectChat(u.id, u.name || "Member", u.email));
+            list.appendChild(item);
         });
-    } catch(e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+    }
 }
 
-// =========================================================
-// 3. RECEIVE MESSAGE LOGIC (WITH NORMALIZATION)
-// =========================================================
-/**
- * Handles an incoming private message from `/user/queue/messages`.
- * If the DM modal (`#dmModal`) is currently open for that conversation partner,
- * appends the message bubble directly; otherwise triggers a Bootstrap toast alert.
- *
- * @param {Object} message - Parsed ChatMessage payload (`{ senderName, receiverName, content }`).
- */
 function onPrivateMessageReceived(message) {
     const currentUser = getCurrentUser();
-    if (!currentUser) return;
+    if (!currentUser || !currentUser.email) return;
 
-    // Normalize emails to lowercase to prevent matching errors (e.g., Admin vs admin)
     const sender = message.senderName ? message.senderName.toLowerCase() : "";
+    const receiver = message.receiverName ? message.receiverName.toLowerCase() : "";
     const partner = currentChatPartnerEmail ? currentChatPartnerEmail.toLowerCase() : "";
     const me = currentUser.email.toLowerCase();
 
-    // CHECK: Is the chat modal open with the person who just messaged?
-    if (currentChatPartnerEmail && (sender === partner || sender === me)) {
+    if (currentChatPartnerEmail && (sender === partner || (sender === me && receiver === partner))) {
         const isMe = (sender === me);
         appendDirectMessage(message.content, isMe ? 'me' : 'them');
-    } else {
-        // Notification: Show a toast if the modal isn't open
-        console.log(`🔔 New message from ${message.senderName}`);
-
-        if(window.bootstrap && document.getElementById('liveToast')) {
+    } else if (sender !== me) {
+        if (window.bootstrap && document.getElementById('liveToast')) {
             const toastBody = document.getElementById('toastBody');
-            if(toastBody) {
+            if (toastBody) {
                 toastBody.innerText = `New message from ${message.senderName}`;
-                const toast = new bootstrap.Toast(document.getElementById('liveToast'));
+                const toast = bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast'));
                 toast.show();
             }
         }
     }
 }
 
-/**
- * Appends a message bubble to the 1-on-1 Direct Message modal (`#dmMessagesArea`).
- *
- * @param {string} text         - Message content.
- * @param {'me'|'them'} who     - Alignment/color style (`me` = right/primary, `them` = left/secondary).
- */
 function appendDirectMessage(text, who) {
     const container = document.getElementById("dmMessagesArea");
     if (!container) return;
 
+    const emptyHint = container.querySelector(".dm-empty-hint");
+    if (emptyHint) emptyHint.remove();
+
     const div = document.createElement("div");
-    // Styling matches your dashboard.html alerts
     div.className = who === 'me'
         ? "alert alert-primary py-2 px-3 mb-1 ms-auto text-end"
         : "alert alert-secondary py-2 px-3 mb-1 me-auto";
     div.style.maxWidth = "75%";
     div.style.borderRadius = "15px";
-    div.innerText = text;
+    div.innerText = text || "";
 
     container.appendChild(div);
-    container.scrollTop = container.scrollHeight; // Auto-scroll
+    container.scrollTop = container.scrollHeight;
 }
 
-// =========================================================
-// 4. PUBLIC CHAT LOGIC (GLOBAL)
-// =========================================================
-/**
- * Renders an incoming public broadcast message from `/topic/public` inside `#chatArea`.
- *
- * @param {Object} message - Parsed public chat message (`{ senderName, content, type }`).
- */
 function onPublicMessageReceived(message) {
-    const messageArea = document.getElementById("chatArea"); // Matches Global Chat container
+    const messageArea = document.getElementById("chatArea");
     if (!messageArea) return;
 
-    // Remove empty placeholder
     const placeholder = messageArea.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
 
     const div = document.createElement('div');
     const currentUser = getCurrentUser();
-    const isMe = (message.senderName === currentUser.email) || (message.senderName === currentUser.name);
+    const senderLower = (message.senderName || "").toLowerCase();
+    const isMe = Boolean(
+        (currentUser.email && senderLower === currentUser.email.toLowerCase()) ||
+        (currentUser.name && message.senderName === currentUser.name)
+    );
 
     div.className = `message ${isMe ? 'my-message' : 'other-message'}`;
-    const displayName = isMe ? 'You' : (message.senderName || 'Anonymous');
-    div.innerHTML = `<strong class="small d-block mb-1" style="opacity: 0.85; font-size: 0.78rem;">${displayName}</strong><div>${message.content}</div>`;
+    const displayName = isMe ? 'You' : (message.senderName || 'Member');
+    div.innerHTML = `<strong class="small d-block mb-1" style="opacity: 0.85; font-size: 0.78rem;">${escapeHtml(displayName)}</strong><div>${escapeHtml(message.content || "")}</div>`;
 
     messageArea.appendChild(div);
     messageArea.scrollTop = messageArea.scrollHeight;
 }
 
-/**
- * Publishes a message from `#messageInput` to the Global Chat room (`/app/chat.sendMessage`).
- */
 window.sendMessage = function() {
     const input = document.getElementById("messageInput");
     if (!input) return;
@@ -265,39 +212,30 @@ window.sendMessage = function() {
     input.value = '';
 };
 
-// =========================================================
-// 5. EXPOSED WINDOW FUNCTIONS
-// =========================================================
-
-/**
- * Opens the 1-on-1 Direct Message modal (`#dmModal`) for the specified partner
- * and loads conversation history from `GET /api/messages/history?partnerEmail=...`.
- * Can be called from the Messages sidebar or the Directory "Message" button.
- *
- * @param {number|string} userId    - Partner's user ID.
- * @param {string}        userName  - Partner's display name for modal header.
- * @param {string}        userEmail - Partner's email address used as routing key.
- */
 window.startDirectChat = async function(userId, userName, userEmail) {
+    if (!userEmail) return;
     currentChatPartnerEmail = userEmail;
 
     const titleEl = document.getElementById("dmModalTitle");
-    if(titleEl) titleEl.innerText = "Chat with " + userName;
+    if (titleEl) titleEl.innerText = "Chat with " + (userName || userEmail);
+
+    const indicator = document.getElementById("typingIndicator");
+    if (indicator) indicator.classList.add("d-none");
 
     const modalEl = document.getElementById('dmModal');
-    if(modalEl) new bootstrap.Modal(modalEl).show();
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
 
     const container = document.getElementById("dmMessagesArea");
-    if(container) {
+    if (container) {
         container.innerHTML = "<div class='text-center text-muted small mt-3'>Loading history...</div>";
         try {
-            const messages = await get(`/messages/history?partnerEmail=${userEmail}`);
+            const messages = await get(`/messages/history?partnerEmail=${encodeURIComponent(userEmail)}`);
             container.innerHTML = "";
 
-            const myEmail = getCurrentUser().email.toLowerCase();
+            const myEmail = (getCurrentUser().email || "").toLowerCase();
 
             if (!messages || messages.length === 0) {
-                container.innerHTML = "<div class='text-center text-muted small mt-5'>Say 'Hi' to start the conversation! 👋</div>";
+                container.innerHTML = "<div class='dm-empty-hint text-center text-muted small mt-5'>Say 'Hi' to start the conversation! 👋</div>";
             } else {
                 messages.forEach(msg => {
                     const sender = (msg.senderName || msg.senderEmail || "").toLowerCase();
@@ -306,55 +244,52 @@ window.startDirectChat = async function(userId, userName, userEmail) {
                 });
             }
             container.scrollTop = container.scrollHeight;
-        } catch(e) {
+        } catch (e) {
             console.error("History Error:", e);
             container.innerHTML = "<div class='text-danger text-center'>Failed to load history.</div>";
         }
     }
 };
 
-/**
- * Sends a private 1-on-1 message from `#dmInput` via STOMP (`/app/chat.private`)
- * and performs an optimistic UI append inside `#dmMessagesArea`.
- */
 window.sendDirectMessage = function() {
     const input = document.getElementById("dmInput");
+    if (!input) return;
     const content = input.value.trim();
+    if (!content || !currentChatPartnerEmail) return;
+
+    if (!stompClient || !stompClient.connected) {
+        alert("Messaging connection is offline. Please wait for reconnection.");
+        return;
+    }
+
     const user = getCurrentUser();
+    stompClient.send("/app/chat.private", {}, JSON.stringify({
+        senderName: user.email,
+        receiverName: currentChatPartnerEmail,
+        content: content,
+        type: 'CHAT'
+    }));
 
-    if (content && currentChatPartnerEmail && stompClient) {
-        const chatMessage = {
-            senderName: user.email,
-            receiverName: currentChatPartnerEmail,
-            content: content,
-            type: 'CHAT'
-        };
-
-        stompClient.send("/app/chat.private", {}, JSON.stringify(chatMessage));
-
-        // Optimistic UI Update
-        appendDirectMessage(content, 'me');
-        input.value = '';
+    input.value = '';
+    if (isTyping) {
+        clearTimeout(typingTimeout);
+        isTyping = false;
+        stompClient.send("/app/chat.typing", {}, JSON.stringify({
+            senderEmail: user.email,
+            receiverEmail: currentChatPartnerEmail,
+            isTyping: false
+        }));
     }
 };
 
-// =========================================================
-// 6. TYPING INDICATOR LOGIC
-// =========================================================
-let typingTimeout = null;
-let isTyping = false;
-
-/**
- * Sends a debounced typing status frame (`isTyping: true`, followed by
- * `isTyping: false` after 2 seconds of inactivity) to `/app/chat.typing`.
- */
 window.handleTyping = function() {
-    if (!currentChatPartnerEmail || !stompClient) return;
+    if (!currentChatPartnerEmail || !stompClient || !stompClient.connected) return;
 
+    const myEmail = getCurrentUser().email;
     if (!isTyping) {
         isTyping = true;
         stompClient.send("/app/chat.typing", {}, JSON.stringify({
-            senderEmail: getCurrentUser().email,
+            senderEmail: myEmail,
             receiverEmail: currentChatPartnerEmail,
             isTyping: true
         }));
@@ -363,25 +298,23 @@ window.handleTyping = function() {
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
         isTyping = false;
-        stompClient.send("/app/chat.typing", {}, JSON.stringify({
-            senderEmail: getCurrentUser().email,
-            receiverEmail: currentChatPartnerEmail,
-            isTyping: false
-        }));
+        if (stompClient && stompClient.connected && currentChatPartnerEmail) {
+            stompClient.send("/app/chat.typing", {}, JSON.stringify({
+                senderEmail: myEmail,
+                receiverEmail: currentChatPartnerEmail,
+                isTyping: false
+            }));
+        }
     }, 2000);
-}
+};
 
-/**
- * Displays or hides `#typingIndicator` inside `#dmModal` when the active chat
- * partner starts or stops typing.
- *
- * @param {Object} message - Typing status payload (`{ senderEmail, receiverEmail, typing }`).
- */
 function onTypingMessageReceived(message) {
-    if (currentChatPartnerEmail && message.senderEmail && message.senderEmail.toLowerCase() === currentChatPartnerEmail.toLowerCase()) {
+    if (currentChatPartnerEmail && message.senderEmail &&
+            message.senderEmail.toLowerCase() === currentChatPartnerEmail.toLowerCase()) {
         const indicator = document.getElementById("typingIndicator");
         if (indicator) {
-            if (message.typing) { // handle both cases (getter for boolean is isTyping(), JSON might serialize as 'typing' or 'isTyping', Jackson depends on field name vs getter)
+            const active = Boolean(message.isTyping ?? message.typing);
+            if (active) {
                 indicator.innerText = "User is typing...";
                 indicator.classList.remove("d-none");
             } else {
@@ -391,7 +324,6 @@ function onTypingMessageReceived(message) {
     }
 }
 
-// Attach event listener once DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("dmInput");
     if (input) {

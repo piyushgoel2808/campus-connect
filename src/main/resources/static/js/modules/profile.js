@@ -1,42 +1,20 @@
 /**
- * ============================================================================
- * FILE: src/main/resources/static/js/modules/profile.js
- * PURPOSE: Current user's Profile & Notification Preferences editor module
- *          (`components/profile.html`).
- *
- * OVERVIEW:
- *   Loads the logged-in user's profile data from `GET /api/users/me` into the
- *   form fields in `components/profile.html` (`#pHeadline`, `#pCompany`,
- *   `#pDesignation`, `#pSkills`, `#pExperience`, `#pLinkedin`, `#pGithub`, and
- *   notification checkboxes `#pNotifyMessages`, `#pNotifyEvents`, `#pNotifyJobs`),
- *   and saves updates via `PUT /api/users/profile` (`window.saveProfile`).
- *
- * API ENDPOINTS USED:
- *   - GET `/api/users/me`      : Fetch current authenticated user's profile
- *   - PUT `/api/users/profile` : Save updated profile and notification settings
- * ============================================================================
+ * Current user's Profile, Notification Preferences, and Password Update controller (`components/profile.html`).
  */
 
-import { get, send } from '../utils/api.js';
+import { get, send, parseErrorMessage } from '../utils/api.js';
 
-// =========================================================
-// 1. LOAD PROFILE
-// =========================================================
+const SAVE_PROFILE_BTN_HTML = '<i class="fas fa-save me-1"></i> Save Profile';
+const CHANGE_PWD_BTN_HTML = '<i class="fas fa-key me-1"></i> Update Password';
 
-/**
- * Fetches the authenticated user's profile from `GET /api/users/me` and
- * populates the input fields and notification toggle switches in `components/profile.html`.
- */
 export async function loadProfile() {
-    // Only try to load if we are actually on the profile tab
-    // (though usually this function is called specifically when that tab loads)
     try {
         const user = await get('/users/me');
+        if (!user) return;
 
-        // Helper to safely set values only if the input exists
         const setVal = (id, val) => {
             const el = document.getElementById(id);
-            if(el) el.value = val || "";
+            if (el) el.value = val || "";
         };
 
         setVal("pHeadline", user.headline);
@@ -47,7 +25,6 @@ export async function loadProfile() {
         setVal("pLinkedin", user.linkedinUrl);
         setVal("pGithub", user.githubUrl);
 
-        // Helper to set checkbox state (defaults to true unless explicitly false)
         const setChecked = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.checked = val !== false;
@@ -56,22 +33,12 @@ export async function loadProfile() {
         setChecked("pNotifyMessages", user.notifyMessages);
         setChecked("pNotifyEvents", user.notifyEvents);
         setChecked("pNotifyJobs", user.notifyJobs);
-
     } catch (e) {
         console.error("Failed to load profile data", e);
     }
 }
 
-// =========================================================
-// 2. SAVE PROFILE (Exposed to Window)
-// =========================================================
-
-/**
- * Reads all profile inputs and notification checkboxes from `components/profile.html`
- * and sends `PUT /api/users/profile`. Reloads the profile form on success.
- */
 window.saveProfile = async function() {
-    // Helper to get values safely
     const getVal = (id) => {
         const el = document.getElementById(id);
         return el ? el.value : "";
@@ -83,16 +50,16 @@ window.saveProfile = async function() {
         designation: getVal("pDesignation"),
         skills: getVal("pSkills"),
         pastExperience: getVal("pExperience"),
-        linkedinUrl: getVal("pLinkedin"),
-        githubUrl: getVal("pGithub"),
+        linkedinUrl: getVal("pLinkedin").trim(),
+        githubUrl: getVal("pGithub").trim(),
         notifyMessages: !!document.getElementById("pNotifyMessages")?.checked,
         notifyEvents: !!document.getElementById("pNotifyEvents")?.checked,
         notifyJobs: !!document.getElementById("pNotifyJobs")?.checked
     };
 
-    const btn = document.querySelector("button[onclick='saveProfile()']");
-    if(btn) {
-        btn.innerHTML = "Saving...";
+    const btn = document.getElementById("btnSaveProfile") || document.querySelector("button[onclick='saveProfile()']");
+    if (btn) {
+        btn.innerText = "Saving...";
         btn.disabled = true;
     }
 
@@ -101,17 +68,74 @@ window.saveProfile = async function() {
 
         if (res.ok) {
             alert("✅ Profile Updated Successfully!");
-            // Reload to ensure data persistence is visible
-            loadProfile();
+            await loadProfile();
         } else {
-            alert("❌ Failed to update profile.");
+            const errMsg = await parseErrorMessage(res, "Failed to update profile.");
+            alert(`❌ ${errMsg}`);
         }
     } catch (e) {
         console.error(e);
         alert("❌ Error: " + e.message);
     } finally {
-        if(btn) {
-            btn.innerHTML = "Save Changes";
+        if (btn) {
+            btn.innerHTML = SAVE_PROFILE_BTN_HTML;
+            btn.disabled = false;
+        }
+    }
+};
+
+window.changeMyPassword = async function() {
+    const currentPassword = document.getElementById("pCurrentPassword")?.value || "";
+    const newPassword = document.getElementById("pNewPassword")?.value || "";
+    const confirmPassword = document.getElementById("pConfirmPassword")?.value || "";
+    const alertEl = document.getElementById("pwdAlert");
+    const btn = document.getElementById("btnChangePassword");
+
+    const showPwdAlert = (msg, ok = false) => {
+        if (!alertEl) return alert(msg);
+        alertEl.className = ok ? "alert alert-success mb-3" : "alert alert-danger mb-3";
+        alertEl.innerText = msg;
+        alertEl.classList.remove("d-none");
+    };
+
+    if (!currentPassword) {
+        showPwdAlert("Please enter your current password.");
+        return;
+    }
+    if (newPassword.length < 6) {
+        showPwdAlert("New password must be at least 6 characters long.");
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        showPwdAlert("New password and confirmation do not match.");
+        return;
+    }
+
+    if (btn) {
+        btn.innerText = "Updating...";
+        btn.disabled = true;
+    }
+
+    try {
+        const res = await send('/auth/change-password', 'POST', { currentPassword, newPassword });
+        if (res.ok) {
+            localStorage.setItem("password_changed", "true");
+            const banner = document.getElementById("defaultPasswordBanner");
+            if (banner) banner.classList.add("d-none");
+            document.getElementById("pCurrentPassword").value = "";
+            document.getElementById("pNewPassword").value = "";
+            document.getElementById("pConfirmPassword").value = "";
+            showPwdAlert("✅ Password updated successfully!", true);
+        } else {
+            const errMsg = await parseErrorMessage(res, "Failed to update password.");
+            showPwdAlert(`❌ ${errMsg}`);
+        }
+    } catch (e) {
+        console.error(e);
+        showPwdAlert("❌ Error: " + e.message);
+    } finally {
+        if (btn) {
+            btn.innerHTML = CHANGE_PWD_BTN_HTML;
             btn.disabled = false;
         }
     }

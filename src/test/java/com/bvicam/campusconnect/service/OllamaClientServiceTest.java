@@ -94,4 +94,34 @@ class OllamaClientServiceTest {
                 )
         );
     }
+
+    @Test
+    @DisplayName("extractTextFromImage with blank image returns empty string without network call")
+    void extractTextFromImage_blankImage_returnsEmpty() {
+        OllamaClientService service = new OllamaClientService(
+                "http://localhost:11434",
+                "gemma4:e4b",
+                "embeddinggemma-2:latest",
+                5,
+                objectMapper
+        );
+
+        assertThat(service.extractTextFromImage("   ")).isEmpty();
+        assertThat(service.extractTextFromImage(null, "Page 1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("extractTextFromImage when Ollama is offline returns empty string rather than standby chat message")
+    void extractTextFromImage_offlineOllama_returnsEmptyString() {
+        OllamaClientService service = new OllamaClientService(
+                "http://192.0.2.1:80",
+                "gemma4:e4b",
+                "embeddinggemma-2:latest",
+                1,
+                objectMapper
+        );
+
+        String extracted = service.extractTextFromImage("aGVsbG8=", "Page 1");
+        assertThat(extracted).isEmpty();
+    }
 }

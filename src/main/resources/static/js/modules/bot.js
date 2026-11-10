@@ -20,39 +20,11 @@
  * ============================================================================
  */
 
-import { send } from '../utils/api.js';
+import { send, parseErrorMessage } from '../utils/api.js';
+import { escapeHtml, safeHttpUrl } from '../utils/sanitize.js';
 
-/**
- * Escapes unsafe HTML characters to guard against XSS injection.
- *
- * @param {string} str - Raw input text
- * @returns {string} Sanitized string
- */
-function escapeHtml(str) {
-    if (!str) return "";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-/**
- * Validates that an external URL strictly adheres to HTTP or HTTPS schemes.
- * Prevents attribute breaking and dangerous protocols like `javascript:` or `data:`.
- *
- * @param {string} urlStr - Target URL string
- * @returns {boolean} True if valid http/https protocol
- */
 function isSafeHttpUrl(urlStr) {
-    if (!urlStr || typeof urlStr !== 'string') return false;
-    try {
-        const parsed = new URL(urlStr);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch (e) {
-        return false;
-    }
+    return Boolean(safeHttpUrl(urlStr));
 }
 
 /**
@@ -181,11 +153,16 @@ export function initBot() {
 
         try {
             const response = await send('/bot/ask', 'POST', { question: question });
-            const data = await response.json();
-
             const typingEl = document.getElementById(typingId);
             if (typingEl) typingEl.remove();
 
+            if (!response.ok) {
+                const errMsg = await parseErrorMessage(response, "Could not reach GradBot right now.");
+                appendBotMessage(`⚠️ ${errMsg}`, "bot");
+                return;
+            }
+
+            const data = await response.json();
             const answer = data.answer || "I couldn't process that question. Try asking about placements, batch, or events.";
             appendBotMessage(answer, "bot", data.citations, data.model);
 
@@ -283,7 +260,9 @@ function appendBotMessage(text, sender, citations = [], model = null) {
                     const badge = document.createElement("span");
                     badge.className = "badge bg-light text-dark border d-inline-flex align-items-center gap-1 bot-citation-pill";
                     const icon = c.category === 'NOTICE' ? 'fa-bell text-danger' :
-                                 c.category === 'SYLLABUS' ? 'fa-book text-info' : 'fa-file-alt text-secondary';
+                                 c.category === 'SYLLABUS' ? 'fa-book text-info' :
+                                 c.category === 'COURSE_MATERIAL' ? 'fa-file-pdf text-warning' :
+                                 c.category === 'BVICAM_WEB' ? 'fa-globe text-success' : 'fa-file-alt text-secondary';
                     badge.innerHTML = `<i class="fas ${icon}" style="font-size:0.7rem;"></i> <span>${escapeHtml(c.title || 'Campus Document')}</span>`;
                     if (c.similarity) {
                         const score = document.createElement("span");

@@ -28,7 +28,7 @@
             <h2 class="cc-page-title">Your Profile & Preferences</h2>
             <p class="cc-page-subtitle">Keep your professional information and portfolio links updated so peers and recruiters can find you.</p>
         </div>
-        <button class="btn btn-primary px-4" onclick="saveProfile()">
+        <button id="btnSaveProfile" class="btn btn-primary px-4" onclick="saveProfile()">
             <i class="fas fa-save me-1"></i> Save Profile
         </button>
     </div>
@@ -130,6 +130,33 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Security & Change Password Panel -->
+    <div class="cc-panel p-4">
+        <div class="cc-divider-title">
+            <i class="fas fa-lock text-primary"></i> Account Security &amp; Password
+        </div>
+        <div id="pwdAlert" class="alert d-none mb-3" role="alert"></div>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="pCurrentPassword" class="form-label text-muted small fw-bold">Current Password</label>
+                <input type="password" id="pCurrentPassword" class="form-control" placeholder="Enter current password" autocomplete="current-password">
+            </div>
+            <div class="col-md-4">
+                <label for="pNewPassword" class="form-label text-muted small fw-bold">New Password (min 6 chars)</label>
+                <input type="password" id="pNewPassword" class="form-control" placeholder="New password" minlength="6" autocomplete="new-password">
+            </div>
+            <div class="col-md-4">
+                <label for="pConfirmPassword" class="form-label text-muted small fw-bold">Confirm New Password</label>
+                <input type="password" id="pConfirmPassword" class="form-control" placeholder="Confirm new password" minlength="6" autocomplete="new-password">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="button" id="btnChangePassword" class="btn btn-outline-primary px-4" onclick="changeMyPassword()">
+                    <i class="fas fa-key me-1"></i> Update Password
+                </button>
             </div>
         </div>
     </div>

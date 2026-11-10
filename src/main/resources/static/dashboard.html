@@ -108,26 +108,26 @@
         <!-- 2A. Desktop Left Sidebar Navigation (lg and up) -->
         <div class="col-lg-2 d-none d-lg-block">
             <div class="nav flex-column nav-pills sticky-top shell-sticky-nav">
-                <button class="nav-link active" id="tab-wall" aria-label="Open wall" onclick="switchTab('wall')">
+                <button class="nav-link active" id="tab-wall" data-tab="wall" aria-label="Open wall" onclick="switchTab('wall')">
                     <i class="fas fa-newspaper me-2"></i> Campus Wall
                 </button>
-                <button class="nav-link" id="tab-messages" aria-label="Open messages" onclick="switchTab('messages')">
+                <button class="nav-link" id="tab-messages" data-tab="messages" aria-label="Open messages" onclick="switchTab('messages')">
                     <i class="fas fa-comment-dots me-2"></i> Messages <span id="msgBadge" class="badge bg-danger ms-auto d-none">New</span>
                 </button>
-                <button class="nav-link" id="tab-directory" aria-label="Open directory" onclick="switchTab('directory')">
+                <button class="nav-link" id="tab-directory" data-tab="directory" aria-label="Open directory" onclick="switchTab('directory')">
                     <i class="fas fa-users me-2"></i> Directory
                 </button>
-                <button class="nav-link" id="tab-events" aria-label="Open events" onclick="switchTab('events')">
+                <button class="nav-link" id="tab-events" data-tab="events" aria-label="Open events" onclick="switchTab('events')">
                     <i class="fas fa-calendar-alt me-2"></i> Events
                 </button>
-                <button class="nav-link" id="tab-jobs" aria-label="Open jobs" onclick="switchTab('jobs')">
+                <button class="nav-link" id="tab-jobs" data-tab="jobs" aria-label="Open jobs" onclick="switchTab('jobs')">
                     <i class="fas fa-briefcase me-2"></i> Jobs & Referrals
                 </button>
-                <button class="nav-link" id="tab-profile" aria-label="Open profile" onclick="switchTab('profile')">
+                <button class="nav-link" id="tab-profile" data-tab="profile" aria-label="Open profile" onclick="switchTab('profile')">
                     <i class="fas fa-user-circle me-2"></i> Profile Settings
                 </button>
                 <!-- Admin Workspace tab: hidden by default, unhidden for ADMIN role in dashboard-main.js -->
-                <button class="nav-link d-none" id="tab-admin" aria-label="Open admin dashboard" onclick="switchTab('admin')">
+                <button class="nav-link d-none" id="tab-admin" data-tab="admin" aria-label="Open admin dashboard" onclick="switchTab('admin')">
                     <i class="fas fa-shield-alt me-2 text-danger"></i> Admin Workspace
                 </button>
 
@@ -142,36 +142,52 @@
 
         <!-- 2B. Mobile Horizontal Scrollable Nav Pills (below lg breakpoint) -->
         <div class="col-12 d-lg-none mb-2">
-            <div class="nav nav-pills nav-fill mobile-nav-surface p-2 rounded-4 overflow-auto flex-nowrap gap-2">
-                <button class="nav-link active" aria-label="Open wall" onclick="switchTab('wall')">
+            <div class="nav nav-pills mobile-nav-surface p-2 rounded-4 overflow-auto flex-nowrap gap-2">
+                <button class="nav-link active" data-tab="wall" aria-label="Open wall" onclick="switchTab('wall')">
                     <i class="fas fa-newspaper"></i>
                     <span class="mobile-nav-label">Wall</span>
                 </button>
-                <button class="nav-link" aria-label="Open messages" onclick="switchTab('messages')">
+                <button class="nav-link" data-tab="chat" id="mobile-tab-chat" aria-label="Open global chat" onclick="switchTab('chat')">
+                    <i class="fas fa-comments"></i>
+                    <span class="mobile-nav-label">Chat</span>
+                </button>
+                <button class="nav-link" data-tab="messages" aria-label="Open messages" onclick="switchTab('messages')">
                     <i class="fas fa-comment"></i>
-                    <span class="mobile-nav-label">Messages</span>
+                    <span class="mobile-nav-label">DMs</span>
                 </button>
-                <button class="nav-link" aria-label="Open directory" onclick="switchTab('directory')">
+                <button class="nav-link" data-tab="directory" aria-label="Open directory" onclick="switchTab('directory')">
                     <i class="fas fa-users"></i>
-                    <span class="mobile-nav-label">Directory</span>
+                    <span class="mobile-nav-label">People</span>
                 </button>
-                <button class="nav-link" aria-label="Open events" onclick="switchTab('events')">
+                <button class="nav-link" data-tab="events" aria-label="Open events" onclick="switchTab('events')">
                     <i class="fas fa-calendar"></i>
                     <span class="mobile-nav-label">Events</span>
                 </button>
-                <button class="nav-link" aria-label="Open jobs" onclick="switchTab('jobs')">
+                <button class="nav-link" data-tab="jobs" aria-label="Open jobs" onclick="switchTab('jobs')">
                     <i class="fas fa-briefcase"></i>
                     <span class="mobile-nav-label">Jobs</span>
                 </button>
-                <button class="nav-link" aria-label="Open profile" onclick="switchTab('profile')">
+                <button class="nav-link" data-tab="profile" aria-label="Open profile" onclick="switchTab('profile')">
                     <i class="fas fa-user"></i>
                     <span class="mobile-nav-label">Profile</span>
+                </button>
+                <button class="nav-link d-none" id="mobile-tab-admin" data-tab="admin" aria-label="Open admin dashboard" onclick="switchTab('admin')">
+                    <i class="fas fa-shield-alt text-danger"></i>
+                    <span class="mobile-nav-label">Admin</span>
+                </button>
+                <button class="nav-link text-warning" aria-label="Rate GradLink" onclick="openFeedbackModal()">
+                    <i class="fas fa-star"></i>
+                    <span class="mobile-nav-label">Rate</span>
                 </button>
             </div>
         </div>
 
         <!-- 2C. Center Dynamic Content Area: `window.switchTab()` injects `components/<tab>.html` here -->
-        <div class="col-lg-7">
+        <div class="col-lg-7" id="mainContentCol">
+            <div id="defaultPasswordBanner" class="alert alert-warning d-none d-flex justify-content-between align-items-center mb-3 shadow-sm">
+                <span class="small"><i class="fas fa-shield-alt me-2"></i>You are using an administrator-assigned default password. Please change it in Profile Settings.</span>
+                <button type="button" class="btn btn-sm btn-warning fw-semibold ms-2" onclick="switchTab('profile')">Change Now</button>
+            </div>
             <div id="main-content" class="p-3 p-lg-4">
                 <div class="text-center py-5">
                     <div class="spinner-border text-primary"></div>
@@ -181,7 +197,7 @@
         </div>
 
         <!-- 2D. Right Side Global Chat Column (STOMP /topic/public via js/modules/chat.js) -->
-        <div class="col-lg-3 chat-column d-none d-lg-block">
+        <div class="col-lg-3 chat-column" id="chatColumn">
             <div class="chat-card">
                 <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-comments text-primary me-2"></i>Global Chat</span>
@@ -368,10 +384,12 @@
     <div id="botMessages" class="card-body bot-messages">
         <div class="system-placeholder text-center p-3 my-auto text-muted small">
             <i class="fas fa-lightbulb text-warning fa-2x mb-2 d-block"></i>
-            Ask GradBot about MCA syllabus, notices, batchmates, jobs, or campus events!
+            Ask GradBot about BVICAM notices, syllabi, course materials, fees, batchmates, jobs, or events!
             <div class="d-flex flex-wrap gap-1 justify-content-center mt-3">
                 <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('What is the MCA syllabus & curriculum?')">MCA Syllabus</button>
-                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Tell me about latest exam notices')">Exam Notices</button>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Tell me about latest exam and admission notices')">Latest Notices</button>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Show MCA course materials and notes links')">Course Materials</button>
+                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('What is the BVICAM fee structure and admission process?')">Fees &amp; Admission</button>
                 <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('What upcoming events or fests are scheduled?')">Upcoming Events</button>
                 <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Placement stats & top recruiters')">Placements</button>
                 <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.74rem;" onclick="askBot('Are there any active job referrals?')">Job Openings</button>
@@ -408,6 +426,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
-<script type="module" src="js/dashboard-main.js?v=20261010_3"></script>
+<script type="module" src="js/dashboard-main.js?v=20261110_1"></script>
 </body>
 </html>

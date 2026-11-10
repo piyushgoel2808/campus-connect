@@ -27,12 +27,18 @@ public final class TextChunker {
             return Collections.emptyList();
         }
 
-        String cleaned = text.trim().replaceAll("\\s+", " ");
-        if (cleaned.length() <= chunkSize) {
-            return List.of(cleaned);
-        }
+        String cleaned = text.trim()
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replaceAll("[ \\t\\x0B\\f]+", " ")
+                .replaceAll(" *\\n{2,} *", "\n\n")
+                .replaceAll(" *(?<!\\n)\\n(?!\\n) *", " ")
+                .trim();
 
         int targetChunkSize = (chunkSize > 0) ? chunkSize : 600;
+        if (cleaned.length() <= targetChunkSize) {
+            return List.of(cleaned);
+        }
         int targetOverlap = Math.max(0, overlap);
         if (targetOverlap >= targetChunkSize) {
             targetOverlap = targetChunkSize / 2;
@@ -47,9 +53,9 @@ public final class TextChunker {
 
             // Favor natural word boundaries when splitting before end
             if (end < length) {
-                int lastSpace = cleaned.lastIndexOf(' ', end);
-                if (lastSpace > start + (targetChunkSize / 2)) {
-                    end = lastSpace;
+                int lastBreak = Math.max(cleaned.lastIndexOf(' ', end), cleaned.lastIndexOf('\n', end));
+                if (lastBreak > start + (targetChunkSize / 2)) {
+                    end = lastBreak;
                 }
             }
 

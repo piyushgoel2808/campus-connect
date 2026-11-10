@@ -2,11 +2,13 @@ package com.bvicam.campusconnect.repository;
 
 import com.bvicam.campusconnect.entity.DocumentCategory;
 import com.bvicam.campusconnect.entity.DocumentChunk;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -20,6 +22,12 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
     @Query("SELECT c FROM DocumentChunk c JOIN FETCH c.document d WHERE d.category = :category ORDER BY c.id ASC")
     List<DocumentChunk> findByDocumentCategory(@Param("category") DocumentCategory category);
 
+    @Query("SELECT c FROM DocumentChunk c JOIN FETCH c.document d WHERE d.category IN :categories ORDER BY c.id DESC")
+    List<DocumentChunk> findRecentByCategories(@Param("categories") Collection<DocumentCategory> categories, Pageable pageable);
+
     @Query("SELECT c FROM DocumentChunk c JOIN FETCH c.document d ORDER BY c.id ASC")
     List<DocumentChunk> findAllWithDocument();
+
+    @Query("SELECT c FROM DocumentChunk c JOIN FETCH c.document d ORDER BY c.id DESC")
+    List<DocumentChunk> findRecentWithDocument(Pageable pageable);
 }

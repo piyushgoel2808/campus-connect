@@ -197,8 +197,17 @@ public class QdrantClientService {
      * @return list of nearest neighbor search results
      */
     public List<QdrantSearchResultDto> search(List<Double> queryVector, int limit, double scoreThreshold) {
+        return searchOptional(queryVector, limit, scoreThreshold).orElse(Collections.emptyList());
+    }
+
+    /**
+     * Searches Qdrant and distinguishes a valid empty response ({@code Optional.of([])})
+     * from an offline or failing Qdrant backend ({@code Optional.empty()}).
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<List<QdrantSearchResultDto>> searchOptional(List<Double> queryVector, int limit, double scoreThreshold) {
         if (queryVector == null || queryVector.isEmpty()) {
-            return Collections.emptyList();
+            return Optional.of(Collections.emptyList());
         }
 
         try {
@@ -229,8 +238,9 @@ public class QdrantClientService {
                         Map<String, Object> payload = objectMapper.convertValue(item.path("payload"), Map.class);
                         results.add(new QdrantSearchResultDto(id, score, payload != null ? payload : Collections.emptyMap()));
                     }
-                    return results;
+                    return Optional.of(results);
                 }
+                return Optional.of(Collections.emptyList());
             } else {
                 log.warn("Qdrant search returned HTTP {}: {}", response.statusCode(), response.body());
             }
@@ -238,7 +248,7 @@ public class QdrantClientService {
             log.warn("Qdrant search failed: {}", e.getMessage());
         }
 
-        return Collections.emptyList();
+        return Optional.empty();
     }
 
     /**

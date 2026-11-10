@@ -24,9 +24,9 @@ Content-Type: application/json
 GET http://localhost:8080/api/jobs
 Authorization: Bearer <PASTE_YOUR_TOKEN_HERE>
 
-### Post a Job (You must login as ALUMNI first to do this successfully!)
+### Post a Job (You must login as ALUMNI or ADMIN first!)
 POST http://localhost:8080/api/jobs
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHVkZW50MUBidmljYW0uaW4iLCJpYXQiOjE3NjU0NjY5OTIsImV4cCI6MTc2NTUwMjk5Mn0.UNprbcR1VvABfL4qjOT0Sv2VAbGB6dFCgxQNR-0iVA4
+Authorization: Bearer <PASTE_YOUR_TOKEN_HERE>
 Content-Type: application/json
 
 {

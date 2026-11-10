@@ -1,38 +1,13 @@
 /**
- * ============================================================================
- * FILE: src/main/resources/static/js/modules/jobs.js
- * PURPOSE: Jobs & Referrals board controller (`components/jobs.html` and
- *          shared modals in `dashboard.html`).
- *
- * OVERVIEW:
- *   Fetches job and internship referral postings from `GET /api/jobs` and
- *   renders cards into `#jobList`.
- *   Role-based permissions:
- *     - `ALUMNI` and `ADMIN` users can post new jobs (`#btnPostJob` -> `#postJobModal`).
- *     - A job's original author (`isOwner`) or any `ADMIN` can edit (`#editJobModal`)
- *       or delete (`window.deleteJob`) the posting.
- *     - Also syncs with the Admin Panel's Jobs table (`window.loadAdminJobs`)
- *       whenever a job is created, edited, or deleted.
- *
- * API ENDPOINTS USED:
- *   - GET    `/api/jobs`      : Fetch all job/referral listings
- *   - POST   `/api/jobs`      : Create a new job/referral (Alumni / Admin)
- *   - PUT    `/api/jobs/{id}` : Update an existing job/referral (Owner / Admin)
- *   - DELETE `/api/jobs/{id}` : Delete a job/referral (Owner / Admin)
- * ============================================================================
+ * Jobs & Referrals board controller (`components/jobs.html` and shared modals in `dashboard.html`).
  */
 
-import { get, send, getCurrentUser } from '../utils/api.js';
+import { get, send, getCurrentUser, parseErrorMessage } from '../utils/api.js';
+import { escapeHtml, safeHttpUrl } from '../utils/sanitize.js';
 
-// In-memory cache mapping jobId -> job object for modal editing
 const jobsMap = new Map();
+const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Resolves the current user's normalized uppercase role and email from
- * `getCurrentUser()`, falling back to `campus_user` in `localStorage` if needed.
- *
- * @returns {{ role: string, email: string }}
- */
 function resolveCurrentRoleAndEmail() {
     let { role, email } = getCurrentUser();
     if (!role || !email) {
@@ -48,10 +23,6 @@ function resolveCurrentRoleAndEmail() {
     };
 }
 
-/**
- * Fetches all job postings from `GET /api/jobs`, reveals `#btnPostJob` if the
- * user is `ADMIN` or `ALUMNI`, and renders the job cards into `#jobList`.
- */
 export async function fetchJobs() {
     try {
         const { role } = resolveCurrentRoleAndEmail();
@@ -61,35 +32,27 @@ export async function fetchJobs() {
         }
 
         const jobs = await get('/jobs');
-        renderJobs(jobs);
+        renderJobs(Array.isArray(jobs) ? jobs : []);
     } catch (e) {
         console.error("Failed to fetch jobs:", e);
     }
 }
 
-/**
- * Normalizes an application link or email into a valid `href` attribute:
- *   - Preserves `http://`, `https://`, and `mailto:` links as-is.
- *   - Prefixes bare email addresses with `mailto:`.
- *   - Prefixes bare domain URLs with `https://`.
- *
- * @param {string} link - Raw apply link or email entered by the poster.
- * @returns {string} Safe href string for the "Apply Now" anchor tag.
- */
 function formatApplyHref(link) {
-    if (!link) return "#";
-    const trimmed = link.trim();
-    if (/^(https?:\/\/|mailto:)/i.test(trimmed)) return trimmed;
-    if (trimmed.includes("@") && !trimmed.includes("/")) return `mailto:${trimmed}`;
-    return `https://${trimmed}`;
+    if (!link) return "";
+    const trimmed = String(link).trim();
+    if (!trimmed) return "";
+
+    if (trimmed.toLowerCase().startsWith("mailto:")) {
+        const emailPart = trimmed.slice(7).trim();
+        return SIMPLE_EMAIL_REGEX.test(emailPart) ? `mailto:${emailPart}` : "";
+    }
+    if (SIMPLE_EMAIL_REGEX.test(trimmed)) {
+        return `mailto:${trimmed}`;
+    }
+    return safeHttpUrl(trimmed);
 }
 
-/**
- * Renders job/referral cards inside `#jobList` and caches each job in `jobsMap`.
- * Displays Edit and Delete buttons if the logged-in user is an `ADMIN` or the job's author.
- *
- * @param {Array<Object>} jobs - Array of job objects returned from `/api/jobs`.
- */
 function renderJobs(jobs) {
     const list = document.getElementById("jobList");
     jobsMap.clear();
@@ -112,7 +75,7 @@ function renderJobs(jobs) {
     }
 
     jobs.forEach(j => {
-        const isOwner = email && j.postedBy?.email && j.postedBy.email.toLowerCase() === email.toLowerCase();
+        const isOwner = Boolean(email && j.postedBy?.email && j.postedBy.email.toLowerCase() === email.toLowerCase());
         const canManage = isAdmin || isOwner;
 
         const actionBtns = canManage
@@ -128,17 +91,20 @@ function renderJobs(jobs) {
         const postedBy = j.postedBy?.name || 'GradLink';
         const titleInitial = (j.company || 'J').charAt(0).toUpperCase();
         const applyHref = formatApplyHref(j.applyLink);
+        const applyBtnHtml = applyHref
+            ? `<a href="${escapeHtml(applyHref)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">Apply Now</a>`
+            : `<span class="badge bg-light text-muted border">No valid apply link</span>`;
 
-        list.innerHTML += `
+        list.insertAdjacentHTML("beforeend", `
             <article class="cc-feature-card cc-hover-lift">
                 <div class="cc-feature-card-header">
                     <div class="d-flex align-items-start gap-3 flex-grow-1">
-                        <div class="avatar-circle">${titleInitial}</div>
+                        <div class="avatar-circle">${escapeHtml(titleInitial)}</div>
                         <div>
-                            <h5 class="cc-feature-title mb-1">${j.title}</h5>
-                            <div class="cc-feature-meta">${j.company} • ${j.location || 'Remote'}</div>
+                            <h5 class="cc-feature-title mb-1">${escapeHtml(j.title)}</h5>
+                            <div class="cc-feature-meta">${escapeHtml(j.company)} • ${escapeHtml(j.location || 'Remote')}</div>
                             <div class="mt-2 d-flex flex-wrap gap-2">
-                                <span class="badge rounded-pill text-bg-light border">Posted by ${postedBy}</span>
+                                <span class="badge rounded-pill text-bg-light border">Posted by ${escapeHtml(postedBy)}</span>
                                 <span class="badge rounded-pill text-bg-light border">Opportunity</span>
                             </div>
                         </div>
@@ -146,19 +112,16 @@ function renderJobs(jobs) {
                     <div class="d-flex gap-2 align-items-start">${actionBtns}</div>
                 </div>
                 <div class="cc-feature-card-body">
-                    <p class="cc-feature-meta mb-3">${j.description || ''}</p>
+                    <p class="cc-feature-meta mb-3">${escapeHtml(j.description || '')}</p>
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <a href="${applyHref}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">Apply Now</a>
-                        <span class="text-muted small">${j.applyLink || 'Tap to open application link'}</span>
+                        ${applyBtnHtml}
+                        <span class="text-muted small">${escapeHtml(j.applyLink || 'See details above')}</span>
                     </div>
                 </div>
-            </article>`;
+            </article>`);
     });
 }
 
-/**
- * Opens the shared `#postJobModal` dialog (defined in `dashboard.html`).
- */
 window.openPostJobModal = function() {
     const modalEl = document.getElementById('postJobModal');
     if (modalEl) {
@@ -166,10 +129,6 @@ window.openPostJobModal = function() {
     }
 };
 
-/**
- * Reads form fields from `#postJobModal`, validates required fields, and submits
- * `POST /api/jobs`. Refreshes both `#jobList` and `#adminJobsTable` on success.
- */
 export async function postJob() {
     const titleEl = document.getElementById("jobTitle");
     const companyEl = document.getElementById("jobCompany");
@@ -193,21 +152,18 @@ export async function postJob() {
     try {
         const res = await send('/jobs', 'POST', data);
         if (!res.ok) {
-            const errText = await res.text();
-            alert("Failed to post job: " + errText);
+            alert("Failed to post job: " + await parseErrorMessage(res));
             return;
         }
 
         alert("✅ Job / Referral posted successfully!");
 
-        // Reset fields
         if (titleEl) titleEl.value = "";
         if (companyEl) companyEl.value = "";
         if (locationEl) locationEl.value = "";
         if (descEl) descEl.value = "";
         if (linkEl) linkEl.value = "";
 
-        // Close modal using Bootstrap API
         const modalEl = document.getElementById('postJobModal');
         if (modalEl) {
             bootstrap.Modal.getOrCreateInstance(modalEl).hide();
@@ -221,13 +177,6 @@ export async function postJob() {
     }
 }
 
-/**
- * Populates `#editJobModal` with the selected job's details (fetching `/api/jobs`
- * if `jobsMap` is not yet populated, e.g., when invoked directly from Admin Panel)
- * and opens the modal.
- *
- * @param {number|Object} jobOrId - Job ID or job object to edit.
- */
 window.openEditJobModal = async function(jobOrId) {
     let job = (typeof jobOrId === 'object' && jobOrId !== null)
         ? jobOrId
@@ -266,10 +215,6 @@ window.openEditJobModal = async function(jobOrId) {
     }
 };
 
-/**
- * Submits edited job fields from `#editJobModal` to `PUT /api/jobs/{id}`
- * and refreshes both the Jobs board and Admin Jobs table.
- */
 window.submitEditJob = async function() {
     const id = document.getElementById("editJobId")?.value;
     const title = document.getElementById("editJobTitle")?.value.trim() || "";
@@ -293,8 +238,7 @@ window.submitEditJob = async function() {
         });
 
         if (!res.ok) {
-            const errText = await res.text();
-            alert("Failed to update job: " + errText);
+            alert("Failed to update job: " + await parseErrorMessage(res));
             return;
         }
 
@@ -313,26 +257,22 @@ window.submitEditJob = async function() {
     }
 };
 
-/**
- * Deletes a job posting via `DELETE /api/jobs/{id}` after user confirmation
- * and refreshes both the Jobs board and Admin Jobs table.
- *
- * @param {number} id - Target job ID to delete.
- */
 export async function deleteJob(id) {
     if (confirm("Are you sure you want to delete this job / referral?")) {
-        const res = await send(`/jobs/${id}`, 'DELETE');
-        if (!res.ok) {
-            const err = await res.text();
-            alert("Failed to delete job: " + err);
-            return;
+        try {
+            const res = await send(`/jobs/${id}`, 'DELETE');
+            if (!res.ok) {
+                alert("Failed to delete job: " + await parseErrorMessage(res));
+                return;
+            }
+            await fetchJobs();
+            if (window.loadAdminJobs) window.loadAdminJobs();
+        } catch (e) {
+            alert("Failed to delete job: " + e.message);
         }
-        await fetchJobs();
-        if (window.loadAdminJobs) window.loadAdminJobs();
     }
 }
 
-// Expose these functions to the global window so HTML onclick="..." works
 window.deleteJob = deleteJob;
 window.postJob = postJob;
 window.fetchJobs = fetchJobs;

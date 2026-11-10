@@ -177,11 +177,76 @@ public class OllamaClientService {
                 "options", Map.of("temperature", 0.3)
         );
 
+        String generated = executeChatCompletion(requestPayload, timeout, "chat generation");
+        if (generated != null && !generated.isBlank()) {
+            return generated;
+        }
+
+        return "⚠️ **GradBot AI Runner is currently in standby mode.**\n\n"
+                + "The local high-performance Mac AI runner (`gemma4:e4b`) is offline. "
+                + "You can still browse campus events, jobs, batch directory, and notices via the dashboard tabs, "
+                + "or ask the system administrator to start the AI runner via `./start-ai-runner.sh`.";
+    }
+
+    /**
+     * Extracts text verbatim from a Base64-encoded image (such as a scanned PDF page or exam date sheet screenshot)
+     * using the configured vision-capable Ollama chat model (e.g., {@code gemma4:e4b}).
+     *
+     * @param base64Image Base64-encoded PNG/JPEG image payload
+     * @return extracted text (preserving tables in Markdown), or empty string if blank/unreadable/offline
+     */
+    public String extractTextFromImage(String base64Image) {
+        return extractTextFromImage(base64Image, null);
+    }
+
+    /**
+     * Extracts text verbatim from a Base64-encoded image with optional page label context.
+     *
+     * @param base64Image Base64-encoded PNG/JPEG image payload
+     * @param pageLabel   optional page context label (e.g., {@code "Page 1 of 3"})
+     * @return extracted text (preserving tables in Markdown), or empty string if blank/unreadable/offline
+     */
+    public String extractTextFromImage(String base64Image, String pageLabel) {
+        if (base64Image == null || base64Image.isBlank()) {
+            return "";
+        }
+
+        String contextNote = (pageLabel != null && !pageLabel.isBlank()) ? " (" + pageLabel + ")" : "";
+        String ocrPrompt = "You are a precise document OCR engine. Extract ALL readable text visible in this image"
+                + contextNote
+                + " verbatim, including headings, circular numbers, dates, exam timings, paper codes, subjects, table rows, and footnotes. "
+                + "Preserve tabular schedules cleanly using Markdown pipe tables (| Column | Column |). "
+                + "Do not summarize or add conversational commentary. If there is no readable text, reply with EMPTY.";
+
+        Map<String, Object> userMessage = Map.of(
+                "role", "user",
+                "content", ocrPrompt,
+                "images", List.of(base64Image.trim())
+        );
+
+        // Disable reasoning tokens ("think": false) so multimodal OCR completes in ~1-2s per page
+        Map<String, Object> requestPayload = Map.of(
+                "model", chatModel,
+                "think", false,
+                "messages", List.of(userMessage),
+                "stream", false,
+                "options", Map.of("temperature", 0.1)
+        );
+
+        Duration ocrTimeout = timeout.compareTo(Duration.ofSeconds(90)) < 0 ? Duration.ofSeconds(90) : timeout;
+        String extracted = executeChatCompletion(requestPayload, ocrTimeout, "vision OCR" + contextNote);
+        if (extracted == null || extracted.isBlank() || "EMPTY".equalsIgnoreCase(extracted.trim())) {
+            return "";
+        }
+        return extracted.trim();
+    }
+
+    private String executeChatCompletion(Map<String, Object> requestPayload, Duration requestTimeout, String operationLabel) {
         try {
             String jsonBody = objectMapper.writeValueAsString(requestPayload);
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + "/api/chat"))
-                    .timeout(timeout)
+                    .timeout(requestTimeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
             applyAuth(builder);
@@ -195,19 +260,15 @@ public class OllamaClientService {
                     return messageNode.asText().trim();
                 }
             } else {
-                log.warn("Ollama /api/chat returned HTTP {}: {}", response.statusCode(), response.body());
+                log.warn("Ollama /api/chat ({}) returned HTTP {}: {}", operationLabel, response.statusCode(), response.body());
             }
         } catch (IOException | InterruptedException e) {
-            log.warn("Ollama chat generation failed or timed out (runner offline): {}", e.getMessage());
+            log.warn("Ollama {} failed or timed out (runner offline): {}", operationLabel, e.getMessage());
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
         }
-
-        return "⚠️ **GradBot AI Runner is currently in standby mode.**\n\n"
-                + "The local high-performance Mac AI runner (`gemma4:e4b`) is offline. "
-                + "You can still browse campus events, jobs, batch directory, and notices via the dashboard tabs, "
-                + "or ask the system administrator to start the AI runner via `./start-ai-runner.sh`.";
+        return "";
     }
 
     /**

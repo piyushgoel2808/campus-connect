@@ -2,7 +2,10 @@ package com.bvicam.campusconnect.service;
 
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
@@ -11,14 +14,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Service responsible for sending outbound emails via Spring's {@link JavaMailSender}.
- * <p>
- * Used by administrators (via {@code AdminController}) to send campus-wide broadcast
- * announcements asynchronously in the background without blocking HTTP responses.
- * </p>
+ * Service responsible for sending outbound broadcast emails via Spring's {@link JavaMailSender}.
  */
 @Service
 public class EmailService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
     @Autowired
     private JavaMailSender mailSender;
@@ -26,39 +27,37 @@ public class EmailService {
     @Autowired
     private UserRepository userRepository;
 
-    /**
-     * Asynchronously sends an email announcement to every registered user in the system.
-     * <p>
-     * Annotated with {@link Async} so that the caller receives an immediate HTTP response
-     * while the SMTP dispatches execute on a background thread pool. Individual send
-     * failures are caught and logged so one invalid address does not abort the entire broadcast.
-     * </p>
-     *
-     * @param subject the email subject line
-     * @param body    the main message body to include in the personalized email template
-     */
-    @Async // Run in background
+    @Value("${spring.mail.username:}")
+    private String mailUsername;
+
+    @Async
     public void sendBroadcastEmail(String subject, String body) {
-        // Step 1: Retrieve all registered users from the database
+        if (mailUsername == null || mailUsername.isBlank() || mailUsername.contains("your-email@")) {
+            log.warn("Skipping email broadcast '{}': SMTP credentials are not configured.", subject);
+            return;
+        }
+
         List<User> allUsers = userRepository.findAll();
+        log.info("Starting email broadcast '{}' to {} users", subject, allUsers.size());
 
-        System.out.println("📨 Starting Broadcast to " + allUsers.size() + " users...");
-
-        // Step 2: Iterate through each user and send a personalized plain-text email
+        int sent = 0;
+        int failed = 0;
         for (User user : allUsers) {
+            if (user.getEmail() == null || user.getEmail().isBlank()) {
+                continue;
+            }
             try {
                 SimpleMailMessage message = new SimpleMailMessage();
                 message.setTo(user.getEmail());
                 message.setSubject(subject);
                 message.setText("Dear " + user.getName() + ",\n\n" + body + "\n\nRegards,\nBVICAM Campus Connect");
-
                 mailSender.send(message);
-                System.out.println("✅ Sent to: " + user.getEmail());
+                sent++;
             } catch (Exception e) {
-                // Log failure for this recipient and continue broadcasting to remaining users
-                System.out.println("❌ Failed to send to: " + user.getEmail());
+                failed++;
+                log.warn("Failed to send broadcast email to {}: {}", user.getEmail(), e.getMessage());
             }
         }
-        System.out.println("📨 Broadcast Complete.");
+        log.info("Broadcast '{}' finished: sent={}, failed={}", subject, sent, failed);
     }
 }

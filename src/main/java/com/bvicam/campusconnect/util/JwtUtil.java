@@ -1,10 +1,18 @@
 package com.bvicam.campusconnect.util;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -13,73 +21,82 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Utility component responsible for JSON Web Token (JWT) creation and cryptographic key management.
- *
- * <p><b>Architectural Role:</b></p>
- * <ul>
- *   <li>Used by {@code AuthController} upon successful login to issue a signed bearer token
- *       identifying the authenticated user by their email address.</li>
- *   <li>Used by {@link com.bvicam.campusconnect.config.JwtAuthenticationFilter} on every subsequent
- *       HTTP request to obtain the HMAC-SHA256 signing key ({@link #getSignKey()}) and verify token
- *       integrity and expiration.</li>
- * </ul>
+ * Utility component responsible for JSON Web Token (JWT) creation, parsing, and key management.
  */
 @Component
 public class JwtUtil {
 
-    // =========================================================================
-    // Configuration Properties
-    // =========================================================================
+    private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
+    private static final long TOKEN_VALIDITY_MS = 1000L * 60 * 60 * 10; // 10 hours
 
-    /**
-     * Base64-encoded 256-bit secret key used to sign and verify JWT tokens.
-     * Injected from {@code app.jwt.secret} in {@code application.properties} (with a default
-     * fallback value for local development).
-     */
-    @Value("${app.jwt.secret:5367566B59703373367639792B423F4528482B4D6251655468576D5A71347437}")
+    @Value("${app.jwt.secret:}")
     private String secret;
 
-    // =========================================================================
-    // Token Generation & Key Resolution
-    // =========================================================================
+    @Autowired(required = false)
+    private Environment environment;
 
-    /**
-     * Generates a signed JWT for the specified user identifier (email address).
-     *
-     * @param userName the authenticated user's email address, stored as the JWT {@code sub} (subject) claim
-     * @return a compact, URL-safe JWT string valid for 10 hours
-     */
+    private Key signingKey;
+
+    @PostConstruct
+    public void init() {
+        if (secret == null || secret.isBlank()) {
+            if (environment != null && environment.acceptsProfiles(Profiles.of("prod", "production"))) {
+                throw new IllegalStateException("APP_JWT_SECRET must be configured when running in production profile.");
+            }
+            // Generate a non-deterministic ephemeral key for unconfigured local dev rather than shipping a public key
+            this.signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+            log.warn("app.jwt.secret is not configured; using an ephemeral random HMAC-SHA256 key (tokens invalidate on restart).");
+        } else {
+            byte[] keyBytes = Decoders.BASE64.decode(secret.trim());
+            this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        }
+    }
+
     public String generateToken(String userName) {
         Map<String, Object> claims = new HashMap<>();
         return createToken(claims, userName);
     }
 
-    /**
-     * Builds and signs the JWT payload with standard registered claims ({@code sub}, {@code iat}, {@code exp})
-     * using the HMAC-SHA256 ({@link SignatureAlgorithm#HS256}) algorithm.
-     *
-     * @param claims  custom claims map to embed in the token payload
-     * @param subject the principal identifier (user email)
-     * @return the serialized JWT string
-     */
     private String createToken(Map<String, Object> claims, String subject) {
+        long now = System.currentTimeMillis();
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10)) // 10 Hours validity
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + TOKEN_VALIDITY_MS))
                 .signWith(getSignKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    /**
-     * Decodes the Base64-encoded secret string into raw bytes and constructs an HMAC-SHA cryptographic
-     * {@link Key} suitable for signing and verifying HS256 JWTs.
-     *
-     * @return the cryptographic signing {@link Key}
-     */
+    public String extractUsername(String token) {
+        return parseAllClaims(token).getSubject();
+    }
+
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        if (userDetails == null) {
+            return false;
+        }
+        Claims claims = parseAllClaims(token);
+        String subject = claims.getSubject();
+        Date expiration = claims.getExpiration();
+        return subject != null
+                && subject.equalsIgnoreCase(userDetails.getUsername())
+                && expiration != null
+                && expiration.after(new Date());
+    }
+
+    private Claims parseAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSignKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
     public Key getSignKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secret);
-        return Keys.hmacShaKeyFor(keyBytes);
+        if (this.signingKey == null) {
+            init();
+        }
+        return this.signingKey;
     }
 }

@@ -6,6 +6,7 @@ package com.bvicam.campusconnect.entity;
 public enum DocumentCategory {
     NOTICE,
     SYLLABUS,
+    COURSE_MATERIAL,
     BVICAM_WEB,
     GENERAL
 }

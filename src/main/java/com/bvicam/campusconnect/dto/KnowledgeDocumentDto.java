@@ -27,6 +27,22 @@ public class KnowledgeDocumentDto {
     private String originalFileName;
     private int chunkCount;
     private LocalDateTime createdAt;
+    private String publishedDate;
+    private String syncStatus;
+
+    /**
+     * Backward-compatible 8-argument constructor retained for unit/integration tests.
+     */
+    public KnowledgeDocumentDto(Long id,
+                                String title,
+                                DocumentCategory category,
+                                SourceType sourceType,
+                                String sourceUrl,
+                                String originalFileName,
+                                int chunkCount,
+                                LocalDateTime createdAt) {
+        this(id, title, category, sourceType, sourceUrl, originalFileName, chunkCount, createdAt, null, null);
+    }
 
     /**
      * Factory method mapping a JPA entity to a projection DTO.
@@ -46,7 +62,9 @@ public class KnowledgeDocumentDto {
                 doc.getSourceUrl(),
                 doc.getOriginalFileName(),
                 doc.getChunkCount(),
-                doc.getCreatedAt()
+                doc.getCreatedAt(),
+                doc.getPublishedDate(),
+                doc.getSyncStatus() != null ? doc.getSyncStatus().name() : null
         );
     }
 }

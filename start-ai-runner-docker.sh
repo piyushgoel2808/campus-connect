@@ -247,26 +247,32 @@ else
     echo -e "${GREEN}✓ Cloudflare Tunnel active: ${BOLD}${TUNNEL_URL}${NC}"
 fi
 
-# Optional automated Render API sync
+# Optional automated Render API sync (per-key updates so unrelated Render env vars are never overwritten)
 RENDER_SYNCED=false
 if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ] && [ "$TUNNEL_URL" != "https://<pending-check-docker-logs>.trycloudflare.com" ]; then
-    echo "Auto-syncing environment variables to Render via API..."
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-        "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/env-vars" \
-        -H "Accept: application/json" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${RENDER_API_KEY}" \
-        -d "[
-            {\"key\": \"OLLAMA_BASE_URL\", \"value\": \"${TUNNEL_URL}\"},
-            {\"key\": \"OLLAMA_AUTH_TOKEN\", \"value\": \"${GRADBOT_SECRET_KEY}\"},
-            {\"key\": \"OLLAMA_AUTH_HEADER\", \"value\": \"${AUTH_HEADER}\"}
-        ]")
+    echo "Auto-syncing environment variables to Render via API (per-key to protect existing config)..."
+    sync_render_var() {
+        local key="$1"
+        local val="$2"
+        curl -s -o /dev/null -w "%{http_code}" -X PUT \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/env-vars/${key}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -d "{\"value\": \"${val}\"}" || true
+    }
 
-    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    URL_STATUS=$(sync_render_var "OLLAMA_BASE_URL" "${TUNNEL_URL}")
+    TOKEN_STATUS=$(sync_render_var "OLLAMA_AUTH_TOKEN" "${GRADBOT_SECRET_KEY}")
+    HEADER_STATUS=$(sync_render_var "OLLAMA_AUTH_HEADER" "${AUTH_HEADER}")
+
+    if { [ "$URL_STATUS" = "200" ] || [ "$URL_STATUS" = "201" ]; } && \
+       { [ "$TOKEN_STATUS" = "200" ] || [ "$TOKEN_STATUS" = "201" ]; } && \
+       { [ "$HEADER_STATUS" = "200" ] || [ "$HEADER_STATUS" = "201" ]; }; then
         echo -e "${GREEN}✓ Render environment variables updated successfully!${NC}"
         RENDER_SYNCED=true
     else
-        echo -e "${YELLOW}⚠️  Render API sync returned HTTP ${HTTP_CODE}. Please verify manually.${NC}"
+        echo -e "${YELLOW}⚠️  Render API sync returned statuses (${URL_STATUS}, ${TOKEN_STATUS}, ${HEADER_STATUS}). Please verify manually.${NC}"
     fi
 fi
 

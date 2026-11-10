@@ -1,32 +1,46 @@
 package com.bvicam.campusconnect.service;
 
+import com.bvicam.campusconnect.dto.CreatePostRequest;
 import com.bvicam.campusconnect.entity.Comment;
 import com.bvicam.campusconnect.entity.Post;
+import com.bvicam.campusconnect.entity.PostLike;
 import com.bvicam.campusconnect.entity.Role;
 import com.bvicam.campusconnect.entity.User;
 import com.bvicam.campusconnect.repository.CommentRepository;
+import com.bvicam.campusconnect.repository.PostLikeRepository;
 import com.bvicam.campusconnect.repository.PostRepository;
 import com.bvicam.campusconnect.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 /**
- * Service layer for managing community feed {@link Post} entities and nested {@link Comment} threads.
- * <p>
- * Coordinates feed ordering (pinned posts first), automated profanity screening via
- * {@link ProfanityFilterService}, automatic account flagging via {@link UserModerationService},
- * post likes, admin pinning, and role/ownership-verified deletions.
- * </p>
+ * Service layer for managing community feed {@link Post} entities, per-user likes, and nested {@link Comment} threads.
  */
 @Service
 public class PostService {
 
+    private static final Logger log = LoggerFactory.getLogger(PostService.class);
+
     @Autowired
     private PostRepository postRepository;
+
+    @Autowired
+    private PostLikeRepository postLikeRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -40,180 +54,203 @@ public class PostService {
     @Autowired
     private UserModerationService userModerationService;
 
-    // =========================================================
-    // 1. POST MANAGEMENT (FEED, CREATE, DELETE, LIKE, PIN)
-    // =========================================================
+    @Value("${upload.dir:uploads}")
+    private String uploadDir;
 
-    /**
-     * Retrieves all community feed posts ordered with pinned posts at the top,
-     * followed by unpinned posts in reverse chronological order (newest first).
-     *
-     * @return a sorted list of all {@link Post} entities
-     */
-    // Corrected: Single method that handles pinned posts first, then chronological order
     public List<Post> getAllPosts() {
         return postRepository.findAllByOrderByIsPinnedDescCreatedAtDesc();
     }
 
-    /**
-     * Creates and saves a new community post authored by the specified user.
-     * <p>
-     * Screens the post content for profanity before saving. If prohibited language is detected,
-     * the author's account is immediately flagged in a separate transaction (via {@link UserModerationService})
-     * and an {@link IllegalArgumentException} is thrown to reject the post.
-     * </p>
-     *
-     * @param post  the {@link Post} payload containing text content and optional image URL
-     * @param email the email address of the authenticated author
-     * @return the persisted {@link Post} entity
-     * @throws IllegalArgumentException if the post content contains profanity
-     * @throws RuntimeException         if the author email cannot be resolved to a user
-     */
+    public List<Post> getPostsPage(int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        return postRepository.findAllByOrderByIsPinnedDescCreatedAtDesc(PageRequest.of(safePage, safeSize)).getContent();
+    }
+
     @Transactional
-    public Post createPost(Post post, String email) {
-        // Step 1: Screen content for prohibited or abusive language
-        if (profanityFilterService.containsProfanity(post.getContent())) {
-            // Flag the user in an independent transaction (REQUIRES_NEW) so the flag persists even when this transaction rolls back
+    public Post createPost(CreatePostRequest request, String email) {
+        if (request == null || request.getContent() == null || request.getContent().trim().isEmpty()) {
+            throw new IllegalArgumentException("Post content cannot be empty.");
+        }
+        String content = request.getContent().trim();
+        if (content.length() > 5000) {
+            throw new IllegalArgumentException("Post content exceeds maximum length of 5000 characters.");
+        }
+
+        if (profanityFilterService.containsProfanity(content)) {
             userModerationService.flagUser(email);
             throw new IllegalArgumentException("Your post contains prohibited or abusive language and has been blocked. Your account has been flagged.");
         }
 
-        // Step 2: Resolve the authenticated user and link as post author
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        post.setAuthor(user);
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        // Step 3: Persist the post to the database
+        Post post = new Post();
+        post.setContent(content);
+        post.setImageUrl(sanitizeImageUrl(request.getImageUrl()));
+        post.setAuthor(user);
+        post.setLikes(0);
+        post.setIsPinned(false);
+        post.setCommentsCount(0);
+
         return postRepository.save(post);
     }
 
-    /**
-     * Deletes a post if and only if the requester is either an {@code ADMIN} or the original author of the post.
-     *
-     * @param postId         the ID of the post to delete
-     * @param requesterEmail the email address of the authenticated user requesting deletion
-     * @throws RuntimeException if the post is not found or the user is unauthorized
-     */
+    private String sanitizeImageUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = rawUrl.trim();
+        if (trimmed.startsWith("/uploads/posts/")) {
+            return trimmed;
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            String scheme = uri.getScheme();
+            if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
+                return trimmed;
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        throw new IllegalArgumentException("Image URL must be an uploaded media path or an http/https URL.");
+    }
+
     @Transactional
     public void deletePost(Long postId, String requesterEmail) {
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
-        User requester = userRepository.findByEmail(requesterEmail).orElseThrow();
+                .orElseThrow(() -> new NoSuchElementException("Post not found"));
+        User requester = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        // Safe Enum check: Admin or author can delete
-        if (requester.getRole() == Role.ADMIN || post.getAuthor().getEmail().equals(requesterEmail)) {
-            postRepository.delete(post);
-        } else {
-            throw new RuntimeException("Unauthorized to delete this post");
+        boolean isAdmin = requester.getRole() == Role.ADMIN;
+        boolean isAuthor = post.getAuthor() != null && requesterEmail.equalsIgnoreCase(post.getAuthor().getEmail());
+
+        if (!isAdmin && !isAuthor) {
+            throw new SecurityException("Unauthorized to delete this post");
+        }
+
+        String imageUrl = post.getImageUrl();
+        postLikeRepository.deleteByPostId(postId);
+        postRepository.delete(post);
+        deleteUploadedPostImageIfLocal(imageUrl);
+    }
+
+    private void deleteUploadedPostImageIfLocal(String imageUrl) {
+        if (imageUrl == null || !imageUrl.startsWith("/uploads/posts/")) {
+            return;
+        }
+        try {
+            String filename = imageUrl.substring("/uploads/posts/".length());
+            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                return;
+            }
+            Path postsRoot = Paths.get(uploadDir, "posts").toAbsolutePath().normalize();
+            Path target = postsRoot.resolve(filename).normalize();
+            if (target.startsWith(postsRoot)) {
+                Files.deleteIfExists(target);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to remove uploaded post image '{}': {}", imageUrl, e.getMessage());
         }
     }
 
-    /**
-     * Increments the like counter on the specified post by 1.
-     *
-     * @param postId the ID of the post to like
-     */
     @Transactional
-    public void likePost(Long postId) {
-        Post post = postRepository.findById(postId).orElseThrow();
-        if (post.getLikes() == null) post.setLikes(0);
-        post.setLikes(post.getLikes() + 1);
+    public Map<String, Object> toggleLike(Long postId, String userEmail) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new NoSuchElementException("Post not found"));
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        Optional<PostLike> existing = postLikeRepository.findByPostIdAndUserId(postId, user.getId());
+        int currentLikes = post.getLikes() != null ? post.getLikes() : 0;
+        boolean liked;
+        if (existing.isPresent()) {
+            postLikeRepository.delete(existing.get());
+            post.setLikes(Math.max(0, currentLikes - 1));
+            liked = false;
+        } else {
+            postLikeRepository.save(new PostLike(post, user));
+            post.setLikes(currentLikes + 1);
+            liked = true;
+        }
         postRepository.save(post);
+        return Map.of("likes", post.getLikes(), "liked", liked);
     }
 
-    /**
-     * Toggles the pinned status of a post (pinning unpinned posts, or unpinning pinned posts).
-     * Restricted strictly to users with the {@link Role#ADMIN} role.
-     *
-     * @param postId         the ID of the post to pin or unpin
-     * @param requesterEmail the email address of the authenticated user
-     * @throws RuntimeException if the user is not an Admin or the post does not exist
-     */
     @Transactional
-    public void togglePin(Long postId, String requesterEmail) {
+    public boolean togglePin(Long postId, String requesterEmail) {
         User requester = userRepository.findByEmail(requesterEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        // Only ADMINs allowed
         if (requester.getRole() != Role.ADMIN) {
-            throw new RuntimeException("Only Admins can pin posts.");
+            throw new SecurityException("Only Admins can pin posts.");
         }
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
+                .orElseThrow(() -> new NoSuchElementException("Post not found"));
 
-        // Logic: If null, treat as false, then flip it
-        boolean currentStatus = post.getIsPinned() != null && post.getIsPinned();
-        post.setIsPinned(!currentStatus);
-
+        boolean nextStatus = !(post.getIsPinned() != null && post.getIsPinned());
+        post.setIsPinned(nextStatus);
         postRepository.save(post);
+        return nextStatus;
     }
 
-    // =========================================================
-    // 2. COMMENTS & REPLIES FUNCTIONALITY
-    // =========================================================
-
-    /**
-     * Fetches all top-level comments for a given post in chronological order (oldest first).
-     * Child replies are nested inside each top-level comment's {@code replies} list.
-     *
-     * @param postId the ID of the post
-     * @return a list of top-level {@link Comment} entities for the post
-     */
+    @Transactional(readOnly = true)
     public List<Comment> getComments(Long postId) {
-        return commentRepository.findByPostIdAndParentCommentIsNullOrderByCreatedAtAsc(postId);
+        List<Comment> topLevel = commentRepository.findByPostIdAndParentCommentIsNullOrderByCreatedAtAsc(postId);
+        initializeCommentReplies(topLevel);
+        return topLevel;
     }
 
-    /**
-     * Adds a new top-level comment or nested reply to a post after screening for profanity.
-     * <p>
-     * Also increments the parent post's denormalized {@code commentsCount} counter.
-     * </p>
-     *
-     * @param postId   the ID of the post being commented on
-     * @param content  the text content of the comment
-     * @param parentId optional ID of the parent comment if this is a nested reply (or {@code null} for top-level)
-     * @param email    the email address of the authenticated comment author
-     * @return the persisted {@link Comment} entity
-     * @throws IllegalArgumentException if the content is empty or contains profanity
-     */
+    private void initializeCommentReplies(List<Comment> comments) {
+        if (comments == null) {
+            return;
+        }
+        for (Comment comment : comments) {
+            List<Comment> replies = comment.getReplies();
+            if (replies != null && !replies.isEmpty()) {
+                initializeCommentReplies(replies);
+            }
+        }
+    }
+
     @Transactional
     public Comment addComment(Long postId, String content, Long parentId, String email) {
-        // Step 1: Validate non-empty content
         if (content == null || content.trim().isEmpty()) {
             throw new IllegalArgumentException("Comment content cannot be empty.");
         }
+        String trimmed = content.trim();
+        if (trimmed.length() > 2000) {
+            throw new IllegalArgumentException("Comment exceeds maximum length of 2000 characters.");
+        }
 
-        // Step 2: Check for profanity and flag the user's account if detected
-        if (profanityFilterService.containsProfanity(content)) {
+        if (profanityFilterService.containsProfanity(trimmed)) {
             userModerationService.flagUser(email);
             throw new IllegalArgumentException("Your comment contains prohibited or abusive language and has been blocked. Your account has been flagged.");
         }
 
-        // Step 3: Load target post and comment author
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
+                .orElseThrow(() -> new NoSuchElementException("Post not found"));
         User author = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        // Step 4: Construct the Comment entity
         Comment comment = new Comment();
-        comment.setContent(content.trim());
+        comment.setContent(trimmed);
         comment.setAuthor(author);
         comment.setPost(post);
         comment.setCreatedAt(LocalDateTime.now());
 
-        // Step 5: Link to parent comment if this is a nested reply
         if (parentId != null) {
             Comment parent = commentRepository.findById(parentId)
-                    .orElseThrow(() -> new RuntimeException("Parent comment not found"));
+                    .orElseThrow(() -> new NoSuchElementException("Parent comment not found"));
+            if (parent.getPost() == null || !postId.equals(parent.getPost().getId())) {
+                throw new IllegalArgumentException("Parent comment does not belong to the specified post.");
+            }
             comment.setParentComment(parent);
         }
 
         Comment saved = commentRepository.save(comment);
 
-        // Step 6: Increment post's total comment counter
-        // Update post comment count
         int currentCount = post.getCommentsCount() != null ? post.getCommentsCount() : 0;
         post.setCommentsCount(currentCount + 1);
         postRepository.save(post);
@@ -221,33 +258,40 @@ public class PostService {
         return saved;
     }
 
-    /**
-     * Deletes a comment (and its cascaded child replies) if the requester is an {@code ADMIN}
-     * or the comment's author, and decrements the parent post's {@code commentsCount} accordingly.
-     *
-     * @param commentId      the ID of the comment to delete
-     * @param requesterEmail the email address of the authenticated requester
-     * @throws RuntimeException if the comment is not found or the user is unauthorized
-     */
     @Transactional
-    public void deleteComment(Long commentId, String requesterEmail) {
+    public int deleteComment(Long commentId, String requesterEmail) {
         Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("Comment not found"));
-        User requester = userRepository.findByEmail(requesterEmail).orElseThrow();
+                .orElseThrow(() -> new NoSuchElementException("Comment not found"));
+        User requester = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        // Safe Enum check: Admin or author can delete
-        if (requester.getRole() == Role.ADMIN || comment.getAuthor().getEmail().equals(requesterEmail)) {
-            Post post = comment.getPost();
-            // Account for both the comment itself and any nested replies that will cascade-delete
-            int deletedCount = 1 + (comment.getReplies() != null ? comment.getReplies().size() : 0);
-            commentRepository.delete(comment);
-            if (post != null) {
-                int count = post.getCommentsCount() != null ? post.getCommentsCount() : deletedCount;
-                post.setCommentsCount(Math.max(0, count - deletedCount));
-                postRepository.save(post);
-            }
-        } else {
-            throw new RuntimeException("Unauthorized to delete this comment");
+        boolean isAdmin = requester.getRole() == Role.ADMIN;
+        boolean isAuthor = comment.getAuthor() != null && requesterEmail.equalsIgnoreCase(comment.getAuthor().getEmail());
+
+        if (!isAdmin && !isAuthor) {
+            throw new SecurityException("Unauthorized to delete this comment");
         }
+
+        Post post = comment.getPost();
+        int deletedCount = countCommentSubtree(comment);
+        commentRepository.delete(comment);
+        if (post != null) {
+            int count = post.getCommentsCount() != null ? post.getCommentsCount() : deletedCount;
+            int updatedCount = Math.max(0, count - deletedCount);
+            post.setCommentsCount(updatedCount);
+            postRepository.save(post);
+            return updatedCount;
+        }
+        return 0;
+    }
+
+    private int countCommentSubtree(Comment comment) {
+        int total = 1;
+        if (comment.getReplies() != null) {
+            for (Comment reply : comment.getReplies()) {
+                total += countCommentSubtree(reply);
+            }
+        }
+        return total;
     }
 }

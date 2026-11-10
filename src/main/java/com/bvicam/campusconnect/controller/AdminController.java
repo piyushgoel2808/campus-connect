@@ -1,283 +1,221 @@
 package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.RegisterRequest;
-import com.bvicam.campusconnect.entity.Department;
-import com.bvicam.campusconnect.entity.Event;
-import com.bvicam.campusconnect.entity.User;
-import com.bvicam.campusconnect.entity.Role;
-import com.bvicam.campusconnect.repository.CommentRepository;
-import com.bvicam.campusconnect.repository.DepartmentRepository;
-import com.bvicam.campusconnect.repository.EventRepository;
-import com.bvicam.campusconnect.repository.FeedbackRepository;
-import com.bvicam.campusconnect.repository.JobRepository;
-import com.bvicam.campusconnect.repository.PostRepository;
-import com.bvicam.campusconnect.repository.UserRepository;
+import com.bvicam.campusconnect.dto.UserProfileDto;
+import com.bvicam.campusconnect.entity.*;
+import com.bvicam.campusconnect.repository.*;
 import com.bvicam.campusconnect.service.EmailService;
+import com.bvicam.campusconnect.service.PostService;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.List;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.Principal;
+import java.util.*;
 
 /**
  * REST Controller for Administrative Operations ({@code /api/admin}).
- * <p>
- * Provides endpoints for user lifecycle management (CRUD, password reset, moderation unflagging),
- * campus-wide email broadcasts, post moderation, and bulk user onboarding via Excel ({@code .xlsx})
- * or CSV ({@code .csv}) file uploads. Intended for users with the {@link Role#ADMIN} role.
- * </p>
+ * Protected at both route level ({@code SecurityConfig}) and method/class level ({@code @PreAuthorize}).
  */
 @RestController
 @RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
+
+    private static final int MAX_BULK_IMPORT_ROWS = 2000;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final PostRepository postRepository;
+    private final PostLikeRepository postLikeRepository;
+    private final PostService postService;
     private final DepartmentRepository departmentRepository;
     private final CommentRepository commentRepository;
     private final JobRepository jobRepository;
     private final FeedbackRepository feedbackRepository;
     private final EventRepository eventRepository;
+    private final PrivateMessageRepository privateMessageRepository;
+    private final NotificationRepository notificationRepository;
+    private final KnowledgeDocumentRepository knowledgeDocumentRepository;
 
-    /**
-     * Constructs the {@code AdminController} with all required repositories and services injected.
-     */
     @Autowired
     public AdminController(UserRepository userRepository,
                            PasswordEncoder passwordEncoder,
                            EmailService emailService,
                            PostRepository postRepository,
+                           PostLikeRepository postLikeRepository,
+                           PostService postService,
                            DepartmentRepository departmentRepository,
                            CommentRepository commentRepository,
                            JobRepository jobRepository,
                            FeedbackRepository feedbackRepository,
-                           EventRepository eventRepository) {
+                           EventRepository eventRepository,
+                           PrivateMessageRepository privateMessageRepository,
+                           NotificationRepository notificationRepository,
+                           KnowledgeDocumentRepository knowledgeDocumentRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.postRepository = postRepository;
+        this.postLikeRepository = postLikeRepository;
+        this.postService = postService;
         this.departmentRepository = departmentRepository;
         this.commentRepository = commentRepository;
         this.jobRepository = jobRepository;
         this.feedbackRepository = feedbackRepository;
         this.eventRepository = eventRepository;
+        this.privateMessageRepository = privateMessageRepository;
+        this.notificationRepository = notificationRepository;
+        this.knowledgeDocumentRepository = knowledgeDocumentRepository;
     }
 
-    /**
-     * Resolves a department short code to an existing {@link Department} entity,
-     * normalizing legacy aliases (such as {@code "BA(JMC)"} to {@code "BJMC"}) and
-     * auto-creating the department if it does not yet exist.
-     *
-     * @param code the department code string
-     * @return the resolved or newly created {@link Department}, or {@code null} if the code is blank
-     */
     private Department resolveDepartment(String code) {
         if (code == null || code.trim().isEmpty()) return null;
         String normalized = code.trim();
         if ("BA(JMC)".equalsIgnoreCase(normalized)) {
             normalized = "BJMC";
         }
-        final String finalCode = normalized;
+        final String finalCode = normalized.toUpperCase(Locale.ROOT);
         return departmentRepository.findByCode(finalCode)
                 .orElseGet(() -> departmentRepository.save(new Department(finalCode, finalCode)));
     }
 
-    // =========================================================
-    // 1. USER MANAGEMENT (CRUD)
-    // =========================================================
-
-    /**
-     * Retrieves all registered user accounts in the system.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code GET /api/admin/users}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Response:</b> {@code 200 OK} with JSON array of {@link User} entities</li>
-     * </ul>
-     *
-     * @return a {@link ResponseEntity} containing the list of all users
-     */
     @GetMapping("/users")
-    public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(userRepository.findAll());
+    public ResponseEntity<List<UserProfileDto>> getAllUsers() {
+        return ResponseEntity.ok(userRepository.findAll().stream()
+                .map(UserProfileDto::fromEntity)
+                .toList());
     }
 
-    /**
-     * Creates a new user account (Student, Alumni, or Admin) from the Admin Dashboard.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code POST /api/admin/users}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Request Payload:</b> {@link RegisterRequest} JSON body</li>
-     *   <li><b>Response:</b> {@code 200 OK} on success, {@code 400 Bad Request} if email is missing/duplicate</li>
-     * </ul>
-     *
-     * @param request the registration details for the new user
-     * @return a {@link ResponseEntity} with a confirmation or error message
-     */
     @PostMapping("/users")
     @Transactional
     public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
-        try {
-            // Step 1: Validate that a non-empty, unique email address was provided
-            if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
-                return ResponseEntity.badRequest().body("Error: Email is required!");
-            }
-            if (userRepository.existsByEmail(request.getEmail().trim())) {
-                return ResponseEntity.badRequest().body("Error: Email already exists!");
-            }
-
-            // Step 2: Populate core identity and academic fields
-            User user = new User();
-            user.setName(request.getName());
-            user.setEmail(request.getEmail().trim());
-            user.setRole(request.getRole() != null ? request.getRole() : Role.STUDENT);
-            user.setEnrollmentNumber(request.getEnrollmentNumber());
-            user.setBatchYear(request.getBatchYear());
-
-            // Step 3: Resolve and link the academic department if a departmentCode was supplied
-            if (request.getDepartmentCode() != null && !request.getDepartmentCode().trim().isEmpty()) {
-                user.setDepartment(resolveDepartment(request.getDepartmentCode()));
-            }
-
-            // Step 4: Set Professional Profile Fields
-            user.setHeadline(request.getHeadline());
-            user.setCurrentCompany(request.getCurrentCompany());
-            user.setDesignation(request.getDesignation());
-            user.setSkills(request.getSkills());
-            user.setGithubUrl(request.getGithubUrl());
-            user.setLinkedinUrl(request.getLinkedinUrl());
-            user.setPastExperience(request.getPastExperience());
-
-            // Step 5: Hash the provided password (or default to "Bvicam@2025") and mark passwordChanged = false
-            String rawPass = (request.getPassword() != null && !request.getPassword().trim().isEmpty())
-                    ? request.getPassword().trim()
-                    : "Bvicam@2025";
-            user.setPasswordHash(passwordEncoder.encode(rawPass));
-            user.setPasswordChanged(false);
-
-            // Step 6: Save the new user entity
-            userRepository.save(user);
-            return ResponseEntity.ok("✅ User created successfully!");
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error creating user: " + e.getMessage());
+        if (request == null || request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Error: Email is required!");
         }
+        if (request.getName() == null || request.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Error: Name is required!");
+        }
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity.badRequest().body("Error: Email already exists!");
+        }
+
+        User user = new User();
+        user.setName(request.getName().trim());
+        user.setEmail(email);
+        user.setRole(request.getRole() != null ? request.getRole() : Role.STUDENT);
+        user.setEnrollmentNumber(request.getEnrollmentNumber());
+        user.setBatchYear(request.getBatchYear());
+
+        if (request.getDepartmentCode() != null && !request.getDepartmentCode().trim().isEmpty()) {
+            user.setDepartment(resolveDepartment(request.getDepartmentCode()));
+        }
+
+        user.setHeadline(request.getHeadline());
+        user.setCurrentCompany(request.getCurrentCompany());
+        user.setDesignation(request.getDesignation());
+        user.setSkills(request.getSkills());
+        user.setGithubUrl(request.getGithubUrl());
+        user.setLinkedinUrl(request.getLinkedinUrl());
+        user.setPastExperience(request.getPastExperience());
+
+        String rawPass = (request.getPassword() != null && !request.getPassword().trim().isEmpty())
+                ? request.getPassword().trim()
+                : "Bvicam@2025";
+        user.setPasswordHash(passwordEncoder.encode(rawPass));
+        user.setPasswordChanged(false);
+
+        userRepository.save(user);
+        return ResponseEntity.ok("User created successfully!");
     }
 
-    /**
-     * Deletes a user account and cleans up all associated foreign-key records
-     * (event RSVPs, comments, posts, jobs, and feedback).
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code DELETE /api/admin/delete-user/{id}}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Path Variable:</b> {@code id} - the ID of the user to delete</li>
-     *   <li><b>Response:</b> {@code 200 OK} on deletion, or {@code 404 Not Found} if user does not exist</li>
-     * </ul>
-     *
-     * @param id the ID of the user to delete
-     * @return a {@link ResponseEntity} indicating success or not found
-     */
     @DeleteMapping("/delete-user/{id}")
     @Transactional
-    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
-        // Step 1: Verify the user exists
+    public ResponseEntity<?> deleteUser(@PathVariable Long id, Principal principal) {
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
+        if (principal != null && principal.getName() != null
+                && principal.getName().equalsIgnoreCase(user.getEmail())) {
+            return ResponseEntity.badRequest().body("Administrators cannot delete their own account.");
+        }
 
-        // Step 2: Remove user from event participants join table to avoid FK constraint violations
-        for (Event event : eventRepository.findAll()) {
+        // Clean up event RSVP join table rows using targeted query
+        for (Event event : eventRepository.findByParticipantId(id)) {
             if (event.getParticipants() != null && event.getParticipants().remove(user)) {
                 eventRepository.save(event);
             }
         }
 
-        // Step 3: Remove comments, posts, jobs, and feedback authored by this user
-        commentRepository.findAll().stream()
-                .filter(c -> c.getAuthor() != null && id.equals(c.getAuthor().getId()))
-                .forEach(commentRepository::delete);
-        postRepository.findAll().stream()
-                .filter(p -> p.getAuthor() != null && id.equals(p.getAuthor().getId()))
-                .forEach(postRepository::delete);
-        jobRepository.findAll().stream()
-                .filter(j -> j.getPostedBy() != null && id.equals(j.getPostedBy().getId()))
-                .forEach(jobRepository::delete);
-        feedbackRepository.findAll().stream()
-                .filter(f -> f.getSubmittedBy() != null && id.equals(f.getSubmittedBy().getId()))
-                .forEach(feedbackRepository::delete);
+        postLikeRepository.deleteByUserId(id);
+        for (com.bvicam.campusconnect.entity.Comment comment : commentRepository.findByAuthorId(id)) {
+            commentRepository.delete(comment);
+        }
+        for (Post post : postRepository.findByAuthorId(id)) {
+            postLikeRepository.deleteByPostId(post.getId());
+            postRepository.delete(post);
+        }
+        jobRepository.deleteByPostedById(id);
+        feedbackRepository.deleteBySubmittedById(id);
+        knowledgeDocumentRepository.clearUploaderByUserId(id);
+        privateMessageRepository.deleteAllByParticipantEmail(user.getEmail());
+        notificationRepository.deleteByRecipientEmail(user.getEmail());
 
-        // Step 4: Delete the user record itself
         userRepository.delete(user);
-        return ResponseEntity.ok("✅ User deleted successfully.");
+        return ResponseEntity.ok("User deleted successfully.");
     }
 
-    /**
-     * Updates an existing user's academic, role, and professional profile details.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code PUT /api/admin/users/{id}}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Path Variable:</b> {@code id} - the ID of the user to update</li>
-     *   <li><b>Request Payload:</b> {@link RegisterRequest} JSON body with updated fields</li>
-     *   <li><b>Response:</b> {@code 200 OK} with confirmation message</li>
-     * </ul>
-     *
-     * @param id          the ID of the user to update
-     * @param updatedData the updated user fields
-     * @return a {@link ResponseEntity} confirming the update
-     */
     @PutMapping("/users/{id}")
     @Transactional
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody RegisterRequest updatedData) {
-        // Step 1: Retrieve existing user by ID
-        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
 
-        // Step 2: Apply updated identity, academic, and professional fields
-        if (updatedData.getName() != null) user.setName(updatedData.getName());
-        if (updatedData.getEmail() != null) user.setEmail(updatedData.getEmail().trim());
+        if (updatedData.getEmail() != null && !updatedData.getEmail().trim().isEmpty()) {
+            String newEmail = updatedData.getEmail().trim().toLowerCase(Locale.ROOT);
+            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                return ResponseEntity.badRequest().body("Error: Another user already uses this email.");
+            }
+            user.setEmail(newEmail);
+        }
+        if (updatedData.getName() != null && !updatedData.getName().trim().isEmpty()) {
+            user.setName(updatedData.getName().trim());
+        }
         if (updatedData.getRole() != null) user.setRole(updatedData.getRole());
-        user.setBatchYear(updatedData.getBatchYear());
-        user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
-        user.setCurrentCompany(updatedData.getCurrentCompany());
-        user.setDesignation(updatedData.getDesignation());
-        user.setHeadline(updatedData.getHeadline());
-        user.setSkills(updatedData.getSkills());
-        user.setGithubUrl(updatedData.getGithubUrl());
-        user.setLinkedinUrl(updatedData.getLinkedinUrl());
-        user.setPastExperience(updatedData.getPastExperience());
+        if (updatedData.getBatchYear() != null) user.setBatchYear(updatedData.getBatchYear());
+        if (updatedData.getEnrollmentNumber() != null) user.setEnrollmentNumber(updatedData.getEnrollmentNumber());
+        if (updatedData.getCurrentCompany() != null) user.setCurrentCompany(updatedData.getCurrentCompany());
+        if (updatedData.getDesignation() != null) user.setDesignation(updatedData.getDesignation());
+        if (updatedData.getHeadline() != null) user.setHeadline(updatedData.getHeadline());
+        if (updatedData.getSkills() != null) user.setSkills(updatedData.getSkills());
+        if (updatedData.getGithubUrl() != null) user.setGithubUrl(updatedData.getGithubUrl());
+        if (updatedData.getLinkedinUrl() != null) user.setLinkedinUrl(updatedData.getLinkedinUrl());
+        if (updatedData.getPastExperience() != null) user.setPastExperience(updatedData.getPastExperience());
 
-        // Step 3: Update department association if provided
         if (updatedData.getDepartmentCode() != null && !updatedData.getDepartmentCode().trim().isEmpty()) {
             user.setDepartment(resolveDepartment(updatedData.getDepartmentCode()));
         }
 
-        // Step 4: Persist changes
         userRepository.save(user);
-        return ResponseEntity.ok("✅ User updated successfully.");
+        return ResponseEntity.ok("User updated successfully.");
     }
 
-    /**
-     * Clears moderation flags ({@code isFlagged = false}, {@code flagCount = 0}) on a user account.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code POST /api/admin/users/{id}/unflag}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Path Variable:</b> {@code id} - the ID of the flagged user</li>
-     *   <li><b>Response:</b> {@code 200 OK} with JSON confirmation, or {@code 404 Not Found}</li>
-     * </ul>
-     *
-     * @param id the ID of the user to unflag
-     * @return a {@link ResponseEntity} confirming the flags were cleared
-     */
     @PostMapping("/users/{id}/unflag")
     @Transactional
     public ResponseEntity<?> unflagUser(@PathVariable Long id) {
@@ -289,203 +227,183 @@ public class AdminController {
         }).orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "User not found")));
     }
 
-    /**
-     * Resets a user's password back to the default temporary password ({@code "Bvicam@2025"}).
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code PUT /api/admin/users/{id}/reset-password}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Path Variable:</b> {@code id} - the ID of the user whose password should be reset</li>
-     *   <li><b>Response:</b> {@code 200 OK} with confirmation message</li>
-     * </ul>
-     *
-     * @param id the ID of the user
-     * @return a {@link ResponseEntity} confirming the password reset
-     */
     @PutMapping("/users/{id}/reset-password")
     @Transactional
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
-        User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
         user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
         user.setPasswordChanged(false);
         userRepository.save(user);
-        return ResponseEntity.ok("✅ Password reset to 'Bvicam@2025'");
+        return ResponseEntity.ok("Password reset to 'Bvicam@2025'");
     }
 
-    // =========================================================
-    // 2. MODERATION & BROADCAST (Restored from Version 1)
-    // =========================================================
-
-    /**
-     * Triggers an asynchronous broadcast email to all registered users.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code POST /api/admin/broadcast}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Request Payload:</b> JSON object containing {@code "subject"} and {@code "body"}</li>
-     *   <li><b>Response:</b> {@code 200 OK} when background dispatch starts, or {@code 400 Bad Request}</li>
-     * </ul>
-     *
-     * @param payload map containing {@code subject} and {@code body} strings
-     * @return a {@link ResponseEntity} acknowledging the background email broadcast
-     */
     @PostMapping("/broadcast")
     public ResponseEntity<?> sendBroadcast(@RequestBody Map<String, String> payload) {
-        String subject = payload.get("subject");
-        String body = payload.get("body");
-        if (subject == null || body == null) {
+        String subject = payload != null ? payload.get("subject") : null;
+        String body = payload != null ? payload.get("body") : null;
+        if (subject == null || subject.isBlank() || body == null || body.isBlank()) {
             return ResponseEntity.badRequest().body("Subject and body are required");
         }
-        emailService.sendBroadcastEmail(subject, body);
+        emailService.sendBroadcastEmail(subject.trim(), body.trim());
         return ResponseEntity.ok("Broadcast started in background!");
     }
 
-    /**
-     * Deletes a community post by ID directly as an administrator.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code DELETE /api/admin/delete-post/{id}}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Path Variable:</b> {@code id} - the ID of the post to delete</li>
-     *   <li><b>Response:</b> {@code 200 OK} on deletion, or {@code 404 Not Found}</li>
-     * </ul>
-     *
-     * @param id the ID of the post to remove
-     * @return a {@link ResponseEntity} confirming deletion
-     */
     @DeleteMapping("/delete-post/{id}")
     @Transactional
-    public ResponseEntity<?> deletePost(@PathVariable Long id) {
-        if (!postRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        postRepository.deleteById(id);
+    public ResponseEntity<?> deletePost(@PathVariable Long id, Principal principal) {
+        String requester = principal != null ? principal.getName() : "admin";
+        postService.deletePost(id, requester);
         return ResponseEntity.ok("Post deleted by Admin.");
     }
 
-    // =========================================================
-    // 3. BULK UPLOAD (Optimized Logic)
-    // =========================================================
-
-    /**
-     * Bulk-imports user accounts from an uploaded CSV ({@code .csv}) or Excel ({@code .xlsx}) file.
-     * <ul>
-     *   <li><b>HTTP Route:</b> {@code POST /api/admin/upload-users-excel}</li>
-     *   <li><b>Access Role:</b> Authenticated Admin ({@code ADMIN})</li>
-     *   <li><b>Request Payload:</b> {@code multipart/form-data} with file parameter {@code "file"}</li>
-     *   <li><b>Response:</b> {@code 200 OK} with count of imported users, or {@code 400/500} on error</li>
-     * </ul>
-     *
-     * @param file the uploaded {@link MultipartFile} ({@code .csv} or {@code .xlsx})
-     * @return a {@link ResponseEntity} summarizing the bulk upload result
-     */
     @PostMapping("/upload-users-excel")
     @Transactional
     public ResponseEntity<?> uploadUsersUniversal(@RequestParam("file") MultipartFile file) {
-        // Step 1: Validate that a non-empty file with a valid filename was provided
-        if (file.isEmpty()) return ResponseEntity.badRequest().body("Please select a file.");
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body("Please select a file.");
+        }
         String fileName = file.getOriginalFilename();
-        if (fileName == null) return ResponseEntity.badRequest().body("Invalid file.");
+        if (fileName == null) {
+            return ResponseEntity.badRequest().body("Invalid file.");
+        }
 
-        // Step 2: Route to the appropriate parser based on file extension (.csv vs .xlsx)
         try {
-            if (fileName.toLowerCase().endsWith(".csv")) {
+            if (fileName.toLowerCase(Locale.ROOT).endsWith(".csv")) {
                 return processCSV(file);
-            } else if (fileName.toLowerCase().endsWith(".xlsx")) {
+            } else if (fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
                 return processExcel(file);
             } else {
-                return ResponseEntity.badRequest().body("❌ Unsupported format. Please upload .csv or .xlsx");
+                return ResponseEntity.badRequest().body("Unsupported format. Please upload .csv or .xlsx");
             }
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error during upload: " + e.getMessage());
         }
     }
 
-    /**
-     * Parses an Excel ({@code .xlsx}) workbook using Apache POI and creates user records for each row.
-     * Skips row 0 (header row) and any rows missing name or email.
-     */
     private ResponseEntity<?> processExcel(MultipartFile file) throws Exception {
+        Set<String> existingEmails = new HashSet<>(userRepository.findAllEmails());
+        String defaultHash = passwordEncoder.encode("Bvicam@2025");
+        Map<String, Department> deptCache = new HashMap<>();
+        List<User> toSave = new ArrayList<>();
+
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
-            int count = 0;
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            int maxRow = Math.min(sheet.getLastRowNum(), MAX_BULK_IMPORT_ROWS);
+            for (int i = 1; i <= maxRow; i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
                 String name = getCellValue(row.getCell(0));
-                String email = getCellValue(row.getCell(1));
-                if (name.isEmpty() || email.isEmpty()) continue;
+                String email = getCellValue(row.getCell(1)).toLowerCase(Locale.ROOT);
+                if (name.isEmpty() || email.isEmpty() || existingEmails.contains(email)) continue;
 
-                saveUserFromData(name, email,
+                User user = buildBulkUser(
+                        name, email,
                         getCellValue(row.getCell(2)), getCellValue(row.getCell(3)),
                         getCellValue(row.getCell(4)), getCellValue(row.getCell(5)),
                         getCellValue(row.getCell(6)), getCellValue(row.getCell(7)),
                         getCellValue(row.getCell(8)), getCellValue(row.getCell(9)),
-                        getCellValue(row.getCell(10)), getCellValue(row.getCell(11))
+                        getCellValue(row.getCell(10)), getCellValue(row.getCell(11)),
+                        getCellValue(row.getCell(12)),
+                        defaultHash, deptCache
                 );
-                count++;
+                existingEmails.add(email);
+                toSave.add(user);
             }
-            return ResponseEntity.ok("✅ Successfully uploaded " + count + " users from Excel!");
         }
+        userRepository.saveAll(toSave);
+        return ResponseEntity.ok("Successfully uploaded " + toSave.size() + " users from Excel!");
     }
 
-    /**
-     * Parses a CSV ({@code .csv}) file line by line (respecting quoted commas) and creates user records.
-     */
     private ResponseEntity<?> processCSV(MultipartFile file) throws Exception {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+        Set<String> existingEmails = new HashSet<>(userRepository.findAllEmails());
+        String defaultHash = passwordEncoder.encode("Bvicam@2025");
+        Map<String, Department> deptCache = new HashMap<>();
+        List<User> toSave = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String header = reader.readLine();
+            if (header == null) {
+                return ResponseEntity.badRequest().body("CSV file is empty.");
+            }
             String line;
-            int count = 0;
-            reader.readLine(); // Skip header
-            while ((line = reader.readLine()) != null) {
-                // Regex handles commas inside quotes
-                String[] data = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
+            int rows = 0;
+            while ((line = reader.readLine()) != null && rows < MAX_BULK_IMPORT_ROWS) {
+                rows++;
+                String cleanLine = line.replace("\uFEFF", "");
+                String[] data = cleanLine.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
                 if (data.length < 2) continue;
 
-                saveUserFromData(data[0].trim().replace("\"", ""), data[1].trim().replace("\"", ""),
-                        (data.length > 2) ? data[2] : "STUDENT",
-                        (data.length > 3) ? data[3] : "",
-                        (data.length > 4) ? data[4] : "",
-                        (data.length > 5) ? data[5] : "",
-                        (data.length > 6) ? data[6] : "",
-                        (data.length > 7) ? data[7] : "",
-                        (data.length > 8) ? data[8] : "",
-                        (data.length > 9) ? data[9] : "",
-                        (data.length > 10) ? data[10] : "",
-                        (data.length > 11) ? data[11] : ""
+                String name = stripCsvQuotes(data[0]);
+                String email = stripCsvQuotes(data[1]).toLowerCase(Locale.ROOT);
+                if (name.isEmpty() || email.isEmpty() || existingEmails.contains(email)) continue;
+
+                User user = buildBulkUser(
+                        name, email,
+                        csvCol(data, 2, "STUDENT"),
+                        csvCol(data, 3, ""),
+                        csvCol(data, 4, ""),
+                        csvCol(data, 5, ""),
+                        csvCol(data, 6, ""),
+                        csvCol(data, 7, ""),
+                        csvCol(data, 8, ""),
+                        csvCol(data, 9, ""),
+                        csvCol(data, 10, ""),
+                        csvCol(data, 11, ""),
+                        csvCol(data, 12, ""),
+                        defaultHash, deptCache
                 );
-                count++;
+                existingEmails.add(email);
+                toSave.add(user);
             }
-            return ResponseEntity.ok("✅ Successfully uploaded " + count + " users from CSV!");
         }
+        userRepository.saveAll(toSave);
+        return ResponseEntity.ok("Successfully uploaded " + toSave.size() + " users from CSV!");
     }
 
-    /**
-     * Helper method that constructs and persists a {@link User} from parsed spreadsheet columns.
-     * Skips creation if a user with the given email already exists.
-     */
-    private void saveUserFromData(String name, String email, String roleStr, String batchStr, String enroll,
-                                  String company, String desig, String head, String skills,
-                                  String git, String linked, String exp) {
+    private String csvCol(String[] data, int idx, String fallback) {
+        return data.length > idx ? stripCsvQuotes(data[idx]) : fallback;
+    }
 
-        if (userRepository.existsByEmail(email)) return;
+    private String stripCsvQuotes(String value) {
+        if (value == null) return "";
+        String trimmed = value.trim();
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed.replace("\"\"", "\"").trim();
+    }
 
+    private User buildBulkUser(String name, String email, String roleStr, String batchStr, String enroll,
+                               String company, String desig, String head, String skills,
+                               String git, String linked, String exp, String deptCode,
+                               String defaultPasswordHash, Map<String, Department> deptCache) {
         User user = new User();
         user.setName(name);
         user.setEmail(email);
 
-        // Safe Enum Conversion
         try {
-            user.setRole(Role.valueOf(roleStr.toUpperCase().trim()));
+            user.setRole(Role.valueOf(roleStr.toUpperCase(Locale.ROOT).trim()));
         } catch (Exception e) {
             user.setRole(Role.STUDENT);
         }
 
-        // Clean Batch Year formatting (handles 2024.0 from Excel)
         try {
             if (!batchStr.isEmpty()) {
                 String cleanBatch = batchStr.contains(".") ? batchStr.split("\\.")[0] : batchStr;
-                user.setBatchYear(Integer.parseInt(cleanBatch));
+                user.setBatchYear(Integer.parseInt(cleanBatch.trim()));
             }
-        } catch (Exception e) { /* Skip invalid years */ }
+        } catch (Exception ignored) {
+        }
+
+        if (deptCode != null && !deptCode.isEmpty()) {
+            String key = deptCode.trim().toUpperCase(Locale.ROOT);
+            Department dept = deptCache.computeIfAbsent(key, this::resolveDepartment);
+            user.setDepartment(dept);
+        }
 
         user.setEnrollmentNumber(enroll);
         user.setCurrentCompany(company);
@@ -495,22 +413,26 @@ public class AdminController {
         user.setGithubUrl(git);
         user.setLinkedinUrl(linked);
         user.setPastExperience(exp);
-        user.setPasswordHash(passwordEncoder.encode("Bvicam@2025"));
+        user.setPasswordHash(defaultPasswordHash);
         user.setPasswordChanged(false);
-
-        userRepository.save(user);
+        return user;
     }
 
-    /**
-     * Safely extracts a trimmed string representation from an Apache POI {@link Cell}.
-     */
     private String getCellValue(Cell cell) {
         if (cell == null) return "";
         switch (cell.getCellType()) {
-            case STRING: return cell.getStringCellValue().trim();
-            case NUMERIC: return String.valueOf((long)cell.getNumericCellValue());
-            case BOOLEAN: return String.valueOf(cell.getBooleanCellValue());
-            default: return "";
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                double d = cell.getNumericCellValue();
+                if (d == Math.floor(d)) {
+                    return String.valueOf((long) d);
+                }
+                return String.valueOf(d);
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            default:
+                return "";
         }
     }
 }

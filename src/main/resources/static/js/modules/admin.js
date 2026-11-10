@@ -1,138 +1,76 @@
 /**
- * ============================================================================
- * FILE: src/main/resources/static/js/modules/admin.js
- * PURPOSE: Admin Control Panel module (`components/admin.html`).
- *
- * OVERVIEW:
- *   Provides administrative capabilities for users with the `ADMIN` role:
- *     1. User Management: List all registered users, inspect profanity flag
- *        counts, clear flags (`unflagUser`), create single users (`adminCreateUser`),
- *        edit full user profiles (`adminSaveUser`), reset passwords to default
- *        (`adminResetPassword`), and delete users (`deleteUser`).
- *     2. Bulk User Import: Upload `.xlsx` or `.csv` files (`uploadBulkDataExcel`)
- *        for batch user provisioning.
- *     3. Community Broadcast: Send an email announcement to all registered
- *        community members (`sendBroadcastEmail`).
- *     4. Feedback Viewer: View star ratings and comments submitted by users
- *        (`loadAdminFeedback`).
- *     5. Jobs & Referrals Management: View, edit, and delete all job/referral
- *        postings (`loadAdminJobs`, delegating modal actions to `jobs.js`).
- *
- * API ENDPOINTS USED:
- *   - GET    `/api/users`                         : Fetch all users
- *   - POST   `/api/admin/users`                   : Create a new user
- *   - PUT    `/api/admin/users/{id}`              : Update an existing user
- *   - PUT    `/api/admin/users/{id}/reset-password`: Reset password to `Bvicam@2025`
- *   - POST   `/api/admin/users/{id}/unflag`       : Clear profanity flag status
- *   - DELETE `/api/admin/delete-user/{id}`        : Permanently delete a user
- *   - POST   `/api/admin/upload-users-excel`      : Multipart bulk Excel/CSV import
- *   - POST   `/api/admin/broadcast`               : Trigger mass email broadcast
- *   - GET    `/api/feedback`                      : Fetch all user feedback entries
- *   - GET    `/api/jobs`                          : Fetch all jobs for admin table
- * ============================================================================
+ * Admin Control Panel module (`components/admin.html`).
  */
 
-import { get, send, getCurrentUser } from '../utils/api.js';
+import { get, send, getCurrentUser, parseErrorMessage } from '../utils/api.js';
+import { escapeHtml, safeHttpUrl } from '../utils/sanitize.js';
 
-// In-memory cache mapping userId -> user object for quick modal population
 const adminUsersMap = new Map();
 
-/**
- * Helper: Safely sets the `.value` of an input element by DOM ID.
- * @param {string} id - DOM element ID.
- * @param {any} val   - Value to assign (defaults to empty string if null/undefined).
- */
 const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.value = val ?? "";
 };
 
-/**
- * Helper: Safely reads and trims the `.value` of an input element by DOM ID.
- * @param {string} id - DOM element ID.
- * @returns {string} Trimmed input value or empty string if element is missing.
- */
 const getVal = (id) => {
     const el = document.getElementById(id);
     return el ? el.value.trim() : "";
 };
 
-// =========================================================
-// 1. INITIALIZATION
-// =========================================================
-
-/**
- * Entry point invoked by `dashboard-main.js` when the Admin tab (`#tab-admin`) is loaded.
- * Verifies ADMIN privileges, loads the initial Users and Jobs tables, and wires up
- * click listeners on the Admin sub-navigation pills.
- */
 export function loadAdminModule() {
-    // 1. Check Permissions
     const { role } = getCurrentUser();
     if (!role || role.toUpperCase() !== 'ADMIN') {
         console.warn("Unauthorized access to Admin module");
         return;
     }
 
-    // 2. Load Initial Data (Users & Jobs)
     loadAdminUsers();
     window.loadAdminJobs();
 
-    // 3. Attach Event Listeners for Sub-tabs (Users, Jobs & Referrals, User Feedback)
-    setTimeout(() => {
-        const feedbackBtn = document.getElementById('tab-feedback-btn');
-        const usersBtn = document.getElementById('tab-users-btn');
-        const jobsBtn = document.getElementById('tab-jobs-admin-btn');
-        const knowledgeBtn = document.getElementById('tab-knowledge-btn');
+    const feedbackBtn = document.getElementById('tab-feedback-btn');
+    const usersBtn = document.getElementById('tab-users-btn');
+    const jobsBtn = document.getElementById('tab-jobs-admin-btn');
+    const knowledgeBtn = document.getElementById('tab-knowledge-btn');
 
-        if (feedbackBtn) feedbackBtn.onclick = loadAdminFeedback;
-        if (usersBtn) usersBtn.onclick = loadAdminUsers;
-        if (jobsBtn) jobsBtn.onclick = window.loadAdminJobs;
-        if (knowledgeBtn) knowledgeBtn.onclick = window.loadAdminKnowledge;
-    }, 100);
+    if (feedbackBtn) feedbackBtn.onclick = loadAdminFeedback;
+    if (usersBtn) usersBtn.onclick = loadAdminUsers;
+    if (jobsBtn) jobsBtn.onclick = window.loadAdminJobs;
+    if (knowledgeBtn) knowledgeBtn.onclick = window.loadAdminKnowledge;
 }
 
-// =========================================================
-// 2. USER MANAGEMENT (READ / DELETE / EDIT)
-// =========================================================
-
-/**
- * Fetches all users from `GET /api/users`, caches them in `adminUsersMap`,
- * and renders rows inside `#adminUserTable` including profanity moderation
- * badges and Unflag / Edit / Delete action buttons.
- */
 async function loadAdminUsers() {
     try {
         const users = await get('/users');
         const tbody = document.getElementById("adminUserTable");
         if (!tbody) return;
 
-        // Refresh in-memory map so `openEditUserModal(id)` can look up users by ID
         adminUsersMap.clear();
-        users.forEach(u => adminUsersMap.set(u.id, u));
+        (users || []).forEach(u => adminUsersMap.set(u.id, u));
 
-        tbody.innerHTML = users.map(u => {
-            // Render moderation status badge (Flagged with count vs Clean)
-            const statusBadge = u.isFlagged 
-                ? `<span class="cc-flag-badge"><i class="fas fa-flag"></i> Flagged (${u.flagCount || 1}x)</span>`
+        tbody.innerHTML = (users || []).map(u => {
+            const flagCount = Number(u.flagCount) || 1;
+            const statusBadge = u.isFlagged
+                ? `<span class="cc-flag-badge"><i class="fas fa-flag"></i> Flagged (${flagCount}x)</span>`
                 : `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fas fa-check-circle me-1"></i> Clean</span>`;
 
-            // Show quick Unflag button only if user is currently flagged for profanity
             const unflagBtn = u.isFlagged
                 ? `<button class="btn btn-sm btn-outline-warning me-1" title="Clear Profanity Flags" onclick="window.unflagUser(${u.id})">
                      <i class="fas fa-flag-checkered me-1"></i> Unflag
                    </button>`
                 : "";
 
+            const deptText = u.departmentCode || u.departmentName || '';
+            const batchText = u.batchYear ? `• Batch ${u.batchYear}` : '';
+
             return `
             <tr>
-                <td>${u.id}</td>
+                <td>${Number(u.id) || 0}</td>
                 <td>
-                    <div class="fw-semibold">${u.name}</div>
-                    <small class="text-muted">${u.departmentCode || u.departmentName || ''} ${u.batchYear ? '• Batch ' + u.batchYear : ''}</small>
+                    <div class="fw-semibold">${escapeHtml(u.name || 'User')}</div>
+                    <small class="text-muted">${escapeHtml(deptText)} ${escapeHtml(batchText)}</small>
                 </td>
-                <td><span class="badge bg-light text-dark border">${u.role}</span></td>
-                <td>${u.email}</td>
+                <td><span class="badge bg-light text-dark border">${escapeHtml(u.role || '')}</span></td>
+                <td>${escapeHtml(u.email || '')}</td>
                 <td>${statusBadge}</td>
                 <td class="text-end">
                     ${unflagBtn}
@@ -154,12 +92,6 @@ async function loadAdminUsers() {
     }
 }
 
-/**
- * Clears the profanity flag status and resets flag count for a specific user
- * via `POST /api/admin/users/{id}/unflag`.
- *
- * @param {number} id - Target user ID to unflag.
- */
 window.unflagUser = async function(id) {
     if (!confirm("Clear flagged status for this user?")) return;
     try {
@@ -167,19 +99,13 @@ window.unflagUser = async function(id) {
         if (res.ok) {
             loadAdminUsers();
         } else {
-            alert("Failed to unflag user.");
+            alert(await parseErrorMessage(res, "Failed to unflag user."));
         }
-    } catch(e) {
+    } catch (e) {
         console.error("Unflag error:", e);
     }
 };
 
-/**
- * Permanently deletes a user account via `DELETE /api/admin/delete-user/{id}`
- * after confirming with the administrator.
- *
- * @param {number} id - Target user ID to delete.
- */
 window.deleteUser = async function(id) {
     if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
 
@@ -188,20 +114,14 @@ window.deleteUser = async function(id) {
         if (res.ok) {
             loadAdminUsers();
         } else {
-            const err = await res.text();
-            alert("Failed to delete user: " + err);
+            alert("Failed to delete user: " + await parseErrorMessage(res));
         }
-    } catch(e) {
+    } catch (e) {
         console.error(e);
         alert("Error deleting user: " + e.message);
     }
 };
 
-/**
- * Populates and opens the `#editUserModal` dialog for a given user ID or user object.
- *
- * @param {number|Object} userOrId - Either a user ID (looked up in `adminUsersMap`) or a user object.
- */
 window.openEditUserModal = function(userOrId) {
     const user = (typeof userOrId === 'object' && userOrId !== null)
         ? userOrId
@@ -212,11 +132,9 @@ window.openEditUserModal = function(userOrId) {
         return;
     }
 
-    // Resolve department code from nested department object or flat DTO field
     const deptCode = (user.department && user.department.code)
         || (user.departmentCode && user.departmentCode !== "UNKNOWN" ? user.departmentCode : "");
 
-    // Populate all form fields inside #editUserModal
     setVal("editUserId", user.id);
     setVal("editName", user.name || "");
     setVal("editEmail", user.email || "");
@@ -231,7 +149,6 @@ window.openEditUserModal = function(userOrId) {
     setVal("editLinkedin", user.linkedinUrl || "");
     setVal("editGithub", user.githubUrl || "");
     setVal("editBio", user.pastExperience || "");
-    setVal("editExperience", user.pastExperience || "");
 
     const modalEl = document.getElementById('editUserModal');
     if (modalEl) {
@@ -239,10 +156,6 @@ window.openEditUserModal = function(userOrId) {
     }
 };
 
-/**
- * Reads updated user fields from `#editUserModal` and sends `PUT /api/admin/users/{id}`.
- * Refreshes the user table on success.
- */
 window.adminSaveUser = async function() {
     const id = getVal("editUserId");
     const batchRaw = getVal("editBatch");
@@ -259,7 +172,7 @@ window.adminSaveUser = async function() {
         skills: getVal("editSkills"),
         linkedinUrl: getVal("editLinkedin"),
         githubUrl: getVal("editGithub"),
-        pastExperience: getVal("editBio") || getVal("editExperience")
+        pastExperience: getVal("editBio")
     };
 
     if (!data.name || !data.email) {
@@ -276,11 +189,10 @@ window.adminSaveUser = async function() {
         if (response.ok) {
             alert("✅ User updated successfully!");
             const modalEl = document.getElementById('editUserModal');
-            if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+            if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
             loadAdminUsers();
         } else {
-            const text = await response.text();
-            alert("❌ Failed to update user: " + text);
+            alert("❌ Failed to update user: " + await parseErrorMessage(response));
         }
     } catch (e) {
         console.error(e);
@@ -293,14 +205,6 @@ window.adminSaveUser = async function() {
     }
 };
 
-// =========================================================
-// 3. RESET PASSWORD
-// =========================================================
-
-/**
- * Resets the currently edited user's password to the campus default (`Bvicam@2025`)
- * via `PUT /api/admin/users/{id}/reset-password`.
- */
 window.adminResetPassword = async function() {
     const userId = getVal("editUserId");
 
@@ -323,8 +227,7 @@ window.adminResetPassword = async function() {
             const msg = await res.text();
             alert(msg || "✅ Password has been reset to: Bvicam@2025");
         } else {
-            const text = await res.text();
-            alert("❌ Failed to reset password: " + text);
+            alert("❌ Failed to reset password: " + await parseErrorMessage(res));
         }
     } catch (e) {
         console.error(e);
@@ -337,13 +240,6 @@ window.adminResetPassword = async function() {
     }
 };
 
-// =========================================================
-// 4. CREATE USER
-// =========================================================
-
-/**
- * Resets all fields in `#createUserModal` to clean defaults and opens the modal.
- */
 window.openCreateUserModal = function() {
     setVal("createName", "");
     setVal("createEmail", "");
@@ -362,15 +258,10 @@ window.openCreateUserModal = function() {
 
     const modalEl = document.getElementById('createUserModal');
     if (modalEl) {
-        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-        modal.show();
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 };
 
-/**
- * Reads new user fields from `#createUserModal` and sends `POST /api/admin/users`.
- * Closes the modal and reloads `#adminUserTable` upon creation.
- */
 window.adminCreateUser = async function() {
     const batchRaw = getVal("createBatch");
     const data = {
@@ -407,12 +298,10 @@ window.adminCreateUser = async function() {
         if (response.ok) {
             alert("✅ User Created Successfully!");
             const modalEl = document.getElementById('createUserModal');
-            if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+            if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
             loadAdminUsers();
         } else {
-            const errorText = await response.text();
-            console.error("Server Error:", errorText);
-            alert(`❌ Server Error (${response.status}):\n${errorText}`);
+            alert(`❌ Server Error (${response.status}):\n${await parseErrorMessage(response)}`);
         }
     } catch (e) {
         console.error(e);
@@ -422,18 +311,8 @@ window.adminCreateUser = async function() {
     }
 };
 
-// Alias for backward compatibility with inline onclick handlers
 window.submitCreateUser = window.adminCreateUser;
 
-// =========================================================
-// 5. BULK UPLOAD (EXCEL / CSV)
-// =========================================================
-
-/**
- * Uploads an Excel (`.xlsx`) or CSV (`.csv`) file from `#bulkFileExcel` via
- * multipart `POST /api/admin/upload-users-excel` to batch-import user accounts.
- * Note: Uses native `fetch()` with `FormData` so the browser sets the multipart boundary.
- */
 window.uploadBulkDataExcel = async function() {
     const fileInput = document.getElementById("bulkFileExcel");
     const file = fileInput?.files[0];
@@ -455,16 +334,13 @@ window.uploadBulkDataExcel = async function() {
             body: formData
         });
 
-        const text = await res.text();
-
         if (res.ok) {
-            alert(text);
+            alert(await res.text());
             fileInput.value = "";
             loadAdminUsers();
         } else {
-            alert("❌ Upload Failed: " + text);
+            alert("❌ Upload Failed: " + await parseErrorMessage(res));
         }
-
     } catch (e) {
         alert("❌ Error: " + e.message);
     } finally {
@@ -472,14 +348,6 @@ window.uploadBulkDataExcel = async function() {
     }
 };
 
-// =========================================================
-// 6. BROADCAST EMAIL
-// =========================================================
-
-/**
- * Sends a community-wide broadcast email via `POST /api/admin/broadcast`
- * using the subject (`#broadcastSubject`) and message (`#broadcastMessage`) inputs.
- */
 window.sendBroadcastEmail = async function() {
     const subject = getVal("broadcastSubject");
     const body = getVal("broadcastMessage");
@@ -501,8 +369,7 @@ window.sendBroadcastEmail = async function() {
             setVal("broadcastSubject", "");
             setVal("broadcastMessage", "");
         } else {
-            const err = await res.text();
-            alert("❌ Failed to send broadcast: " + err);
+            alert("❌ Failed to send broadcast: " + await parseErrorMessage(res));
         }
     } catch (e) {
         console.error("Broadcast error:", e);
@@ -515,14 +382,6 @@ window.sendBroadcastEmail = async function() {
     }
 };
 
-// =========================================================
-// 7. FEEDBACK MANAGEMENT
-// =========================================================
-
-/**
- * Fetches all user feedback submissions from `GET /api/feedback` and renders
- * them inside `#adminFeedbackTable` under the User Feedback sub-tab.
- */
 window.loadAdminFeedback = async function() {
     const tbody = document.getElementById("adminFeedbackTable");
     if (!tbody) return;
@@ -541,28 +400,20 @@ window.loadAdminFeedback = async function() {
         feedbacks.forEach(f => {
             const ts = f.submittedAt || f.createdAt;
             const dateStr = ts ? new Date(ts).toLocaleDateString() : '-';
-            tbody.innerHTML += `
+            const ratingCount = Math.min(5, Math.max(0, Number(f.rating) || 0));
+            tbody.insertAdjacentHTML("beforeend", `
                 <tr>
-                    <td>${f.submittedBy?.name || 'Anonymous'}</td>
-                    <td class="text-warning">${"⭐".repeat(f.rating || 0)}</td>
-                    <td>${f.comments || ''}</td>
-                    <td>${dateStr}</td>
-                </tr>`;
+                    <td>${escapeHtml(f.submittedBy?.name || 'Anonymous')}</td>
+                    <td class="text-warning">${"⭐".repeat(ratingCount)}</td>
+                    <td>${escapeHtml(f.comments || '')}</td>
+                    <td>${escapeHtml(dateStr)}</td>
+                </tr>`);
         });
-    } catch(e) {
+    } catch (e) {
         tbody.innerHTML = "<tr><td colspan='4' class='text-danger text-center'>Error loading feedback</td></tr>";
     }
 };
 
-// =========================================================
-// 8. JOBS & REFERRALS MANAGEMENT (ADMIN)
-// =========================================================
-
-/**
- * Fetches all job and referral postings from `GET /api/jobs` and populates
- * `#adminJobsTable` with Edit and Delete controls (wired to `window.openEditJobModal`
- * and `window.deleteJob` in `jobs.js`).
- */
 window.loadAdminJobs = async function() {
     const tbody = document.getElementById("adminJobsTable");
     if (!tbody) return;
@@ -580,17 +431,17 @@ window.loadAdminJobs = async function() {
 
         jobs.forEach(j => {
             const postedBy = j.postedBy?.name || 'Admin';
-            tbody.innerHTML += `
+            tbody.insertAdjacentHTML("beforeend", `
                 <tr>
-                    <td>${j.id}</td>
+                    <td>${Number(j.id) || 0}</td>
                     <td>
-                        <div class="fw-bold">${j.title || '-'}</div>
-                        <small class="text-primary fw-semibold">${j.company || '-'}</small>
-                        <div class="small text-muted text-truncate" style="max-width: 280px;">${j.description || ''}</div>
+                        <div class="fw-bold">${escapeHtml(j.title || '-')}</div>
+                        <small class="text-primary fw-semibold">${escapeHtml(j.company || '-')}</small>
+                        <div class="small text-muted text-truncate" style="max-width: 280px;">${escapeHtml(j.description || '')}</div>
                     </td>
-                    <td>${j.location || 'Remote'}</td>
-                    <td><small class="text-break">${j.applyLink || '-'}</small></td>
-                    <td><span class="badge bg-light text-dark border">${postedBy}</span></td>
+                    <td>${escapeHtml(j.location || 'Remote')}</td>
+                    <td><small class="text-break">${escapeHtml(j.applyLink || '-')}</small></td>
+                    <td><span class="badge bg-light text-dark border">${escapeHtml(postedBy)}</span></td>
                     <td class="text-end text-nowrap">
                         <button class="btn btn-sm btn-outline-primary me-1" onclick="window.openEditJobModal(${j.id})" title="Edit Job / Referral">
                             <i class="fas fa-edit me-1"></i> Edit
@@ -599,7 +450,7 @@ window.loadAdminJobs = async function() {
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                </tr>`;
+                </tr>`);
         });
     } catch (e) {
         console.error("Failed to load admin jobs:", e);
@@ -607,15 +458,8 @@ window.loadAdminJobs = async function() {
     }
 };
 
-// =========================================================
-// 9. GRADBOT KNOWLEDGE BASE MANAGEMENT (ADMIN)
-// =========================================================
-
-/**
- * Fetches all indexed knowledge documents from `GET /api/admin/knowledge/documents`
- * and populates `#adminKnowledgeTable`.
- */
 window.loadAdminKnowledge = async function() {
+    loadBvicamSyncStatus();
     const tbody = document.getElementById("adminKnowledgeTable");
     if (!tbody) return;
 
@@ -634,28 +478,33 @@ window.loadAdminKnowledge = async function() {
             const dateStr = doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '-';
             const catBadgeClass = doc.category === 'NOTICE' ? 'bg-danger' :
                                   doc.category === 'SYLLABUS' ? 'bg-info text-dark' :
+                                  doc.category === 'COURSE_MATERIAL' ? 'bg-warning text-dark' :
                                   doc.category === 'BVICAM_WEB' ? 'bg-success' : 'bg-secondary';
-            const sourceBadgeClass = doc.sourceType === 'WEB_URL' ? 'bg-primary' : 'bg-dark';
-            const sourceDisplay = doc.sourceUrl ? `<a href="${doc.sourceUrl}" target="_blank" rel="noopener noreferrer" class="small text-truncate d-block" style="max-width: 260px;">${doc.sourceUrl}</a>` : '';
+            const sourceBadgeClass = doc.sourceType === 'AUTO_SYNC' ? 'bg-primary' :
+                                     doc.sourceType === 'WEB_URL' ? 'bg-info text-dark' : 'bg-dark';
+            const validSourceUrl = safeHttpUrl(doc.sourceUrl);
+            const sourceDisplay = validSourceUrl
+                ? `<a href="${escapeHtml(validSourceUrl)}" target="_blank" rel="noopener noreferrer" class="small text-truncate d-block" style="max-width: 260px;">${escapeHtml(validSourceUrl)}</a>`
+                : (doc.sourceUrl ? `<span class="small text-muted">${escapeHtml(doc.sourceUrl)}</span>` : '');
 
-            tbody.innerHTML += `
+            tbody.insertAdjacentHTML("beforeend", `
                 <tr>
-                    <td>${doc.id}</td>
+                    <td>${Number(doc.id) || 0}</td>
                     <td>
-                        <div class="fw-bold text-dark">${doc.title || '-'}</div>
-                        ${doc.originalFileName ? `<small class="text-muted"><i class="fas fa-file me-1"></i>${doc.originalFileName}</small>` : ''}
+                        <div class="fw-bold text-dark">${escapeHtml(doc.title || '-')}</div>
+                        ${doc.originalFileName ? `<small class="text-muted"><i class="fas fa-file me-1"></i>${escapeHtml(doc.originalFileName)}</small>` : ''}
                         ${sourceDisplay}
                     </td>
-                    <td><span class="badge ${catBadgeClass}">${doc.category || 'GENERAL'}</span></td>
-                    <td><span class="badge ${sourceBadgeClass}">${doc.sourceType || 'FILE_UPLOAD'}</span></td>
-                    <td><span class="badge bg-light text-dark border">${doc.chunkCount} chunks</span></td>
-                    <td><small class="text-muted">${dateStr}</small></td>
+                    <td><span class="badge ${catBadgeClass}">${escapeHtml(doc.category || 'GENERAL')}</span></td>
+                    <td><span class="badge ${sourceBadgeClass}">${escapeHtml(doc.sourceType || 'FILE_UPLOAD')}</span></td>
+                    <td><span class="badge bg-light text-dark border">${Number(doc.chunkCount) || 0} chunks</span></td>
+                    <td><small class="text-muted">${escapeHtml(dateStr)}</small></td>
                     <td class="text-end">
                         <button class="btn btn-sm btn-outline-danger" onclick="window.deleteKnowledgeDocument(${doc.id})" title="Delete Document & Chunks">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                </tr>`;
+                </tr>`);
         });
     } catch (e) {
         console.error("Failed to load knowledge documents:", e);
@@ -663,14 +512,11 @@ window.loadAdminKnowledge = async function() {
     }
 };
 
-/**
- * Uploads a notice/syllabus document via multipart `POST /api/admin/knowledge/upload`.
- */
 window.uploadKnowledgeDocument = async function() {
     const fileInput = document.getElementById("knowledgeFileInput");
     const file = fileInput?.files[0];
     if (!file) {
-        alert("⚠️ Please select a file (.pdf, .txt, .md) to upload!");
+        alert("⚠️ Please select a file (.pdf, .png, .jpg, .txt, .md) to upload!");
         return;
     }
 
@@ -700,14 +546,7 @@ window.uploadKnowledgeDocument = async function() {
             setVal("knowledgeDocTitle", "");
             window.loadAdminKnowledge();
         } else {
-            let errorMsg = "Upload failed.";
-            try {
-                const errObj = await res.json();
-                errorMsg = errObj.error || errObj.message || JSON.stringify(errObj);
-            } catch (ignored) {
-                errorMsg = await res.text();
-            }
-            alert("❌ Upload Failed: " + errorMsg);
+            alert("❌ Upload Failed: " + await parseErrorMessage(res));
         }
     } catch (e) {
         console.error(e);
@@ -717,9 +556,6 @@ window.uploadKnowledgeDocument = async function() {
     }
 };
 
-/**
- * Scrapes and indexes an external URL via `POST /api/admin/knowledge/scrape-url`.
- */
 window.scrapeKnowledgeUrl = async function() {
     const url = getVal("knowledgeScrapeUrl");
     if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
@@ -742,8 +578,7 @@ window.scrapeKnowledgeUrl = async function() {
             setVal("knowledgeScrapeTitle", "");
             window.loadAdminKnowledge();
         } else {
-            const errorText = await res.text();
-            alert("❌ Scraping Failed: " + errorText);
+            alert("❌ Scraping Failed: " + await parseErrorMessage(res));
         }
     } catch (e) {
         console.error(e);
@@ -753,9 +588,6 @@ window.scrapeKnowledgeUrl = async function() {
     }
 };
 
-/**
- * Deletes a knowledge document and all its chunks via `DELETE /api/admin/knowledge/documents/{id}`.
- */
 window.deleteKnowledgeDocument = async function(id) {
     if (!confirm(`Are you sure you want to delete document #${id}? All associated vector chunks will be permanently removed.`)) {
         return;
@@ -767,11 +599,123 @@ window.deleteKnowledgeDocument = async function(id) {
             alert("✅ Document deleted successfully.");
             window.loadAdminKnowledge();
         } else {
-            const err = await res.text();
-            alert("❌ Delete failed: " + err);
+            alert("❌ Delete failed: " + await parseErrorMessage(res));
         }
     } catch (e) {
         console.error(e);
         alert("❌ Error deleting document: " + e.message);
+    }
+};
+
+let bvicamSyncPollTimer = null;
+let bvicamWasRunning = false;
+
+function renderBvicamSyncStatus(status) {
+    if (!status) return;
+    const badgeEl = document.getElementById("bvicamSyncBadge");
+    const phaseEl = document.getElementById("syncMetricPhase");
+    const discoveredEl = document.getElementById("syncMetricDiscovered");
+    const newEl = document.getElementById("syncMetricNew");
+    const scannedEl = document.getElementById("syncMetricScanned");
+    const skippedEl = document.getElementById("syncMetricSkipped");
+    const failedEl = document.getElementById("syncMetricFailed");
+    const msgEl = document.getElementById("bvicamSyncMessage");
+
+    const phase = status.phase || "IDLE";
+    if (badgeEl) {
+        badgeEl.textContent = status.running ? `RUNNING (${phase})` : phase;
+        badgeEl.className = "badge " + (
+            status.running ? "bg-primary" :
+            phase === "COMPLETED" ? "bg-success" :
+            phase.startsWith("ABORTED") || phase.startsWith("STOPPED") ? "bg-warning text-dark" : "bg-secondary"
+        );
+    }
+    if (phaseEl) phaseEl.textContent = phase;
+    if (discoveredEl) discoveredEl.textContent = String(status.discoveredCount ?? 0);
+    if (newEl) newEl.textContent = String(status.indexedNewCount ?? 0);
+    if (scannedEl) scannedEl.textContent = String(status.scannedFallbackCount ?? 0);
+    if (skippedEl) skippedEl.textContent = String(status.skippedExistingCount ?? 0);
+    if (failedEl) failedEl.textContent = String(status.failedCount ?? 0);
+
+    if (msgEl) {
+        let text = status.lastMessage || "Ready for scheduled 24h BVICAM sync.";
+        if (status.stoppedReason) {
+            text += ` (Note: ${status.stoppedReason})`;
+        }
+        msgEl.textContent = text;
+    }
+
+    if (status.running) {
+        bvicamWasRunning = true;
+        if (!bvicamSyncPollTimer) {
+            bvicamSyncPollTimer = setInterval(() => {
+                window.loadBvicamSyncStatus();
+            }, 4000);
+        }
+    } else {
+        if (bvicamSyncPollTimer) {
+            clearInterval(bvicamSyncPollTimer);
+            bvicamSyncPollTimer = null;
+        }
+        if (bvicamWasRunning) {
+            bvicamWasRunning = false;
+            if (typeof window.loadAdminKnowledge === "function") {
+                window.loadAdminKnowledge();
+            }
+        }
+    }
+}
+
+window.loadBvicamSyncStatus = async function() {
+    try {
+        const status = await get("/admin/knowledge/sync-status");
+        renderBvicamSyncStatus(status);
+    } catch (e) {
+        const msgEl = document.getElementById("bvicamSyncMessage");
+        if (msgEl) msgEl.textContent = "Unable to load BVICAM sync status: " + e.message;
+    }
+};
+
+window.triggerBvicamSync = async function(mode = "FULL", btnEl = null) {
+    const origHtml = btnEl ? btnEl.innerHTML : null;
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Starting...`;
+    }
+    try {
+        const res = await send(`/admin/knowledge/sync-bvicam?mode=${encodeURIComponent(mode)}`, "POST");
+        const bodyText = await res.text();
+        let payload = null;
+        try {
+            payload = bodyText ? JSON.parse(bodyText) : null;
+        } catch (_) {
+            payload = null;
+        }
+
+        if (res.status === 409 && payload && payload.status) {
+            renderBvicamSyncStatus(payload.status);
+            alert(payload.message || "A BVICAM portal sync is already running.");
+            return;
+        }
+
+        if (!res.ok) {
+            const errMsg = (payload && (payload.error || payload.message)) || bodyText || `Sync failed (${res.status})`;
+            throw new Error(errMsg);
+        }
+
+        if (payload && payload.status) {
+            bvicamWasRunning = true;
+            renderBvicamSyncStatus({ ...payload.status, running: true });
+        } else {
+            await window.loadBvicamSyncStatus();
+        }
+    } catch (e) {
+        console.error(e);
+        alert("❌ Could not start BVICAM sync: " + e.message);
+    } finally {
+        if (btnEl && origHtml !== null) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = origHtml;
+        }
     }
 };

@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import hmac
 import json
 import os
 import sys
@@ -17,12 +18,22 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime
+from urllib.parse import urlsplit
 
 # Global configuration initialized in main()
 TARGET_HOST = "http://127.0.0.1:11434"
 QDRANT_HOST = "http://127.0.0.1:6333"
 AUTH_HEADER = "X-GradBot-Key"
 AUTH_SECRET = ""
+MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25 MB request body cap
+ALLOWED_OLLAMA_PREFIXES = (
+    "/api/tags",
+    "/api/chat",
+    "/api/embeddings",
+    "/api/generate",
+    "/api/show",
+    "/api/version",
+)
 
 
 class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
@@ -83,34 +94,61 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self._proxy_request("DELETE")
 
+    def _send_json_error(self, status_code, payload_dict):
+        err_payload = json.dumps(payload_dict).encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(err_payload)))
+        self.end_headers()
+        self.wfile.write(err_payload)
+        self.wfile.flush()
+
     def _proxy_request(self, method):
-        # 1. Enforce Shared Secret Authentication
-        provided_token = self.headers.get(AUTH_HEADER)
-        if not AUTH_SECRET or provided_token != AUTH_SECRET:
-            err_payload = json.dumps({
+        # 1. Enforce Shared Secret Authentication in constant time
+        provided_token = self.headers.get(AUTH_HEADER) or ""
+        if not AUTH_SECRET or not provided_token or not hmac.compare_digest(provided_token, AUTH_SECRET):
+            self._send_json_error(401, {
                 "error": "Unauthorized: invalid or missing security token.",
                 "hint": f"Provide '{AUTH_HEADER}' header matching your runner secret."
-            }).encode("utf-8")
-            self.send_response(401)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(err_payload)))
-            self.end_headers()
-            self.wfile.write(err_payload)
-            self.wfile.flush()
+            })
             return
 
-        # 2. Read Request Body (if any)
-        content_length = int(self.headers.get("Content-Length", 0))
+        # 2. Validate and bound Request Body size
+        raw_cl = self.headers.get("Content-Length", "0")
+        try:
+            content_length = int(raw_cl)
+        except ValueError:
+            self._send_json_error(400, {"error": "Invalid Content-Length header."})
+            return
+
+        if content_length < 0:
+            self._send_json_error(400, {"error": "Negative Content-Length header."})
+            return
+        if content_length > MAX_CONTENT_LENGTH:
+            self._send_json_error(413, {"error": f"Request body exceeds maximum {MAX_CONTENT_LENGTH} bytes."})
+            return
+
         body = self.rfile.read(content_length) if content_length > 0 else None
 
-        # 3. Multiplex Upstream Request (Ollama vs Qdrant)
+        # 3. Multiplex Upstream Request (strictly allowlisted paths for Qdrant vs Ollama)
+        path_only = urlsplit(self.path).path
+        if ".." in path_only.split("/"):
+            self._send_json_error(400, {"error": "Invalid request path."})
+            return
+
         if self.path.startswith("/qdrant/"):
+            upstream_name = "Qdrant"
             upstream_path = self.path[len("/qdrant"):]
             target_url = f"{QDRANT_HOST}{upstream_path}"
-        elif self.path.startswith("/collections") or self.path.startswith("/aliases"):
+        elif path_only == "/collections" or path_only.startswith("/collections/") or path_only == "/aliases" or path_only.startswith("/aliases/"):
+            upstream_name = "Qdrant"
             target_url = f"{QDRANT_HOST}{self.path}"
-        else:
+        elif any(path_only == prefix or path_only.startswith(prefix + "/") for prefix in ALLOWED_OLLAMA_PREFIXES):
+            upstream_name = "Ollama"
             target_url = f"{TARGET_HOST}{self.path}"
+        else:
+            self._send_json_error(403, {"error": f"Forbidden path '{path_only}': not in Ollama/Qdrant allowlist."})
+            return
 
         req = urllib.request.Request(target_url, data=body, method=method)
 
@@ -118,7 +156,7 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
             if key.lower() not in ("host", "content-length", AUTH_HEADER.lower()):
                 req.add_header(key, value)
 
-        # 4. Execute Request to Ollama
+        # 4. Execute Request to upstream
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 self.send_response(resp.status)
@@ -162,13 +200,7 @@ class AuthenticatedProxyHandler(BaseHTTPRequestHandler):
             self.wfile.write(error_data)
 
         except Exception as e:
-            self.send_response(502)
-            self.send_header("Content-Type", "application/json")
-            msg = json.dumps({"error": f"Failed to reach local Ollama: {str(e)}"}).encode("utf-8")
-            self.send_header("Content-Length", str(len(msg)))
-            self.end_headers()
-            self.wfile.write(msg)
-            self.wfile.flush()
+            self._send_json_error(502, {"error": f"Failed to reach local {upstream_name}: {str(e)}"})
 
 
 def main():

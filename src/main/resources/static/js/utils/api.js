@@ -1,102 +1,126 @@
 /**
- * ============================================================================
- * FILE: src/main/resources/static/js/utils/api.js
- * PURPOSE: Centralized HTTP client utility and session state helper for the
- *          GradLink (Campus Connect) frontend.
- *
- * OVERVIEW:
- *   All frontend feature modules import `get`, `send`, and `getCurrentUser`
- *   from this utility rather than calling `fetch()` directly. It automatically:
- *     - Prefixes all relative API paths with `/api`.
- *     - Attaches the JWT Bearer token from `localStorage` (`jwt_token`).
- *     - Redirects unauthenticated or expired sessions (HTTP 401) to `login.html`.
- *
- * STORAGE KEYS USED (localStorage):
- *   - `jwt_token`  : JWT authentication token issued by `/api/auth/login`
- *   - `user_email` : Logged-in user's email address
- *   - `user_role`  : Logged-in user's role (`STUDENT`, `ALUMNI`, `FACULTY`, `ADMIN`)
- *   - `user_name`  : Logged-in user's display name
- * ============================================================================
+ * Centralized HTTP client utility and session state helper for GradLink.
  */
 
-// Base URL prefix for all backend REST API endpoints
 const API_BASE = "/api";
+let isRedirectingToLogin = false;
 
-/**
- * Retrieves the active JWT token from browser localStorage.
- *
- * @returns {string|null} The stored JWT string, or null if not logged in.
- */
 function getToken() {
     return localStorage.getItem("jwt_token");
 }
 
+function clearSessionStorage() {
+    localStorage.removeItem("jwt_token");
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_role");
+    localStorage.removeItem("user_email");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("campus_user");
+    localStorage.removeItem("password_changed");
+}
+
+function redirectToLogin(message) {
+    clearSessionStorage();
+    if (!isRedirectingToLogin) {
+        isRedirectingToLogin = true;
+        if (message) {
+            alert(message);
+        }
+        window.location.href = "login.html";
+    }
+}
+
 /**
- * 1. Generic GET Request
- * Performs an authenticated HTTP GET request to `${API_BASE}${endpoint}` and
- * parses the JSON response payload. Redirects to `login.html` if no token is
- * present or if the backend returns HTTP 401 Unauthorized.
- *
- * @param {string} endpoint - Relative API path starting with `/` (e.g., `/jobs`, `/users`).
- * @returns {Promise<any>} Parsed JSON response body from the server.
+ * Extracts a human-readable error message from a failed Fetch `Response`.
+ */
+export async function parseErrorMessage(response, fallback = "Request failed") {
+    try {
+        const text = await response.text();
+        if (!text) return fallback;
+        try {
+            const json = JSON.parse(text);
+            return json.error || json.message || fallback;
+        } catch (_) {
+            return text;
+        }
+    } catch (_) {
+        return fallback;
+    }
+}
+
+/**
+ * Performs an authenticated HTTP GET request and returns parsed JSON.
  */
 export async function get(endpoint) {
     const token = getToken();
-    // Guard: redirect immediately if the user does not have a saved JWT token
-    if (!token) window.location.href = "login.html";
+    if (!token) {
+        redirectToLogin();
+        throw new Error("Authentication required");
+    }
 
-    // Execute GET request with Bearer authentication header
     const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: { "Authorization": `Bearer ${token}` }
     });
 
-    // Handle expired or invalid JWT token
     if (response.status === 401) {
-        alert("Session expired");
-        window.location.href = "login.html";
+        redirectToLogin("Session expired. Please sign in again.");
+        throw new Error("Session expired");
     }
-    return response.json();
+
+    if (!response.ok) {
+        const message = await parseErrorMessage(response, `Request failed (${response.status})`);
+        throw new Error(message);
+    }
+
+    const rawBody = await response.text();
+    if (!rawBody) return null;
+    try {
+        return JSON.parse(rawBody);
+    } catch (_) {
+        return rawBody;
+    }
 }
 
 /**
- * 2. Generic POST / PUT / DELETE Request
- * Performs an authenticated HTTP mutation request with an optional JSON body.
- * Returns the raw `Response` object so callers can inspect `response.ok`,
- * `response.status`, or read text/JSON responses as needed.
- *
- * @param {string} endpoint - Relative API path starting with `/` (e.g., `/posts`, `/jobs/5`).
- * @param {string} method   - HTTP verb (`POST`, `PUT`, `DELETE`).
- * @param {Object|null} [data=null] - Optional payload object to serialize as JSON.
- * @returns {Promise<Response>} Raw Fetch API Response object.
+ * Performs an authenticated HTTP POST / PUT / DELETE request and returns the raw Response.
  */
 export async function send(endpoint, method, data = null) {
     const token = getToken();
+    if (!token) {
+        redirectToLogin();
+        throw new Error("Authentication required");
+    }
+
     const options = {
-        method: method,
+        method,
         headers: {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json"
         }
     };
 
-    // Attach serialized JSON request body when payload data is provided
-    if (data) options.body = JSON.stringify(data);
+    if (data !== null && data !== undefined) {
+        options.body = JSON.stringify(data);
+    }
 
     const response = await fetch(`${API_BASE}${endpoint}`, options);
-    return response; // Return full response to check .ok
+
+    if (response.status === 401) {
+        redirectToLogin("Session expired. Please sign in again.");
+        throw new Error("Session expired");
+    }
+
+    return response;
 }
 
 /**
- * 3. User State Helper
- * Reads the currently authenticated user's profile summary from localStorage.
- * Populated during login in `app.js`.
- *
- * @returns {{ email: string|null, role: string|null, name: string|null }}
+ * Reads the currently authenticated user's session summary from localStorage.
  */
 export function getCurrentUser() {
     return {
         email: localStorage.getItem("user_email"),
         role: localStorage.getItem("user_role"),
-        name: localStorage.getItem("user_name")
+        name: localStorage.getItem("user_name"),
+        passwordChanged: localStorage.getItem("password_changed") !== "false"
     };
 }

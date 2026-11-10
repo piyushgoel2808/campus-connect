@@ -37,6 +37,7 @@ COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 
 # 🚀 MEMORY OPTIMIZATION (Prevents crashing on Free Tier cloud hosts like Render/Railway)
+# -Djava.awt.headless=true: Enables PDFBox image rendering cleanly inside headless containers.
 # -Xmx384m: Caps the maximum JVM heap size at 384 MB to stay within container limits.
 # -Xms256m: Pre-allocates 256 MB initial heap size for predictable startup performance.
-ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Xmx384m", "-Xms256m", "-jar", "app.jar"]

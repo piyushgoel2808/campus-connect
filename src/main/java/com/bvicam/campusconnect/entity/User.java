@@ -7,8 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -22,8 +20,6 @@ import java.util.Set;
  *       (e.g., MCA, BJMC).</li>
  *   <li>{@code events} ({@link ManyToMany}): Inverse side of {@link Event#getParticipants()}; annotated
  *       with {@link JsonIgnore} to prevent infinite recursion when serializing events or users.</li>
- *   <li>{@code sentMessages} / {@code receivedMessages} ({@link OneToMany}): Inverse associations to
- *       {@link ChatMessage}, also marked {@link JsonIgnore}.</li>
  *   <li>Includes professional portfolio fields (company, designation, skills, LinkedIn/GitHub URLs),
  *       granular notification opt-in flags, and community moderation/flagging counters.</li>
  * </ul>
@@ -133,18 +129,6 @@ public class User {
     // =========================================================================
     // JPA Relationships (With @JsonIgnore Recursion Guards)
     // =========================================================================
-
-    // --- RELATIONSHIPS WITH JSON FIXES ---
-
-    /** Messages sent by this user; ignored in JSON to avoid circular serialization and lazy-loading errors. */
-    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore // FIX: Prevents recursion when fetching chat history
-    private List<ChatMessage> sentMessages = new ArrayList<>();
-
-    /** Messages received by this user; ignored in JSON to avoid circular serialization and lazy-loading errors. */
-    @OneToMany(mappedBy = "recipient", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore // FIX: Prevents recursion when fetching chat history
-    private List<ChatMessage> receivedMessages = new ArrayList<>();
 
     /** Events this user has RSVP'd to; ignored in JSON to prevent infinite User <-> Event loops. */
     @ManyToMany(mappedBy = "participants")

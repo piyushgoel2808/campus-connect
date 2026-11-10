@@ -1,68 +1,106 @@
 package com.bvicam.campusconnect.config;
 
+import com.bvicam.campusconnect.service.CustomUserDetailsService;
+import com.bvicam.campusconnect.util.JwtUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.Arrays;
+
 /**
- * Configures real-time bidirectional communication using STOMP over WebSockets (with SockJS fallback).
- *
- * <p><b>Architectural Role:</b></p>
- * <ul>
- *   <li>Powers real-time 1-on-1 private chat, typing indicators ({@code ChatController}), and
- *       instant in-app notifications ({@code NotificationService}).</li>
- *   <li>Exposes {@code /ws} as the SockJS handshake endpoint so browsers can establish persistent
- *       connections even behind restrictive proxies.</li>
- *   <li>Configures an in-memory message broker routing messages to {@code /topic}, {@code /queue},
- *       and {@code /user} destinations.</li>
- * </ul>
+ * Configures STOMP over WebSockets (SockJS) and authenticates STOMP CONNECT frames using JWT Bearer tokens.
  */
 @Configuration
 @EnableWebSocketMessageBroker
+@Order(Ordered.HIGHEST_PRECEDENCE + 99)
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    /**
-     * Registers the {@code /ws} STOMP WebSocket handshake endpoint with SockJS fallback enabled.
-     *
-     * @param registry the STOMP endpoint registry
-     */
+    private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
+
+    @Value("${app.cors.allowed-origins:http://localhost:8080,http://127.0.0.1:8080,https://*.onrender.com}")
+    private String allowedOrigins;
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // ✅ The main endpoint for connection
-        // setAllowedOriginPatterns("*") is critical for deployment (Render/Heroku)
+        String[] patterns = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(patterns)
                 .withSockJS();
     }
 
-    /**
-     * Configures the STOMP message broker routing prefixes for client subscriptions and server-bound messages.
-     *
-     * <p><b>Routing Summary:</b></p>
-     * <ul>
-     *   <li>{@code /topic/**}: Public broadcast channels (e.g., {@code /topic/messages/{email}},
-     *       {@code /topic/typing/{email}}, {@code /topic/notifications/{email}}).</li>
-     *   <li>{@code /queue/**} &amp; {@code /user/**}: Point-to-point and user-scoped destinations.</li>
-     *   <li>{@code /app/**}: Prefix for messages sent <i>from</i> the client <i>to</i> server
-     *       {@code @MessageMapping} controller methods (e.g., {@code /app/chat}, {@code /app/typing}).</li>
-     * </ul>
-     *
-     * @param config the message broker registry
-     */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // 1. Destinations the client can SUBSCRIBE to
-        // /topic -> Public/Broadcast
-        // /queue -> Private messages (standard convention)
-        // /user  -> User-specific events
-        config.enableSimpleBroker("/topic", "/queue", "/user");
-
-        // 2. Destinations the client SENDS to (mapped to @MessageMapping in Controllers)
+        config.enableSimpleBroker("/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
-
-        // 3. Prefix for User-specific messaging (e.g. /user/queue/messages)
         config.setUserDestinationPrefix("/user");
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(new ChannelInterceptor() {
+            @Override
+            public Message<?> preSend(Message<?> message, MessageChannel channel) {
+                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                if (accessor == null) {
+                    return message;
+                }
+
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    String authHeader = accessor.getFirstNativeHeader("Authorization");
+                    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                        throw new IllegalArgumentException("Missing Authorization Bearer token in STOMP CONNECT.");
+                    }
+
+                    String token = authHeader.substring(7);
+                    try {
+                        String email = jwtUtil.extractUsername(token);
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                        if (!jwtUtil.isTokenValid(token, userDetails)) {
+                            throw new IllegalArgumentException("Expired or invalid STOMP JWT.");
+                        }
+                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                                userDetails.getUsername(), null, userDetails.getAuthorities());
+                        accessor.setUser(auth);
+                    } catch (Exception e) {
+                        log.warn("Rejected unauthenticated WebSocket CONNECT: {}", e.getMessage());
+                        throw new IllegalArgumentException("Unauthorized WebSocket connection.");
+                    }
+                } else if (StompCommand.SEND.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    if (accessor.getUser() == null) {
+                        throw new IllegalArgumentException("Unauthenticated STOMP frame rejected.");
+                    }
+                }
+
+                return message;
+            }
+        });
     }
 }
