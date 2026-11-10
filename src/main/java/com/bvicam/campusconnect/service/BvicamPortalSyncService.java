@@ -25,9 +25,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.net.http.HttpTimeoutException;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -35,27 +42,30 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Automated, polite, idempotent synchronization pipeline for BVICAM portal notices,
- * syllabi, informational pages, and MCA/BA(JMC) course materials.
+ * Automated, polite, fault-isolated, idempotent synchronization pipeline for BVICAM portal
+ * syllabi, info pages, notices (past + latest), and MCA/BA(JMC) course materials.
  * <p>
- * Runs strictly single-threaded via {@link AtomicBoolean} lock, checks Ollama readiness before
- * touching {@code bvicam.in}, skips already-indexed immutable PDFs prior to download, and
- * backs off cleanly on HTTP 429/503 or repeated remote errors.
+ * Runs single-threaded via {@link AtomicBoolean}, checks Ollama availability before contacting
+ * {@code bvicam.in}, skips already-indexed immutable PDFs prior to download, isolates individual
+ * broken PDFs from aborting full backfills, and pauses immediately on HTTP 429/503 throttling.
  */
 @Service
 public class BvicamPortalSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(BvicamPortalSyncService.class);
-    private static final int MAX_CONSECUTIVE_REMOTE_ERRORS = 3;
+    private static final int MAX_CONSECUTIVE_TRANSPORT_ERRORS = 5;
+    private static final int MAX_RECENT_ISSUES = 25;
 
     private static final List<NoticeFeed> NOTICE_FEEDS = List.of(
-            new NoticeFeed("/WebsiteGetFunction/GetCircularAdmissionList", "Admission Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetExaminationList", "Examination Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetPlacementList", "Placement Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetCircularTimeTableList", "Time Table Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetCircularStudentWelfareList", "Student Welfare Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetCircularAttendanceList", "Attendance Notice"),
-            new NoticeFeed("/WebsiteGetFunction/GetCircularList", "General Notice")
+            new NoticeFeed("/WebsiteGetFunction/GetCircularAdmissionList", "Admission Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetExaminationList", "Examination Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetPlacementList", "Placement Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetCircularTimeTableList", "Time Table Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetCircularStudentWelfareList", "Student Welfare Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetCircularAttendanceList", "Attendance Notice", true),
+            new NoticeFeed("/WebsiteGetFunction/GetCircularActivitiesList", "Activities & Webinar Notice", true),
+            new NoticeFeed("/Circular/GetCircularAchievementsList", "Achievements Notice", false),
+            new NoticeFeed("/WebsiteGetFunction/GetCircularList", "General Notice", true)
     );
 
     private static final List<SyllabusFeed> SYLLABUS_FEEDS = List.of(
@@ -77,9 +87,11 @@ public class BvicamPortalSyncService {
      * Supported synchronization scopes.
      */
     public enum SyncMode {
-        NOTICES,
         SYLLABUS_AND_INFO,
+        NOTICES,
         COURSE_MATERIALS,
+        COURSE_MATERIALS_MCA,
+        COURSE_MATERIALS_BAJMC,
         FULL
     }
 
@@ -162,7 +174,7 @@ public class BvicamPortalSyncService {
     }
 
     /**
-     * Runs the weekly full portal sync (notices, syllabi, info pages, and course materials).
+     * Runs the weekly full portal sync (syllabi, info pages, notices, and course materials).
      */
     @Scheduled(cron = "${ai.sync.full-cron:0 30 3 * * 0}")
     public void scheduledFullSync() {
@@ -195,7 +207,8 @@ public class BvicamPortalSyncService {
         lastStatus = tracker.snapshot(true);
 
         try {
-            tracker.setPhase("CHECKING_OLLAMA", "Verifying local Ollama model availability before contacting BVICAM...");
+            tracker.setPhase("CHECKING_OLLAMA", "Verifying Ollama availability before contacting BVICAM...",
+                    "Checking local Ollama runtime...");
             if (!ollamaClientService.isHealthy()) {
                 tracker.abort("ABORTED_OLLAMA_OFFLINE",
                         "Ollama service or required chat/embedding models are offline; skipped BVICAM requests.",
@@ -204,21 +217,26 @@ public class BvicamPortalSyncService {
                 return tracker.snapshot(false);
             }
 
-            if (effectiveMode == SyncMode.NOTICES || effectiveMode == SyncMode.FULL) {
-                syncNotices(tracker);
-            }
-            if (!tracker.isAborted() && (effectiveMode == SyncMode.SYLLABUS_AND_INFO || effectiveMode == SyncMode.FULL)) {
+            // Phase 1: Syllabi & Core Info Pages first (~12 docs, fastest immediate value for GradBot)
+            if (effectiveMode == SyncMode.SYLLABUS_AND_INFO || effectiveMode == SyncMode.FULL) {
                 syncSyllabusAndInfoPages(tracker);
             }
-            if (!tracker.isAborted() && (effectiveMode == SyncMode.COURSE_MATERIALS || effectiveMode == SyncMode.FULL)) {
-                syncCourseMaterials(tracker);
+
+            // Phase 2: Notices & Circulars (newest first, across all active feeds including ActivitiesNotices)
+            if (!tracker.isAborted() && (effectiveMode == SyncMode.NOTICES || effectiveMode == SyncMode.FULL)) {
+                syncNotices(tracker);
+            }
+
+            // Phase 3: MCA & BA(JMC) Course Materials (subject directory index + individual PDFs)
+            if (!tracker.isAborted() && isCourseMaterialMode(effectiveMode)) {
+                syncCourseMaterials(tracker, effectiveMode);
             }
 
             if (!tracker.isAborted()) {
                 tracker.complete();
             }
             BvicamSyncStatusDto finalSnapshot = tracker.snapshot(false);
-            log.info("BVICAM sync finished: mode={}, phase={}, discovered={}, new={}, scannedFallback={}, updated={}, skipped={}, failed={}",
+            log.info("BVICAM sync finished: mode={}, phase={}, discovered={}, new={}, ocrOrStub={}, updated={}, skipped={}, failed={}",
                     finalSnapshot.mode(),
                     finalSnapshot.phase(),
                     finalSnapshot.discoveredCount(),
@@ -248,106 +266,25 @@ public class BvicamPortalSyncService {
     }
 
     // -------------------------------------------------------------------------
-    // Phase A: Historical & Recent Circulars / Notices
-    // -------------------------------------------------------------------------
-
-    private void syncNotices(SyncTracker tracker) {
-        tracker.setPhase("NOTICES", "Fetching BVICAM circular and notice feeds...");
-        Map<Long, DiscoveredCircular> discoveredById = new LinkedHashMap<>();
-
-        for (NoticeFeed feed : NOTICE_FEEDS) {
-            if (tracker.isAborted()) {
-                return;
-            }
-            try {
-                List<CircularEntry> entries = portalClient.fetchCirculars(feed.path());
-                tracker.resetRemoteErrors();
-                for (CircularEntry entry : entries) {
-                    DiscoveredCircular existing = discoveredById.get(entry.circularId());
-                    if (existing == null) {
-                        discoveredById.put(entry.circularId(), new DiscoveredCircular(entry, new ArrayList<>(List.of(feed.label()))));
-                    } else if (!existing.labels().contains(feed.label())) {
-                        existing.labels().add(feed.label());
-                    }
-                }
-            } catch (RemoteThrottleException ex) {
-                throw ex;
-            } catch (IOException ex) {
-                tracker.recordRemoteError("Notice feed " + feed.path() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
-            }
-        }
-
-        List<DiscoveredCircular> allCirculars = new ArrayList<>(discoveredById.values());
-        tracker.addDiscovered(allCirculars.size());
-        tracker.setMessage("Processing " + allCirculars.size() + " discovered BVICAM notices (skipping already-indexed items)...");
-
-        for (DiscoveredCircular item : allCirculars) {
-            if (tracker.isAborted()) {
-                return;
-            }
-            CircularEntry entry = item.entry();
-            String externalKey = "circular:" + entry.circularId();
-
-            // Critical politeness check: never download immutable circular PDFs already indexed in DB/Qdrant
-            if (ingestionService.isDocumentIndexed(externalKey)) {
-                tracker.incrementSkipped();
-                continue;
-            }
-
-            String pdfUrl = portalClient.buildCircularPdfUrl(entry.circularId());
-            String labels = String.join(", ", item.labels());
-            String date = entry.date() != null ? entry.date().trim() : "";
-            String contextPrefix = "BVICAM Official Notice (" + labels + ")"
-                    + (date.isBlank() ? "" : " | Published Date: " + date)
-                    + " | Circular ID: " + entry.circularId();
-
-            try {
-                byte[] pdfBytes = portalClient.fetchPdfBytes(pdfUrl);
-                tracker.resetRemoteErrors();
-
-                SyncUpsertResult result = ingestionService.upsertAutoSyncedDocument(
-                        externalKey,
-                        entry.description(),
-                        DocumentCategory.NOTICE,
-                        pdfUrl,
-                        "circular-" + entry.circularId() + ".pdf",
-                        date,
-                        contextPrefix,
-                        null,
-                        pdfBytes
-                );
-                tracker.recordUpsertOutcome(result.status());
-            } catch (RemoteThrottleException ex) {
-                throw ex;
-            } catch (IllegalStateException ex) {
-                throw new AbortSyncException("ABORTED_OLLAMA_OFFLINE", ex.getMessage(), "Ollama became unreachable mid-sync");
-            } catch (IOException ex) {
-                tracker.recordRemoteError("Circular #" + entry.circularId() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
-            } catch (Exception ex) {
-                tracker.incrementFailed();
-                log.warn("Failed processing circular #{}: {}", entry.circularId(), ex.getMessage());
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Phase B: Syllabi & Core HTML Pages (Fees, Admissions, Placements, Contact)
+    // Phase 1: Syllabi & Core HTML Pages (Fees, Admissions, Placements, Contact)
     // -------------------------------------------------------------------------
 
     private void syncSyllabusAndInfoPages(SyncTracker tracker) {
-        tracker.setPhase("SYLLABUS_AND_INFO", "Syncing BVICAM fee structure, admission pages, and syllabi...");
+        tracker.setPhase("SYLLABUS_AND_INFO",
+                "Syncing BVICAM fee structure, admission guidelines, and official syllabi...",
+                "Fetching core portal pages...");
 
-        // 1. Core HTML pages (lightweight text GETs, SHA-256 hash prevents redundant Ollama re-embedding)
         for (InfoPageSpec page : INFO_PAGES) {
             if (tracker.isAborted()) {
                 return;
             }
             tracker.addDiscovered(1);
+            tracker.setCurrentActivity("Portal page: " + page.title());
             try {
                 WebPageContent content = portalClient.fetchHtmlPage(page.path());
-                tracker.resetRemoteErrors();
+                tracker.resetTransportErrors();
                 if (content.extractedText() == null || content.extractedText().isBlank()) {
-                    tracker.incrementFailed();
+                    tracker.recordItemFailure("Info page " + page.path() + " returned empty text");
                     continue;
                 }
                 String externalKey = "web:" + page.path();
@@ -367,41 +304,41 @@ public class BvicamPortalSyncService {
             } catch (RemoteThrottleException ex) {
                 throw ex;
             } catch (IllegalStateException ex) {
-                throw new AbortSyncException("ABORTED_OLLAMA_OFFLINE", ex.getMessage(), "Ollama became unreachable mid-sync");
+                handleUpsertIllegalState("Info page " + page.path(), ex, tracker);
             } catch (IOException ex) {
-                tracker.recordRemoteError("Info page " + page.path() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
+                handleRemoteException("Info page " + page.path(), ex, true, tracker);
             } catch (Exception ex) {
-                tracker.incrementFailed();
-                log.warn("Failed syncing info page {}: {}", page.path(), ex.getMessage());
+                tracker.recordItemFailure("Info page " + page.path() + ": " + ex.getMessage());
             }
         }
 
-        // 2. Syllabus PDFs linked from /Home/MCASyllabus and /Home/BajmcSyllabus
         Map<String, ScopedSyllabusLink> syllabusLinksByUrl = new LinkedHashMap<>();
         for (SyllabusFeed feed : SYLLABUS_FEEDS) {
             if (tracker.isAborted()) {
                 return;
             }
+            tracker.setCurrentActivity("Scanning syllabus links: " + feed.programmeLabel());
             try {
                 List<SyllabusLink> links = portalClient.fetchSyllabusLinks(feed.path());
-                tracker.resetRemoteErrors();
+                tracker.resetTransportErrors();
                 for (SyllabusLink link : links) {
                     syllabusLinksByUrl.putIfAbsent(link.pdfUrl(), new ScopedSyllabusLink(feed.programmeLabel(), link));
                 }
             } catch (RemoteThrottleException ex) {
                 throw ex;
             } catch (IOException ex) {
-                tracker.recordRemoteError("Syllabus page " + feed.path() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
+                handleRemoteException("Syllabus page " + feed.path(), ex, true, tracker);
             }
         }
 
         List<ScopedSyllabusLink> allSyllabi = new ArrayList<>(syllabusLinksByUrl.values());
         tracker.addDiscovered(allSyllabi.size());
 
-        for (ScopedSyllabusLink scoped : allSyllabi) {
+        for (int i = 0; i < allSyllabi.size(); i++) {
             if (tracker.isAborted()) {
                 return;
             }
+            ScopedSyllabusLink scoped = allSyllabi.get(i);
             SyllabusLink link = scoped.link();
             String externalKey = buildUrlExternalKey("syllabus:", link.pdfUrl());
             if (ingestionService.isDocumentIndexed(externalKey)) {
@@ -409,9 +346,10 @@ public class BvicamPortalSyncService {
                 continue;
             }
 
+            tracker.setCurrentActivity(String.format("Syllabus %d/%d: %s", i + 1, allSyllabi.size(), link.title()));
             try {
                 byte[] pdfBytes = portalClient.fetchPdfBytes(link.pdfUrl());
-                tracker.resetRemoteErrors();
+                tracker.resetTransportErrors();
                 String title = scoped.programmeLabel() + " - " + link.title();
                 String contextPrefix = "BVICAM Official Syllabus (" + scoped.programmeLabel() + "): " + link.title();
                 SyncUpsertResult result = ingestionService.upsertAutoSyncedDocument(
@@ -429,48 +367,196 @@ public class BvicamPortalSyncService {
             } catch (RemoteThrottleException ex) {
                 throw ex;
             } catch (IllegalStateException ex) {
-                throw new AbortSyncException("ABORTED_OLLAMA_OFFLINE", ex.getMessage(), "Ollama became unreachable mid-sync");
+                handleUpsertIllegalState("Syllabus PDF " + link.title(), ex, tracker);
             } catch (IOException ex) {
-                tracker.recordRemoteError("Syllabus PDF " + link.pdfUrl() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
+                handleRemoteException("Syllabus PDF " + link.pdfUrl(), ex, false, tracker);
             } catch (Exception ex) {
-                tracker.incrementFailed();
-                log.warn("Failed syncing syllabus PDF {}: {}", link.pdfUrl(), ex.getMessage());
+                tracker.recordItemFailure("Syllabus PDF " + link.pdfUrl() + ": " + ex.getMessage());
             }
         }
     }
 
     // -------------------------------------------------------------------------
-    // Phase C: Course Materials across MCA & BA(JMC) Programmes / Semesters
+    // Phase 2: All Historical & Recent Circulars / Notices (Newest First)
     // -------------------------------------------------------------------------
 
-    private void syncCourseMaterials(SyncTracker tracker) {
-        tracker.setPhase("COURSE_MATERIALS", "Discovering BVICAM courses, semesters, and subject materials...");
+    private void syncNotices(SyncTracker tracker) {
+        tracker.setPhase("NOTICES", "Fetching BVICAM circular and notice feeds...",
+                "Querying notice feeds...");
+        Map<Long, DiscoveredCircular> discoveredById = new LinkedHashMap<>();
+
+        for (NoticeFeed feed : NOTICE_FEEDS) {
+            if (tracker.isAborted()) {
+                return;
+            }
+            tracker.setCurrentActivity("Scanning notice feed: " + feed.label());
+            try {
+                List<CircularEntry> entries = portalClient.fetchCirculars(feed.path());
+                tracker.resetTransportErrors();
+                for (CircularEntry entry : entries) {
+                    DiscoveredCircular existing = discoveredById.get(entry.circularId());
+                    if (existing == null) {
+                        discoveredById.put(entry.circularId(), new DiscoveredCircular(entry, new ArrayList<>(List.of(feed.label()))));
+                    } else if (!existing.labels().contains(feed.label())) {
+                        existing.labels().add(feed.label());
+                    }
+                }
+            } catch (RemoteThrottleException ex) {
+                throw ex;
+            } catch (IOException ex) {
+                boolean isBrokenOptional = !feed.required()
+                        || (ex instanceof HttpStatusException s && s.getStatusCode() == 404);
+                if (isBrokenOptional) {
+                    log.debug("Optional notice feed {} skipped ({})", feed.path(), ex.getMessage());
+                } else {
+                    handleRemoteException("Notice feed " + feed.path(), ex, true, tracker);
+                }
+            }
+        }
+
+        // Index newest circulars first so recent notices become searchable immediately
+        List<DiscoveredCircular> allCirculars = new ArrayList<>(discoveredById.values());
+        allCirculars.sort(Comparator.comparingLong((DiscoveredCircular c) -> c.entry().circularId()).reversed());
+
+        tracker.addDiscovered(allCirculars.size());
+        tracker.setMessage("Syncing " + allCirculars.size() + " discovered BVICAM notices (newest first; skipping already-indexed)...");
+
+        for (int i = 0; i < allCirculars.size(); i++) {
+            if (tracker.isAborted()) {
+                return;
+            }
+            DiscoveredCircular item = allCirculars.get(i);
+            CircularEntry entry = item.entry();
+            String externalKey = "circular:" + entry.circularId();
+
+            // Critical politeness check: never download immutable circular PDFs already indexed in DB/Qdrant
+            if (ingestionService.isDocumentIndexed(externalKey)) {
+                tracker.incrementSkipped();
+                continue;
+            }
+
+            tracker.setCurrentActivity(String.format("Notice %d/%d (#%d): %s",
+                    i + 1, allCirculars.size(), entry.circularId(), abbreviate(entry.description(), 64)));
+
+            String pdfUrl = portalClient.buildCircularPdfUrl(entry.circularId());
+            String labels = String.join(", ", item.labels());
+            String date = entry.date() != null ? entry.date().trim() : "";
+            String contextPrefix = "BVICAM Official Notice (" + labels + ")"
+                    + (date.isBlank() ? "" : " | Published Date: " + date)
+                    + " | Circular ID: " + entry.circularId();
+
+            try {
+                byte[] pdfBytes = portalClient.fetchPdfBytes(pdfUrl);
+                tracker.resetTransportErrors();
+
+                SyncUpsertResult result = ingestionService.upsertAutoSyncedDocument(
+                        externalKey,
+                        entry.description(),
+                        DocumentCategory.NOTICE,
+                        pdfUrl,
+                        "circular-" + entry.circularId() + ".pdf",
+                        date,
+                        contextPrefix,
+                        null,
+                        pdfBytes
+                );
+                tracker.recordUpsertOutcome(result.status());
+            } catch (RemoteThrottleException ex) {
+                throw ex;
+            } catch (IllegalStateException ex) {
+                handleUpsertIllegalState("Circular #" + entry.circularId(), ex, tracker);
+            } catch (IOException ex) {
+                // If ViewPdf returns 404/500 or an HTML error page, index the circular metadata stub instead of dropping it
+                if (!isTransportFailure(ex)) {
+                    tracker.resetTransportErrors();
+                    tryIndexMissingNoticeMetadata(externalKey, entry, labels, date, pdfUrl, contextPrefix, ex.getMessage(), tracker);
+                } else {
+                    handleRemoteException("Circular #" + entry.circularId(), ex, true, tracker);
+                }
+            } catch (Exception ex) {
+                tracker.recordItemFailure("Circular #" + entry.circularId() + ": " + ex.getMessage());
+            }
+        }
+    }
+
+    private void tryIndexMissingNoticeMetadata(String externalKey,
+                                               CircularEntry entry,
+                                               String labels,
+                                               String date,
+                                               String pdfUrl,
+                                               String contextPrefix,
+                                               String fetchError,
+                                               SyncTracker tracker) {
+        try {
+            String stubText = contextPrefix
+                    + "\nOfficial Notice Title: " + entry.description()
+                    + (date.isBlank() ? "" : "\nPublished Date: " + date)
+                    + "\nOfficial Portal Link: " + pdfUrl
+                    + "\nNote: PDF binary was unavailable on BVICAM portal during sync (" + fetchError + ").";
+            SyncUpsertResult stubResult = ingestionService.upsertAutoSyncedDocument(
+                    externalKey,
+                    entry.description(),
+                    DocumentCategory.NOTICE,
+                    pdfUrl,
+                    "circular-" + entry.circularId() + ".pdf",
+                    date,
+                    contextPrefix,
+                    stubText,
+                    null
+            );
+            tracker.recordUpsertOutcome(stubResult.status());
+            tracker.addIssueOnly("Circular #" + entry.circularId() + " (" + abbreviate(entry.description(), 45)
+                    + "): PDF missing on portal (" + fetchError + "); indexed metadata stub.");
+        } catch (IllegalStateException ex) {
+            handleUpsertIllegalState("Circular #" + entry.circularId() + " metadata stub", ex, tracker);
+        } catch (Exception stubEx) {
+            tracker.recordItemFailure("Circular #" + entry.circularId() + " metadata fallback: " + stubEx.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 3: Course Materials across MCA & BA(JMC) Programmes / Semesters
+    // -------------------------------------------------------------------------
+
+    private void syncCourseMaterials(SyncTracker tracker, SyncMode mode) {
+        tracker.setPhase("COURSE_MATERIALS",
+                "Discovering BVICAM courses, semesters, and subject materials...",
+                "Fetching BVICAM course list...");
+
         List<DropdownOption> courses;
         try {
-            courses = portalClient.fetchCourses();
-            tracker.resetRemoteErrors();
+            courses = new ArrayList<>(portalClient.fetchCourses());
+            tracker.resetTransportErrors();
         } catch (RemoteThrottleException ex) {
             throw ex;
         } catch (IOException ex) {
-            tracker.recordRemoteError("Course dropdown fetch: " + ex.getMessage(), isServerOrNetworkError(ex));
+            handleRemoteException("Course dropdown fetch", ex, true, tracker);
             return;
         }
 
+        // Order MCA programmes before BA(JMC) and filter if caller asked for MCA-only or BA(JMC)-only
+        courses.sort(Comparator.comparingInt(c -> isBajmcCourse(c) ? 1 : 0));
+        List<DropdownOption> targetCourses = courses.stream()
+                .filter(c -> mode != SyncMode.COURSE_MATERIALS_MCA || !isBajmcCourse(c))
+                .filter(c -> mode != SyncMode.COURSE_MATERIALS_BAJMC || isBajmcCourse(c))
+                .toList();
+
         Map<String, ScopedMaterial> discoveredMaterials = new LinkedHashMap<>();
 
-        for (DropdownOption course : courses) {
+        for (DropdownOption course : targetCourses) {
             if (tracker.isAborted()) {
                 return;
             }
             boolean isBajmc = isBajmcCourse(course);
             List<DropdownOption> semesters;
+            tracker.setCurrentActivity("Fetching semesters for " + course.text());
             try {
                 semesters = portalClient.fetchSemesters(course.value());
-                tracker.resetRemoteErrors();
+                tracker.resetTransportErrors();
             } catch (RemoteThrottleException ex) {
                 throw ex;
             } catch (IOException ex) {
-                tracker.recordRemoteError("Semester dropdown for course " + course.text() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
+                handleRemoteException("Semester dropdown for " + course.text(), ex, isTransportFailure(ex), tracker);
                 continue;
             }
 
@@ -479,14 +565,15 @@ public class BvicamPortalSyncService {
                     return;
                 }
                 List<SubjectEntry> subjects;
+                tracker.setCurrentActivity("Fetching subjects: " + course.text() + " / " + semester.text());
                 try {
                     subjects = portalClient.fetchSubjects(course.value(), semester.value(), isBajmc);
-                    tracker.resetRemoteErrors();
+                    tracker.resetTransportErrors();
                 } catch (RemoteThrottleException ex) {
                     throw ex;
                 } catch (IOException ex) {
-                    tracker.recordRemoteError("Subject list for " + course.text() + " sem " + semester.text() + ": " + ex.getMessage(),
-                            isServerOrNetworkError(ex));
+                    handleRemoteException("Subject list for " + course.text() + " " + semester.text(),
+                            ex, isTransportFailure(ex), tracker);
                     continue;
                 }
 
@@ -494,17 +581,25 @@ public class BvicamPortalSyncService {
                     if (tracker.isAborted()) {
                         return;
                     }
+                    String subjectLabel = buildSubjectLabel(subject);
+                    tracker.setCurrentActivity("Scanning resources: " + course.text() + " " + semester.text() + " — " + subjectLabel);
                     try {
                         List<CourseMaterialLink> resources = portalClient.fetchSubjectResources(subject, isBajmc);
-                        tracker.resetRemoteErrors();
-                        for (CourseMaterialLink link : resources) {
-                            discoveredMaterials.putIfAbsent(link.pdfUrl(), new ScopedMaterial(course.text(), semester.text(), subject, link));
+                        tracker.resetTransportErrors();
+                        if (!resources.isEmpty()) {
+                            indexSubjectDirectoryOverview(course, semester, subject, subjectLabel, resources, isBajmc, tracker);
+                            for (CourseMaterialLink link : resources) {
+                                discoveredMaterials.putIfAbsent(
+                                        link.pdfUrl(),
+                                        new ScopedMaterial(course.text(), semester.text(), subject, link)
+                                );
+                            }
                         }
                     } catch (RemoteThrottleException ex) {
                         throw ex;
                     } catch (IOException ex) {
-                        tracker.recordRemoteError("Subject resources P_Id=" + subject.paperId() + ": " + ex.getMessage(),
-                                isServerOrNetworkError(ex));
+                        handleRemoteException("Subject resources P_Id=" + subject.paperId(),
+                                ex, isTransportFailure(ex), tracker);
                     }
                 }
             }
@@ -512,12 +607,13 @@ public class BvicamPortalSyncService {
 
         List<ScopedMaterial> allMaterials = new ArrayList<>(discoveredMaterials.values());
         tracker.addDiscovered(allMaterials.size());
-        tracker.setMessage("Indexing " + allMaterials.size() + " discovered course material PDFs...");
+        tracker.setMessage("Indexing " + allMaterials.size() + " discovered course material PDFs (skipping already-indexed)...");
 
-        for (ScopedMaterial item : allMaterials) {
+        for (int i = 0; i < allMaterials.size(); i++) {
             if (tracker.isAborted()) {
                 return;
             }
+            ScopedMaterial item = allMaterials.get(i);
             CourseMaterialLink link = item.link();
             String externalKey = buildUrlExternalKey("material:", link.pdfUrl());
             if (ingestionService.isDocumentIndexed(externalKey)) {
@@ -528,6 +624,9 @@ public class BvicamPortalSyncService {
             SubjectEntry subject = item.subject();
             String subjectLabel = buildSubjectLabel(subject);
             String title = subjectLabel.isBlank() ? link.title() : (subjectLabel + ": " + link.title());
+            tracker.setCurrentActivity(String.format("Course PDF %d/%d: %s — %s",
+                    i + 1, allMaterials.size(), abbreviate(subjectLabel, 28), abbreviate(link.title(), 40)));
+
             StringBuilder prefix = new StringBuilder();
             prefix.append("BVICAM Course Material | Programme: ").append(item.courseName())
                     .append(" | Semester: ").append(item.semesterName());
@@ -540,7 +639,7 @@ public class BvicamPortalSyncService {
 
             try {
                 byte[] pdfBytes = portalClient.fetchPdfBytes(link.pdfUrl());
-                tracker.resetRemoteErrors();
+                tracker.resetTransportErrors();
                 SyncUpsertResult result = ingestionService.upsertAutoSyncedDocument(
                         externalKey,
                         title,
@@ -556,19 +655,96 @@ public class BvicamPortalSyncService {
             } catch (RemoteThrottleException ex) {
                 throw ex;
             } catch (IllegalStateException ex) {
-                throw new AbortSyncException("ABORTED_OLLAMA_OFFLINE", ex.getMessage(), "Ollama became unreachable mid-sync");
+                handleUpsertIllegalState("Material PDF " + link.title(), ex, tracker);
             } catch (IOException ex) {
-                tracker.recordRemoteError("Material PDF " + link.pdfUrl() + ": " + ex.getMessage(), isServerOrNetworkError(ex));
+                // Individual missing/broken PDF under /UploadDocuments/ must never abort the remaining materials
+                handleRemoteException("Material PDF " + link.title() + " (" + link.pdfUrl() + ")",
+                        ex, isTransportFailure(ex), tracker);
             } catch (Exception ex) {
-                tracker.incrementFailed();
-                log.warn("Failed processing material PDF {}: {}", link.pdfUrl(), ex.getMessage());
+                tracker.recordItemFailure("Material PDF " + link.pdfUrl() + ": " + ex.getMessage());
             }
         }
     }
 
+    /**
+     * Immediately indexes a lightweight subject resource directory entry so students can ask GradBot
+     * for any subject's units, assignments, and past paper links right away while full PDFs continue embedding.
+     */
+    private void indexSubjectDirectoryOverview(DropdownOption course,
+                                               DropdownOption semester,
+                                               SubjectEntry subject,
+                                               String subjectLabel,
+                                               List<CourseMaterialLink> resources,
+                                               boolean isBajmc,
+                                               SyncTracker tracker) {
+        String subjectUrl = portalClient.getBaseUrl()
+                + (isBajmc ? "/WebsiteGetFunction/SubjectContentViewBajmc" : "/WebsiteGetFunction/SubjectContentView")
+                + "?Course_Id=" + subject.courseId()
+                + "&P_Id=" + subject.paperId()
+                + "&Sem_Id=" + subject.semId();
+        String externalKey = "subject-index:" + subject.courseId() + ":" + subject.semId() + ":" + subject.paperId();
+        String title = course.text() + " " + semester.text() + " | " + subjectLabel + " (Material Index)";
+        String contextPrefix = "BVICAM Course Material Directory | Programme: " + course.text()
+                + " | Semester: " + semester.text()
+                + " | Subject: " + subjectLabel;
+
+        StringBuilder body = new StringBuilder();
+        body.append(contextPrefix).append("\nOfficial Subject Page: ").append(subjectUrl).append("\n");
+        String lastSection = null;
+        for (CourseMaterialLink link : resources) {
+            String sec = (link.sectionTitle() != null && !link.sectionTitle().isBlank())
+                    ? link.sectionTitle().trim()
+                    : "Resources";
+            if (!sec.equals(lastSection)) {
+                body.append("\n[").append(sec).append("]\n");
+                lastSection = sec;
+            }
+            body.append("- ").append(link.title()).append(": ").append(link.pdfUrl()).append("\n");
+        }
+
+        tracker.addDiscovered(1);
+        try {
+            SyncUpsertResult res = ingestionService.upsertAutoSyncedDocument(
+                    externalKey,
+                    title,
+                    DocumentCategory.COURSE_MATERIAL,
+                    subjectUrl,
+                    null,
+                    null,
+                    contextPrefix,
+                    body.toString(),
+                    null
+            );
+            tracker.recordUpsertOutcome(res.status());
+        } catch (IllegalStateException ex) {
+            handleUpsertIllegalState("Subject index " + subjectLabel, ex, tracker);
+        } catch (Exception ex) {
+            tracker.recordItemFailure("Subject index " + subjectLabel + ": " + ex.getMessage());
+        }
+    }
+
     // -------------------------------------------------------------------------
-    // Pure helpers & internal state tracking
+    // Error classification, helpers & live progress tracker
     // -------------------------------------------------------------------------
+
+    private void handleUpsertIllegalState(String itemLabel, IllegalStateException ex, SyncTracker tracker) {
+        if (!ollamaClientService.isHealthy()) {
+            throw new AbortSyncException("ABORTED_OLLAMA_OFFLINE", ex.getMessage(),
+                    "Ollama became unreachable mid-sync while indexing " + itemLabel);
+        }
+        tracker.recordItemFailure(itemLabel + " embedding error: " + ex.getMessage());
+    }
+
+    private void handleRemoteException(String label, IOException ex, boolean countsAsTransportOutage, SyncTracker tracker) {
+        tracker.recordRemoteError(label + ": " + ex.getMessage(), countsAsTransportOutage && isTransportFailure(ex));
+    }
+
+    private static boolean isCourseMaterialMode(SyncMode mode) {
+        return mode == SyncMode.COURSE_MATERIALS
+                || mode == SyncMode.COURSE_MATERIALS_MCA
+                || mode == SyncMode.COURSE_MATERIALS_BAJMC
+                || mode == SyncMode.FULL;
+    }
 
     static boolean isBajmcCourse(DropdownOption course) {
         if (course == null) {
@@ -616,15 +792,32 @@ public class BvicamPortalSyncService {
         }
     }
 
-    private static boolean isServerOrNetworkError(IOException ex) {
-        if (ex instanceof HttpStatusException statusEx) {
-            int code = statusEx.getStatusCode();
-            return code >= 500;
+    /**
+     * Distinguishes true network/connect/feed outages from single-document HTTP 404/500 or HTML error responses.
+     */
+    private static boolean isTransportFailure(IOException ex) {
+        if (ex instanceof ConnectException
+                || ex instanceof SocketTimeoutException
+                || ex instanceof HttpTimeoutException
+                || ex instanceof UnknownHostException) {
+            return true;
         }
-        return true;
+        if (ex instanceof HttpStatusException statusEx) {
+            return statusEx.getStatusCode() >= 500;
+        }
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase(Locale.ROOT) : "";
+        return msg.contains("timed out") || msg.contains("connection refused") || msg.contains("reset by peer");
     }
 
-    private record NoticeFeed(String path, String label) {
+    private static String abbreviate(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        String clean = text.trim().replaceAll("\\s+", " ");
+        return clean.length() > maxLen ? clean.substring(0, maxLen) + "..." : clean;
+    }
+
+    private record NoticeFeed(String path, String label, boolean required) {
     }
 
     private record DiscoveredCircular(CircularEntry entry, List<String> labels) {
@@ -667,6 +860,7 @@ public class BvicamPortalSyncService {
         private final LocalDateTime startedAt = LocalDateTime.now();
         private LocalDateTime finishedAt;
         private String phase = "INITIALIZING";
+        private String currentActivity = "Initializing sync pipeline...";
         private String lastMessage = "Starting BVICAM portal sync...";
         private String stoppedReason;
         private boolean aborted = false;
@@ -676,20 +870,26 @@ public class BvicamPortalSyncService {
         private int updatedCount = 0;
         private int skippedExistingCount = 0;
         private int failedCount = 0;
-        private int consecutiveRemoteErrors = 0;
+        private int consecutiveTransportErrors = 0;
+        private final Deque<String> recentIssues = new ArrayDeque<>();
 
         SyncTracker(String mode, String triggerReason) {
             this.mode = mode;
             this.triggerReason = triggerReason;
         }
 
-        synchronized void setPhase(String phase, String message) {
+        synchronized void setPhase(String phase, String message, String activity) {
             this.phase = phase;
             this.lastMessage = message;
+            this.currentActivity = activity;
         }
 
         synchronized void setMessage(String message) {
             this.lastMessage = message;
+        }
+
+        synchronized void setCurrentActivity(String currentActivity) {
+            this.currentActivity = currentActivity;
         }
 
         synchronized void addDiscovered(int count) {
@@ -700,28 +900,46 @@ public class BvicamPortalSyncService {
             this.skippedExistingCount++;
         }
 
-        synchronized void incrementFailed() {
-            this.failedCount++;
+        synchronized void resetTransportErrors() {
+            this.consecutiveTransportErrors = 0;
         }
 
-        synchronized void resetRemoteErrors() {
-            this.consecutiveRemoteErrors = 0;
+        synchronized void addIssueOnly(String issue) {
+            log.warn("BVICAM sync notice: {}", issue);
+            appendIssue(issue);
         }
 
-        synchronized void recordRemoteError(String detail, boolean countsTowardCircuitBreaker) {
+        synchronized void recordItemFailure(String detail) {
             this.failedCount++;
-            log.warn("BVICAM sync item error ({}): {}", countsTowardCircuitBreaker ? "remote" : "client", detail);
-            if (countsTowardCircuitBreaker) {
-                this.consecutiveRemoteErrors++;
-                if (this.consecutiveRemoteErrors >= MAX_CONSECUTIVE_REMOTE_ERRORS) {
+            log.warn("BVICAM sync item failed: {}", detail);
+            appendIssue(detail);
+        }
+
+        synchronized void recordRemoteError(String detail, boolean countsTowardTransportBreaker) {
+            this.failedCount++;
+            log.warn("BVICAM sync error ({}): {}", countsTowardTransportBreaker ? "transport" : "item", detail);
+            appendIssue(detail);
+            if (countsTowardTransportBreaker) {
+                this.consecutiveTransportErrors++;
+                if (this.consecutiveTransportErrors >= MAX_CONSECUTIVE_TRANSPORT_ERRORS) {
                     throw new AbortSyncException(
                             "ABORTED_REMOTE_ERRORS",
-                            "Paused sync politely after " + MAX_CONSECUTIVE_REMOTE_ERRORS
-                                    + " consecutive BVICAM network/5xx errors. Last error: " + detail,
-                            "Consecutive BVICAM server/network errors (" + MAX_CONSECUTIVE_REMOTE_ERRORS + ")"
+                            "Paused sync politely after " + MAX_CONSECUTIVE_TRANSPORT_ERRORS
+                                    + " consecutive BVICAM connection/server errors. Last error: " + detail,
+                            "Consecutive BVICAM transport/server errors (" + MAX_CONSECUTIVE_TRANSPORT_ERRORS + ")"
                     );
                 }
             }
+        }
+
+        private void appendIssue(String issue) {
+            if (issue == null || issue.isBlank()) {
+                return;
+            }
+            if (recentIssues.size() >= MAX_RECENT_ISSUES) {
+                recentIssues.removeFirst();
+            }
+            recentIssues.addLast(issue);
         }
 
         synchronized void recordUpsertOutcome(SyncResultStatus status) {
@@ -740,15 +958,18 @@ public class BvicamPortalSyncService {
             this.aborted = true;
             this.phase = phase;
             this.lastMessage = message;
+            this.currentActivity = "Stopped: " + phase;
             this.stoppedReason = stoppedReason;
             this.finishedAt = LocalDateTime.now();
+            appendIssue(message);
         }
 
         synchronized void complete() {
             this.phase = "COMPLETED";
             this.finishedAt = LocalDateTime.now();
+            this.currentActivity = "Completed";
             this.lastMessage = String.format(
-                    "BVICAM sync (%s) complete: %d discovered, %d new (%d scanned-PDF stubs), %d updated, %d skipped, %d failed.",
+                    "BVICAM sync (%s) complete: %d discovered, %d new (%d OCR/stubs), %d updated, %d skipped, %d failed.",
                     triggerReason, discoveredCount, indexedNewCount, scannedFallbackCount, updatedCount, skippedExistingCount, failedCount
             );
         }
@@ -762,6 +983,7 @@ public class BvicamPortalSyncService {
                     running,
                     mode,
                     phase,
+                    currentActivity,
                     startedAt,
                     running ? null : finishedAt,
                     discoveredCount,
@@ -771,7 +993,8 @@ public class BvicamPortalSyncService {
                     skippedExistingCount,
                     failedCount,
                     lastMessage,
-                    stoppedReason
+                    stoppedReason,
+                    List.copyOf(recentIssues)
             );
         }
     }
