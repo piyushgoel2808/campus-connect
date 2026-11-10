@@ -185,17 +185,52 @@
         </div>
 
         <!-- =================================================================
-             TAB 5: GRADBOT KNOWLEDGE BASE (Document Upload & URL Scraper)
+             TAB 5: GRADBOT KNOWLEDGE BASE (BVICAM Auto-Sync, Explorer & Upload)
              ================================================================= -->
         <div class="tab-pane fade" id="admin-knowledge">
-            <div class="card border-primary border-opacity-25 shadow-sm mb-4">
+            <!-- 1. Category Summary KPI Cards (Click any card to filter Explorer below) -->
+            <div class="row g-2 mb-3">
+                <div class="col-6 col-md">
+                    <button type="button" class="card w-100 text-start border shadow-sm p-2 px-3 bg-white kb-kpi-btn" data-kb-cat="ALL" onclick="window.setKbCategoryFilter('ALL')">
+                        <div class="small text-muted fw-bold">TOTAL DOCS</div>
+                        <div class="fs-5 fw-bold text-primary" id="kbCountTotal">0</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" class="card w-100 text-start border shadow-sm p-2 px-3 bg-white kb-kpi-btn" data-kb-cat="NOTICE" onclick="window.setKbCategoryFilter('NOTICE')">
+                        <div class="small text-muted fw-bold">NOTICES</div>
+                        <div class="fs-5 fw-bold text-danger" id="kbCountNotice">0</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" class="card w-100 text-start border shadow-sm p-2 px-3 bg-white kb-kpi-btn" data-kb-cat="COURSE_MATERIAL" onclick="window.setKbCategoryFilter('COURSE_MATERIAL')">
+                        <div class="small text-muted fw-bold">COURSE MATERIAL</div>
+                        <div class="fs-5 fw-bold text-warning" id="kbCountMaterial">0</div>
+                    </button>
+                </div>
+                <div class="col-6 col-md">
+                    <button type="button" class="card w-100 text-start border shadow-sm p-2 px-3 bg-white kb-kpi-btn" data-kb-cat="SYLLABUS" onclick="window.setKbCategoryFilter('SYLLABUS')">
+                        <div class="small text-muted fw-bold">SYLLABI</div>
+                        <div class="fs-5 fw-bold text-info" id="kbCountSyllabus">0</div>
+                    </button>
+                </div>
+                <div class="col-12 col-md">
+                    <button type="button" class="card w-100 text-start border shadow-sm p-2 px-3 bg-white kb-kpi-btn" data-kb-cat="BVICAM_WEB" onclick="window.setKbCategoryFilter('BVICAM_WEB')">
+                        <div class="small text-muted fw-bold">CAMPUS INFO / WEB</div>
+                        <div class="fs-5 fw-bold text-success" id="kbCountWeb">0</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. BVICAM Automated Portal Sync Control & Live Progress -->
+            <div class="card border-primary border-opacity-25 shadow-sm mb-3">
                 <div class="card-header bg-primary bg-opacity-10 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
                         <h6 class="mb-0 fw-bold text-primary">
                             <i class="fas fa-sync-alt me-2"></i>BVICAM Automated Portal Sync (Past &amp; Latest)
                         </h6>
                         <small class="text-muted">
-                            Read-only connector: checks notices every <strong>24h</strong> (02:00 AM), syllabi &amp; course materials weekly, with polite 1.2s+ pacing and automatic skip of already-indexed PDFs.
+                            Polite read-only connector (<code>&gt;=1.2s</code> pacing): 24h notice sync (02:00 AM), anti-forgery session for MCA &amp; BA(JMC) course materials, Vision OCR for scanned PDFs, and auto-skip for already-indexed files.
                         </small>
                     </div>
                     <span class="badge bg-secondary" id="bvicamSyncBadge">IDLE</span>
@@ -206,113 +241,199 @@
                             <i class="fas fa-cloud-download-alt me-1"></i>Sync All (Past + Latest)
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="triggerBvicamSync('NOTICES', this)">
-                            <i class="fas fa-bell me-1"></i>Sync Notices
+                            <i class="fas fa-bell me-1"></i>Notices Only
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-info" onclick="triggerBvicamSync('SYLLABUS_AND_INFO', this)">
-                            <i class="fas fa-book me-1"></i>Sync Syllabus &amp; Fees
+                            <i class="fas fa-book me-1"></i>Syllabus &amp; Fees
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-success" onclick="triggerBvicamSync('COURSE_MATERIALS', this)">
-                            <i class="fas fa-folder-open me-1"></i>Sync Course Materials
+                        <button type="button" class="btn btn-sm btn-outline-warning text-dark" onclick="triggerBvicamSync('COURSE_MATERIALS_MCA', this)">
+                            <i class="fas fa-laptop-code me-1"></i>Course Material (MCA)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="triggerBvicamSync('COURSE_MATERIALS_BAJMC', this)">
+                            <i class="fas fa-newspaper me-1"></i>Course Material (BA-JMC)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-dark" onclick="triggerBvicamSync('COURSE_MATERIALS', this)">
+                            <i class="fas fa-folder-open me-1"></i>All Course Materials
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadBvicamSyncStatus()">
                             <i class="fas fa-redo me-1"></i>Refresh Status
                         </button>
                     </div>
+
+                    <div class="d-flex align-items-center gap-2 px-3 py-2 rounded bg-light border small mb-2">
+                        <i class="fas fa-terminal text-primary"></i>
+                        <strong class="text-dark">Live Activity:</strong>
+                        <span class="text-muted text-truncate" id="bvicamSyncActivity">Idle</span>
+                    </div>
+
                     <div class="row g-2 text-center small mb-2" id="bvicamSyncMetrics">
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Phase</div><strong id="syncMetricPhase">IDLE</strong></div></div>
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Discovered</div><strong id="syncMetricDiscovered">0</strong></div></div>
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">New Indexed</div><strong class="text-success" id="syncMetricNew">0</strong></div></div>
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Scanned Stubs</div><strong class="text-warning" id="syncMetricScanned">0</strong></div></div>
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Skipped</div><strong class="text-secondary" id="syncMetricSkipped">0</strong></div></div>
-                        <div class="col-6 col-md-2"><div class="p-2 rounded bg-light"><div class="text-muted">Failed</div><strong class="text-danger" id="syncMetricFailed">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">Phase</div><strong id="syncMetricPhase">IDLE</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">Discovered</div><strong id="syncMetricDiscovered">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">New Indexed</div><strong class="text-success" id="syncMetricNew">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">OCR / Stubs</div><strong class="text-warning" id="syncMetricScanned">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">Updated</div><strong class="text-info" id="syncMetricUpdated">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">Skipped</div><strong class="text-secondary" id="syncMetricSkipped">0</strong></div></div>
+                        <div class="col-6 col-md"><div class="p-2 rounded bg-light"><div class="text-muted">Failed</div><strong class="text-danger" id="syncMetricFailed">0</strong></div></div>
                     </div>
                     <div class="small text-muted" id="bvicamSyncMessage">Loading BVICAM sync status...</div>
-                </div>
-            </div>
-            <div class="row g-4 mb-4">
-                <!-- Section 1: Upload Notice / PDF / Circular Document -->
-                <div class="col-lg-6">
-                    <div class="card h-100 border-0 shadow-sm p-3">
-                        <h6 class="fw-bold text-primary mb-2">
-                            <i class="fas fa-file-upload me-1"></i> Ingest Document (PDF / Notice / Image)
-                        </h6>
-                        <p class="small text-muted mb-3">Upload examination notices, date sheets, circulars, or syllabi. Scanned PDFs &amp; images are read automatically via Gemma 4 Vision OCR.</p>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Document Title</label>
-                            <input type="text" class="form-control" id="knowledgeDocTitle" placeholder="e.g. End Term Exam Schedule 2026">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Category</label>
-                            <select class="form-select" id="knowledgeDocCategory">
-                                <option value="NOTICE">Notice / Circular</option>
-                                <option value="SYLLABUS">Syllabus / Curriculum</option>
-                                <option value="COURSE_MATERIAL">Course Material / Notes</option>
-                                <option value="GENERAL">General Campus Info</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">File (.pdf, .png, .jpg, .txt, .md)</label>
-                            <input type="file" class="form-control" id="knowledgeFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.csv,.html">
-                        </div>
-                        <button class="btn btn-primary w-100 mt-auto" id="btnUploadDoc" onclick="window.uploadKnowledgeDocument()">
-                            <i class="fas fa-upload me-1"></i> Upload & Vectorize
-                        </button>
-                    </div>
-                </div>
 
-                <!-- Section 2: Scrape BVICAM Web URL -->
-                <div class="col-lg-6">
-                    <div class="card h-100 border-0 shadow-sm p-3">
-                        <h6 class="fw-bold text-primary mb-2">
-                            <i class="fas fa-globe me-1"></i> Index BVICAM Web Page
-                        </h6>
-                        <p class="small text-muted mb-3">Index official BVICAM web pages (e.g. faculty directory, admissions, infrastructure) into GradBot.</p>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Page / Resource Title</label>
-                            <input type="text" class="form-control" id="knowledgeScrapeTitle" placeholder="e.g. BVICAM MCA Faculty Directory">
+                    <div class="mt-2 d-none" id="bvicamSyncIssuesBox">
+                        <div class="alert alert-warning py-2 px-3 mb-0 small">
+                            <div class="fw-bold mb-1"><i class="fas fa-exclamation-triangle me-1"></i>Recent Sync Warnings / Failed Items</div>
+                            <ul class="mb-0 ps-3" id="bvicamSyncIssuesList" style="max-height: 140px; overflow-y: auto;"></ul>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Target URL</label>
-                            <input type="url" class="form-control" id="knowledgeScrapeUrl" placeholder="https://bvicam.in/faculty or http://...">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Category</label>
-                            <select class="form-select" id="knowledgeScrapeCategory">
-                                <option value="BVICAM_WEB">BVICAM Official Website</option>
-                                <option value="GENERAL">General Web Resource</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-outline-primary w-100 mt-auto" id="btnScrapeUrl" onclick="window.scrapeKnowledgeUrl()">
-                            <i class="fas fa-spider me-1"></i> Scrape & Index URL
-                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Indexed Documents Table -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold text-dark mb-0"><i class="fas fa-database me-1 text-primary"></i> Indexed Knowledge Base Sources</h6>
-                <button class="btn btn-sm btn-outline-secondary" onclick="window.loadAdminKnowledge()">
-                    <i class="fas fa-sync-alt me-1"></i> Refresh
+            <!-- 3. Collapsible Manual Upload & Single URL Scraper -->
+            <div class="mb-3">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#manualIngestCollapse" aria-expanded="false">
+                    <i class="fas fa-plus-circle me-1"></i> Manual Document Upload / Scrape Single URL
                 </button>
             </div>
-            <div class="table-responsive cc-table-card">
-                <table class="table table-hover mb-0">
-                    <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Title / Source</th>
-                        <th>Category</th>
-                        <th>Source Type</th>
-                        <th>Chunks</th>
-                        <th>Indexed At</th>
-                        <th class="text-end">Action</th>
-                    </tr>
-                    </thead>
-                    <tbody id="adminKnowledgeTable">
-                    <tr><td colspan="7" class="text-center py-4 text-muted">Click "GradBot Knowledge" to load indexed sources...</td></tr>
-                    </tbody>
-                </table>
+            <div class="collapse mb-4" id="manualIngestCollapse">
+                <div class="row g-4">
+                    <!-- Section 1: Upload Notice / PDF / Circular Document -->
+                    <div class="col-lg-6">
+                        <div class="card h-100 border-0 shadow-sm p-3">
+                            <h6 class="fw-bold text-primary mb-2">
+                                <i class="fas fa-file-upload me-1"></i> Ingest Document (PDF / Notice / Image)
+                            </h6>
+                            <p class="small text-muted mb-3">Upload examination notices, date sheets, circulars, or syllabi. Scanned PDFs &amp; images are read automatically via Gemma 4 Vision OCR.</p>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Document Title</label>
+                                <input type="text" class="form-control" id="knowledgeDocTitle" placeholder="e.g. End Term Exam Schedule 2026">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Category</label>
+                                <select class="form-select" id="knowledgeDocCategory">
+                                    <option value="NOTICE">Notice / Circular</option>
+                                    <option value="SYLLABUS">Syllabus / Curriculum</option>
+                                    <option value="COURSE_MATERIAL">Course Material / Notes</option>
+                                    <option value="GENERAL">General Campus Info</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">File (.pdf, .png, .jpg, .txt, .md)</label>
+                                <input type="file" class="form-control" id="knowledgeFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.csv,.html">
+                            </div>
+                            <button class="btn btn-primary w-100 mt-auto" id="btnUploadDoc" onclick="window.uploadKnowledgeDocument()">
+                                <i class="fas fa-upload me-1"></i> Upload &amp; Vectorize
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Scrape BVICAM Web URL -->
+                    <div class="col-lg-6">
+                        <div class="card h-100 border-0 shadow-sm p-3">
+                            <h6 class="fw-bold text-primary mb-2">
+                                <i class="fas fa-globe me-1"></i> Index BVICAM Web Page
+                            </h6>
+                            <p class="small text-muted mb-3">Index official BVICAM web pages (e.g. faculty directory, admissions, infrastructure) into GradBot.</p>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Page / Resource Title</label>
+                                <input type="text" class="form-control" id="knowledgeScrapeTitle" placeholder="e.g. BVICAM MCA Faculty Directory">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Target URL</label>
+                                <input type="url" class="form-control" id="knowledgeScrapeUrl" placeholder="https://bvicam.in/faculty or http://...">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Category</label>
+                                <select class="form-select" id="knowledgeScrapeCategory">
+                                    <option value="BVICAM_WEB">BVICAM Official Website</option>
+                                    <option value="GENERAL">General Web Resource</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-outline-primary w-100 mt-auto" id="btnScrapeUrl" onclick="window.scrapeKnowledgeUrl()">
+                                <i class="fas fa-spider me-1"></i> Scrape &amp; Index URL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Complete Searchable, Filterable & Paginated Knowledge Base Explorer -->
+            <div class="card border-0 shadow-sm p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-0"><i class="fas fa-database me-1 text-primary"></i> All Indexed Knowledge Base Documents</h6>
+                        <small class="text-muted" id="kbExplorerSummary">Loading indexed sources...</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="window.loadAdminKnowledge()">
+                        <i class="fas fa-sync-alt me-1"></i> Refresh List
+                    </button>
+                </div>
+
+                <!-- Filter & Search Controls -->
+                <div class="row g-2 align-items-center mb-3">
+                    <div class="col-md-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" class="form-control" id="kbSearchInput" placeholder="Search title, subject, file, date, or #ID..." oninput="window.setKbFilter('search', this.value)">
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" id="kbCategoryFilter" onchange="window.setKbFilter('category', this.value)">
+                            <option value="ALL">All Categories</option>
+                            <option value="NOTICE">Notices</option>
+                            <option value="COURSE_MATERIAL">Course Material</option>
+                            <option value="SYLLABUS">Syllabi</option>
+                            <option value="BVICAM_WEB">Campus Web Info</option>
+                            <option value="GENERAL">General</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" id="kbSourceFilter" onchange="window.setKbFilter('sourceType', this.value)">
+                            <option value="ALL">All Sources</option>
+                            <option value="AUTO_SYNC">AUTO_SYNC</option>
+                            <option value="FILE_UPLOAD">FILE_UPLOAD</option>
+                            <option value="WEB_URL">WEB_URL</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" id="kbStatusFilter" onchange="window.setKbFilter('syncStatus', this.value)">
+                            <option value="ALL">All Sync States</option>
+                            <option value="INDEXED">INDEXED</option>
+                            <option value="PENDING_QDRANT_SYNC">PENDING_QDRANT</option>
+                            <option value="DB_ONLY">DB_ONLY</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <select class="form-select form-select-sm" id="kbPageSizeSelect" onchange="window.setKbFilter('pageSize', this.value)">
+                            <option value="25">25 / page</option>
+                            <option value="50" selected>50 / page</option>
+                            <option value="100">100 / page</option>
+                            <option value="ALL">Show All</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Pagination Bar (Top) -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 small text-muted" id="kbPaginationTop"></div>
+
+                <div class="table-responsive cc-table-card" style="overflow-x: auto;">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th style="width: 65px;">ID</th>
+                            <th>Title, File &amp; Source Link</th>
+                            <th style="width: 140px;">Category</th>
+                            <th style="width: 160px;">Source &amp; Status</th>
+                            <th style="width: 100px;">Chunks</th>
+                            <th style="width: 155px;">Indexed At</th>
+                            <th class="text-end" style="width: 75px;">Action</th>
+                        </tr>
+                        </thead>
+                        <tbody id="adminKnowledgeTable">
+                        <tr><td colspan="7" class="text-center py-4 text-muted">Click "GradBot Knowledge" to load indexed sources...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Bar (Bottom) -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 small text-muted" id="kbPaginationBottom"></div>
             </div>
         </div>
     </div>
