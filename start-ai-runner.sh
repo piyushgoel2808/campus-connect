@@ -286,6 +286,14 @@ if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
 
     if [ "$URL_STATUS" = "200" ] && [ "$TOKEN_STATUS" = "200" ]; then
         echo -e "${GREEN}✓ Render environment variables (OLLAMA_BASE_URL, OLLAMA_AUTH_TOKEN) updated automatically!${NC}"
+        # Trigger an immediate rolling deploy so the running container loads the new tunnel URL
+        DEPLOY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_not_clear"}' || true)
+        if [ "$DEPLOY_STATUS" = "201" ]; then
+            echo -e "${GREEN}✓ Triggered Render rolling deployment to load the new AI runner connection!${NC}"
+        fi
         RENDER_SYNCED=true
     else
         echo -e "${YELLOW}⚠️  Render env var update returned status ($URL_STATUS, $TOKEN_STATUS). Check your RENDER_API_KEY and RENDER_SERVICE_ID.${NC}"
