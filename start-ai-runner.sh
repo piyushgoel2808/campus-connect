@@ -190,19 +190,20 @@ cleanup() {
 }
 trap cleanup EXIT SIGINT SIGTERM
 
-# Safely check PROXY_PORT without terminating unrelated services
-if lsof -Pi :$PROXY_PORT -sTCP:LISTEN -t &>/dev/null; then
+# Safely find a usable PROXY_PORT without terminating unrelated services
+while lsof -Pi :$PROXY_PORT -sTCP:LISTEN -t &>/dev/null; do
     EXISTING_PID=$(lsof -Pi :$PROXY_PORT -sTCP:LISTEN -t | head -n 1)
-    if ps -p "$EXISTING_PID" -o command= | grep -q "ai_proxy.py"; then
+    if ps -p "$EXISTING_PID" -o command= 2>/dev/null | grep -q "ai_proxy.py"; then
         echo -e "${YELLOW}⚠️  Existing GradBot proxy found on port $PROXY_PORT (PID: $EXISTING_PID). Restarting it...${NC}"
         kill -9 "$EXISTING_PID" 2>/dev/null || true
         sleep 1
+        break
     else
-        echo -e "${RED}❌ Port $PROXY_PORT is already in use by PID $EXISTING_PID ($(ps -p "$EXISTING_PID" -o comm= 2>/dev/null || echo 'unknown')).${NC}"
-        echo -e "Please configure a different PROXY_PORT in $ENV_FILE or stop the conflicting service."
-        exit 1
+        echo -e "${YELLOW}⚠️  Port $PROXY_PORT is in use by PID $EXISTING_PID ($(ps -p "$EXISTING_PID" -o comm= 2>/dev/null || echo 'external service')).${NC}"
+        PROXY_PORT=$((PROXY_PORT + 1))
+        echo -e "${CYAN}→ Auto-selecting next available port: $PROXY_PORT${NC}"
     fi
-fi
+done
 
 python3 scripts/ai_proxy.py --port "$PROXY_PORT" --secret "$GRADBOT_SECRET_KEY" --header "$AUTH_HEADER" &
 PROXY_PID=$!
