@@ -11,9 +11,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.http.HttpRequest;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -213,5 +216,93 @@ class BvicamPortalClientTest {
         IllegalArgumentException redirectEx = assertThrows(IllegalArgumentException.class,
                 () -> client.fetchHtmlPage("/Home/Admission"));
         assertFalse(redirectEx.getMessage().isBlank());
+    }
+
+    @Test
+    @DisplayName("Acquires ASP.NET __RequestVerificationToken from MCACourse, sends it in POST, and refreshes on 500")
+    void fetchSubjects_acquiresAntiForgeryTokenAndRefreshesOn500() throws IOException {
+        AtomicInteger postAttempt = new AtomicInteger(0);
+        List<String> capturedPostBodies = new ArrayList<>();
+
+        BvicamPortalClient.HttpTransport transport = (req, max) -> {
+            String path = req.uri().getPath();
+            if ("/Home/MCACourse".equals(path)) {
+                String tokenVal = postAttempt.get() == 0 ? "tok_initial_123" : "tok_fresh_999";
+                String html = "<form id=\"__AjaxAntiForgeryForm\"><input type=\"hidden\" name=\"__RequestVerificationToken\" value=\""
+                        + tokenVal + "\"/></form>";
+                return new RawHttpResponse(200, "text/html", null, html.getBytes(StandardCharsets.UTF_8));
+            }
+            if ("/WebsiteGetFunction/GetMCASubjectData".equals(path)) {
+                String body = readBody(req);
+                capturedPostBodies.add(body);
+                if (postAttempt.getAndIncrement() == 0) {
+                    return new RawHttpResponse(500, "text/html", null, "Server Error".getBytes(StandardCharsets.UTF_8));
+                }
+                String json = "\"[{\\\"P_Id\\\":1,\\\"Course_Id\\\":1,\\\"Sem_Id\\\":1,\\\"Paper_Code\\\":\\\"MCA-101\\\",\\\"Paper_Title\\\":\\\"Discrete Structures\\\"}]\"";
+                return new RawHttpResponse(200, "application/json", null, json.getBytes(StandardCharsets.UTF_8));
+            }
+            throw new IOException("Unexpected request path: " + path);
+        };
+
+        BvicamPortalClient client = new BvicamPortalClient(null, transport, ms -> {});
+        List<SubjectEntry> subjects = client.fetchSubjects("1", "1", false);
+
+        assertEquals(1, subjects.size());
+        assertEquals("MCA-101", subjects.get(0).paperCode());
+        assertEquals(2, capturedPostBodies.size());
+        assertTrue(capturedPostBodies.get(0).contains("__RequestVerificationToken=tok_initial_123"));
+        assertTrue(capturedPostBodies.get(0).contains("Course_Id=1"));
+        assertTrue(capturedPostBodies.get(1).contains("__RequestVerificationToken=tok_fresh_999"));
+        assertTrue(capturedPostBodies.get(1).contains("Sem_Id=1"));
+    }
+
+    @Test
+    @DisplayName("Preserves encoded leading spaces and parentheses inside BA(JMC) Course Material PDF URLs")
+    void parseSubjectResourceHtml_handlesLeadingSpaceAndParentheses() {
+        String html = """
+                <div class="detail-content-area">
+                  <div class="panel">
+                    <div class="panel-heading"><h3 class="panel-title">Unit II</h3></div>
+                    <ul class="list-group">
+                      <li class="list-group-item">
+                        <a href="/UploadDocuments/CourseMaterial/ Unit 2(IC) - BA JMC 101.pdf">Unit 2 Notes</a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                """;
+
+        List<CourseMaterialLink> links = BvicamPortalClient.parseSubjectResourceHtml(
+                html, "https://bvicam.in/WebsiteGetFunction/SubjectContentViewBajmc?Course_Id=2&P_Id=108&Sem_Id=1");
+
+        assertEquals(1, links.size());
+        assertEquals("https://bvicam.in/UploadDocuments/CourseMaterial/%20Unit%202(IC)%20-%20BA%20JMC%20101.pdf", links.get(0).pdfUrl());
+    }
+
+    private static String readBody(HttpRequest request) {
+        if (request.bodyPublisher().isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        request.bodyPublisher().get().subscribe(new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(ByteBuffer item) {
+                sb.append(StandardCharsets.UTF_8.decode(item));
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        });
+        return sb.toString();
     }
 }
