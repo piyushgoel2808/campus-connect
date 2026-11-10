@@ -96,6 +96,12 @@ public class KnowledgeIngestionService {
     @Value("${ai.ocr.dpi:150}")
     private float ocrDpi = 150f;
 
+    @Value("${ai.sync.ocr-scanned-pdfs:true}")
+    private boolean autoSyncOcrEnabled = true;
+
+    @Value("${ai.sync.ocr-max-pages:3}")
+    private int autoSyncOcrMaxPages = 3;
+
     @Autowired
     public KnowledgeIngestionService(KnowledgeDocumentRepository documentRepository,
                                      DocumentChunkRepository chunkRepository,
@@ -299,21 +305,41 @@ public class KnowledgeIngestionService {
         if (rawPdfBytes != null) {
             String pdfText = extractTextFromPdfBytes(rawPdfBytes);
             String compact = pdfText.replaceAll("\\s+", "");
-            if (compact.length() < 25) {
-                scannedFallback = true;
-                StringBuilder fallback = new StringBuilder();
-                if (contextPrefix != null && !contextPrefix.isBlank()) {
-                    fallback.append(contextPrefix.trim()).append("\n");
+            if (compact.length() < MIN_DIGITAL_PDF_CHARS) {
+                String ocrText = (autoSyncOcrEnabled && ollamaClientService != null)
+                        ? extractTextFromPdfWithVisionFallback(rawPdfBytes, Math.max(1, autoSyncOcrMaxPages))
+                        : "";
+                if (ocrText != null && ocrText.replaceAll("\\s+", "").length() >= MIN_DIGITAL_PDF_CHARS) {
+                    scannedFallback = true;
+                    StringBuilder ocrDoc = new StringBuilder();
+                    if (contextPrefix != null && !contextPrefix.isBlank()) {
+                        ocrDoc.append(contextPrefix.trim()).append("\n");
+                    }
+                    ocrDoc.append("Official Document Title: ").append(effectiveTitle);
+                    if (publishedDate != null && !publishedDate.isBlank()) {
+                        ocrDoc.append("\nPublished Date: ").append(publishedDate.trim());
+                    }
+                    if (sourceUrl != null && !sourceUrl.isBlank()) {
+                        ocrDoc.append("\nOfficial PDF Link: ").append(sourceUrl);
+                    }
+                    ocrDoc.append("\n[Extracted via AI Vision OCR]\n").append(ocrText.trim());
+                    bodyText = ocrDoc.toString();
+                } else {
+                    scannedFallback = true;
+                    StringBuilder fallback = new StringBuilder();
+                    if (contextPrefix != null && !contextPrefix.isBlank()) {
+                        fallback.append(contextPrefix.trim()).append("\n");
+                    }
+                    fallback.append("Official Document Title: ").append(effectiveTitle);
+                    if (publishedDate != null && !publishedDate.isBlank()) {
+                        fallback.append("\nPublished Date: ").append(publishedDate.trim());
+                    }
+                    if (sourceUrl != null && !sourceUrl.isBlank()) {
+                        fallback.append("\nOfficial PDF Link: ").append(sourceUrl);
+                    }
+                    fallback.append("\nNote: This circular/document is a scanned PDF image without embedded machine-readable text. Open the official link above to view the full scanned document.");
+                    bodyText = fallback.toString();
                 }
-                fallback.append("Official Document Title: ").append(effectiveTitle);
-                if (publishedDate != null && !publishedDate.isBlank()) {
-                    fallback.append("\nPublished Date: ").append(publishedDate.trim());
-                }
-                if (sourceUrl != null && !sourceUrl.isBlank()) {
-                    fallback.append("\nOfficial PDF Link: ").append(sourceUrl);
-                }
-                fallback.append("\nNote: This circular/document is a scanned PDF image without embedded machine-readable text. Open the official link above to view the full scanned document.");
-                bodyText = fallback.toString();
             } else {
                 bodyText = pdfText;
             }
@@ -759,6 +785,13 @@ public class KnowledgeIngestionService {
      * lacks an embedded digital text layer (e.g., scanned exam date sheets or circulars).
      */
     public String extractTextFromPdfWithVisionFallback(byte[] pdfBytes) {
+        return extractTextFromPdfWithVisionFallback(pdfBytes, maxOcrPages);
+    }
+
+    /**
+     * Extracts text from a PDF with an explicit maximum OCR page cap for automated sync throughput.
+     */
+    public String extractTextFromPdfWithVisionFallback(byte[] pdfBytes, int pageCapOverride) {
         if (pdfBytes == null || pdfBytes.length < 5) {
             return "";
         }
@@ -781,7 +814,7 @@ public class KnowledgeIngestionService {
                 return "";
             }
 
-            int pageCap = Math.max(1, maxOcrPages);
+            int pageCap = Math.max(1, pageCapOverride > 0 ? pageCapOverride : maxOcrPages);
             int pagesToProcess = Math.min(totalPages, pageCap);
             float dpi = ocrDpi > 0 ? ocrDpi : 150f;
             log.info("PDF appears to be a scanned image (digitalChars={}). Running AI Vision OCR on {}/{} page(s) at {} DPI...",
