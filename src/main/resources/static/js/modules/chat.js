@@ -12,6 +12,23 @@ let currentChatPartnerEmail = null;
 const notificationListeners = [];
 let typingTimeout = null;
 let isTyping = false;
+let reconnectTimer = null;
+let isExplicitDisconnect = false;
+
+if (typeof document !== 'undefined') {
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            if (!isExplicitDisconnect && (!stompClient || !stompClient.connected)) {
+                connectChat();
+            }
+        }
+    });
+    window.addEventListener("online", () => {
+        if (!isExplicitDisconnect && (!stompClient || !stompClient.connected)) {
+            connectChat();
+        }
+    });
+}
 
 export function onRealtimeNotification(handler) {
     if (typeof handler === 'function') {
@@ -20,69 +37,91 @@ export function onRealtimeNotification(handler) {
 }
 
 export function connectChat() {
+    isExplicitDisconnect = false;
     if (stompClient && stompClient.connected) return;
 
     const token = localStorage.getItem("jwt_token");
     if (!token) return;
 
-    const socket = new SockJS(WS_URL);
-    stompClient = Stomp.over(socket);
-    stompClient.debug = null;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
 
-    const headers = {
-        'Authorization': `Bearer ${token}`
-    };
+    try {
+        const socket = new SockJS(WS_URL);
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null;
 
-    stompClient.connect(headers, function () {
-        const statusBadge = document.getElementById("chatStatus");
-        if (statusBadge) {
-            statusBadge.className = "badge bg-success";
-            statusBadge.innerHTML = `<i class="fas fa-circle me-1" style="font-size: 0.55rem;"></i>Online`;
-        }
+        const headers = {
+            'Authorization': `Bearer ${token}`
+        };
 
-        const chatArea = document.getElementById("chatArea");
-        if (chatArea && !chatArea.hasChildNodes()) {
-            chatArea.innerHTML = `
-                <div class="chat-placeholder text-center text-muted small py-4 my-auto">
-                    <i class="fas fa-comments text-primary fa-2x mb-2 d-block" style="opacity: 0.45;"></i>
-                    <strong>Welcome to Global Chat!</strong><br>
-                    Messages sent here are visible to the entire GradLink community.
-                </div>`;
-        }
+        stompClient.connect(headers, function () {
+            const statusBadge = document.getElementById("chatStatus");
+            if (statusBadge) {
+                statusBadge.className = "badge bg-success";
+                statusBadge.innerHTML = `<i class="fas fa-circle me-1" style="font-size: 0.55rem;"></i>Online`;
+            }
 
-        stompClient.subscribe('/user/queue/messages', function (payload) {
-            onPrivateMessageReceived(JSON.parse(payload.body));
-        });
+            const chatArea = document.getElementById("chatArea");
+            if (chatArea && !chatArea.hasChildNodes()) {
+                chatArea.innerHTML = `
+                    <div class="chat-placeholder text-center text-muted small py-4 my-auto">
+                        <i class="fas fa-comments text-primary fa-2x mb-2 d-block" style="opacity: 0.45;"></i>
+                        <strong>Welcome to Global Chat!</strong><br>
+                        Messages sent here are visible to the entire GradLink community.
+                    </div>`;
+            }
 
-        stompClient.subscribe('/user/queue/typing', function (payload) {
-            onTypingMessageReceived(JSON.parse(payload.body));
-        });
-
-        stompClient.subscribe('/user/queue/notifications', function (payload) {
-            const notification = JSON.parse(payload.body);
-            notificationListeners.forEach(listener => {
-                try {
-                    listener(notification);
-                } catch (e) {
-                    console.error('Notification listener error:', e);
-                }
+            stompClient.subscribe('/user/queue/messages', function (payload) {
+                onPrivateMessageReceived(JSON.parse(payload.body));
             });
-        });
 
-        stompClient.subscribe('/topic/public', function (payload) {
-            onPublicMessageReceived(JSON.parse(payload.body));
+            stompClient.subscribe('/user/queue/typing', function (payload) {
+                onTypingMessageReceived(JSON.parse(payload.body));
+            });
+
+            stompClient.subscribe('/user/queue/notifications', function (payload) {
+                const notification = JSON.parse(payload.body);
+                notificationListeners.forEach(listener => {
+                    try {
+                        listener(notification);
+                    } catch (e) {
+                        console.error('Notification listener error:', e);
+                    }
+                });
+            });
+
+            stompClient.subscribe('/topic/public', function (payload) {
+                onPublicMessageReceived(JSON.parse(payload.body));
+            });
+        }, function (err) {
+            console.warn('WebSocket connection lost or failed:', err);
+            const statusBadge = document.getElementById("chatStatus");
+            if (statusBadge) {
+                statusBadge.className = "badge bg-secondary";
+                statusBadge.innerHTML = `<i class="fas fa-sync fa-spin me-1" style="font-size: 0.55rem;"></i>Reconnecting...`;
+            }
+            stompClient = null;
+            if (!isExplicitDisconnect && !reconnectTimer) {
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connectChat();
+                }, 3000);
+            }
         });
-    }, function (err) {
-        console.error('WebSocket Error:', err);
-        const statusBadge = document.getElementById("chatStatus");
-        if (statusBadge) {
-            statusBadge.className = "badge bg-danger";
-            statusBadge.innerText = "Offline";
-        }
-    });
+    } catch (e) {
+        console.error('Failed creating WebSocket:', e);
+    }
 }
 
 export function disconnectChat() {
+    isExplicitDisconnect = true;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
     clearTimeout(typingTimeout);
     isTyping = false;
     currentChatPartnerEmail = null;
@@ -199,7 +238,8 @@ window.sendMessage = function() {
     if (!content) return;
 
     if (!stompClient || !stompClient.connected) {
-        alert("Global chat is currently connecting to the server. Please wait a moment.");
+        connectChat();
+        alert("Connecting to Global Chat... Please wait 2 seconds and click send again.");
         return;
     }
 
