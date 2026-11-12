@@ -1,8 +1,9 @@
 package com.bvicam.campusconnect.controller;
 
-import com.bvicam.campusconnect.dto.KnowledgeDocumentDto;
-import com.bvicam.campusconnect.entity.DocumentCategory;
 import com.bvicam.campusconnect.dto.BvicamSyncStatusDto;
+import com.bvicam.campusconnect.dto.KnowledgeDocumentDto;
+import com.bvicam.campusconnect.dto.KnowledgeUploadJobDto;
+import com.bvicam.campusconnect.entity.DocumentCategory;
 import com.bvicam.campusconnect.service.BvicamPortalSyncService;
 import com.bvicam.campusconnect.service.KnowledgeIngestionService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +49,29 @@ public class AdminKnowledgeController {
                 ? ingestionService.ingestFile(file, title, category, principal.getName())
                 : ingestionService.ingestFile(file, title, category);
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Starts an asynchronous knowledge document ingestion job (recommended for scanned PDFs/images
+     * requiring AI Vision OCR so long-running OCR never hits HTTP reverse-proxy timeouts).
+     */
+    @PostMapping(value = "/upload-async", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<KnowledgeUploadJobDto> uploadDocumentAsync(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "category", defaultValue = "NOTICE") DocumentCategory category,
+            Principal principal) throws IOException {
+        String uploaderEmail = (principal != null) ? principal.getName() : null;
+        KnowledgeUploadJobDto job = ingestionService.startAsyncFileUpload(file, title, category, uploaderEmail);
+        return ResponseEntity.accepted().body(job);
+    }
+
+    /**
+     * Returns live phase/page progress or final completion/error state for an async upload job.
+     */
+    @GetMapping("/upload-status/{jobId}")
+    public ResponseEntity<KnowledgeUploadJobDto> getUploadJobStatus(@PathVariable String jobId) {
+        return ResponseEntity.ok(ingestionService.getUploadJobStatus(jobId));
     }
 
     /**

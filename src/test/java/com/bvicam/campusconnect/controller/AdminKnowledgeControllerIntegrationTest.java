@@ -1,6 +1,8 @@
 package com.bvicam.campusconnect.controller;
 
+import com.bvicam.campusconnect.common.GlobalExceptionHandler;
 import com.bvicam.campusconnect.dto.KnowledgeDocumentDto;
+import com.bvicam.campusconnect.dto.KnowledgeUploadJobDto;
 import com.bvicam.campusconnect.entity.DocumentCategory;
 import com.bvicam.campusconnect.entity.SourceType;
 import com.bvicam.campusconnect.service.KnowledgeIngestionService;
@@ -18,6 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -44,7 +47,9 @@ class AdminKnowledgeControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(adminKnowledgeController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(adminKnowledgeController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -81,6 +86,76 @@ class AdminKnowledgeControllerIntegrationTest {
                 .andExpect(jsonPath("$.chunkCount").value(2));
 
         verify(ingestionService).ingestFile(any(), eq("Exam Schedule Notice"), eq(DocumentCategory.NOTICE));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/knowledge/upload-async starts background ingestion job and returns HTTP 202")
+    void uploadNoticeFileAsync_validRequest_returnsAcceptedJob() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "datesheet.pdf",
+                "application/pdf",
+                "%PDF-1.4\ndatesheet".getBytes()
+        );
+
+        KnowledgeUploadJobDto job = new KnowledgeUploadJobDto(
+                "job-123",
+                "QUEUED",
+                "QUEUED",
+                "Upload received. Preparing document...",
+                0,
+                0,
+                null,
+                null,
+                LocalDateTime.now(),
+                null
+        );
+
+        when(ingestionService.startAsyncFileUpload(any(), eq("Datesheet MCA"), eq(DocumentCategory.NOTICE), any()))
+                .thenReturn(job);
+
+        mockMvc.perform(multipart("/api/admin/knowledge/upload-async")
+                        .file(file)
+                        .param("title", "Datesheet MCA")
+                        .param("category", "NOTICE"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.jobId").value("job-123"))
+                .andExpect(jsonPath("$.status").value("QUEUED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/admin/knowledge/upload-status/{jobId} returns current progress or 404 when missing")
+    void getUploadJobStatus_returnsProgressAndHandlesNotFound() throws Exception {
+        KnowledgeDocumentDto docDto = new KnowledgeDocumentDto(
+                10L, "Datesheet MCA", DocumentCategory.NOTICE, SourceType.FILE_UPLOAD,
+                null, "datesheet.pdf", 3, LocalDateTime.now()
+        );
+        KnowledgeUploadJobDto completed = new KnowledgeUploadJobDto(
+                "job-123",
+                "COMPLETED",
+                "COMPLETED",
+                "Document indexed successfully (3 vector chunks).",
+                4,
+                4,
+                docDto,
+                null,
+                LocalDateTime.now(),
+                LocalDateTime.now()
+        );
+
+        when(ingestionService.getUploadJobStatus("job-123")).thenReturn(completed);
+        when(ingestionService.getUploadJobStatus("unknown"))
+                .thenThrow(new NoSuchElementException("Upload job not found"));
+
+        mockMvc.perform(get("/api/admin/knowledge/upload-status/job-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.currentPage").value(4))
+                .andExpect(jsonPath("$.document.id").value(10L));
+
+        mockMvc.perform(get("/api/admin/knowledge/upload-status/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Upload job not found"));
     }
 
     @Test

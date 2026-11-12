@@ -2,7 +2,7 @@
  * Admin Control Panel module (`components/admin.html`).
  */
 
-import { get, send, getCurrentUser, parseErrorMessage } from '../utils/api.js';
+import { get, send, getCurrentUser, parseErrorMessage, handleUnauthorized } from '../utils/api.js?v=20261112_1';
 import { escapeHtml, safeHttpUrl } from '../utils/sanitize.js';
 
 const adminUsersMap = new Map();
@@ -665,6 +665,46 @@ window.loadAdminKnowledge = async function(options = {}) {
     }
 };
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function updateUploadProgressUi({ show = true, phase = "PROCESSING", message = "Processing document...", percent = 15, pageLabel = "" } = {}) {
+    const box = document.getElementById("knowledgeUploadProgress");
+    const phaseEl = document.getElementById("knowledgeUploadPhase");
+    const percentEl = document.getElementById("knowledgeUploadPercent");
+    const barEl = document.getElementById("knowledgeUploadBar");
+    const msgEl = document.getElementById("knowledgeUploadMessage");
+    if (!box) return;
+    if (!show) {
+        box.classList.add("d-none");
+        return;
+    }
+    box.classList.remove("d-none");
+    const clampedPct = Math.max(5, Math.min(100, Math.round(Number(percent) || 0)));
+    if (phaseEl) phaseEl.textContent = pageLabel ? `${phase} (${pageLabel})` : phase;
+    if (percentEl) percentEl.textContent = `${clampedPct}%`;
+    if (barEl) barEl.style.width = `${clampedPct}%`;
+    if (msgEl) msgEl.textContent = message;
+}
+
+function computeUploadProgressPercent(job) {
+    const phase = (job?.phase || job?.status || "").toUpperCase();
+    const cur = Number(job?.currentPage) || 0;
+    const tot = Number(job?.totalPages) || 0;
+    if (phase === "QUEUED") return { percent: 15, pageLabel: "" };
+    if (phase === "EXTRACTING") return { percent: 25, pageLabel: "" };
+    if (phase === "OCR") {
+        const pct = tot > 0 ? Math.min(78, 25 + Math.round((cur / tot) * 53)) : 45;
+        return { percent: pct, pageLabel: tot > 0 ? `Page ${cur}/${tot}` : "" };
+    }
+    if (phase === "EMBEDDING") {
+        const pct = tot > 0 ? Math.min(94, 78 + Math.round((cur / tot) * 16)) : 84;
+        return { percent: pct, pageLabel: tot > 0 ? `Chunk ${cur}/${tot}` : "" };
+    }
+    if (phase === "INDEXING") return { percent: 96, pageLabel: "" };
+    if (phase === "COMPLETED") return { percent: 100, pageLabel: "" };
+    return { percent: 35, pageLabel: "" };
+}
+
 window.uploadKnowledgeDocument = async function() {
     const fileInput = document.getElementById("knowledgeFileInput");
     const file = fileInput?.files[0];
@@ -672,12 +712,38 @@ window.uploadKnowledgeDocument = async function() {
         alert("⚠️ Please select a file (.pdf, .png, .jpg, .txt, .md) to upload!");
         return;
     }
+    if (file.size > 15 * 1024 * 1024) {
+        alert("⚠️ Selected file exceeds the 15 MB upload limit. Please compress or split the document.");
+        return;
+    }
+
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+        handleUnauthorized("Authentication required. Please sign in again.");
+        return;
+    }
 
     const title = getVal("knowledgeDocTitle");
     const category = getVal("knowledgeDocCategory") || "NOTICE";
     const btn = document.getElementById("btnUploadDoc");
+    const resetUploadUi = () => {
+        if (btn) {
+            btn.innerHTML = "<i class='fas fa-upload me-1'></i> Upload & Vectorize";
+            btn.disabled = false;
+        }
+        updateUploadProgressUi({ show: false });
+    };
 
-    if (btn) { btn.innerHTML = "<i class='fas fa-spinner fa-spin me-1'></i> Processing & Vectorizing..."; btn.disabled = true; }
+    if (btn) {
+        btn.innerHTML = "<i class='fas fa-spinner fa-spin me-1'></i> Uploading & Processing...";
+        btn.disabled = true;
+    }
+    updateUploadProgressUi({
+        show: true,
+        phase: "UPLOADING",
+        message: `Uploading "${file.name}" (${(file.size / 1024).toFixed(0)} KB)...`,
+        percent: 10
+    });
 
     const formData = new FormData();
     formData.append("file", file);
@@ -685,27 +751,127 @@ window.uploadKnowledgeDocument = async function() {
     formData.append("category", category);
 
     try {
-        const token = localStorage.getItem("jwt_token");
-        const res = await fetch('/api/admin/knowledge/upload', {
+        const res = await fetch('/api/admin/knowledge/upload-async', {
             method: "POST",
             headers: { "Authorization": `Bearer ${token}` },
             body: formData
         });
 
-        if (res.ok) {
-            const data = await res.json();
-            alert(`✅ Document "${data.title}" successfully indexed into ${data.chunkCount} vector chunks!`);
-            fileInput.value = "";
-            setVal("knowledgeDocTitle", "");
-            window.loadAdminKnowledge();
-        } else {
-            alert("❌ Upload Failed: " + await parseErrorMessage(res));
+        if (res.status === 401) {
+            resetUploadUi();
+            handleUnauthorized("Session expired. Please sign in again.");
+            return;
         }
+
+        if (!res.ok) {
+            const errMsg = await parseErrorMessage(res, "Upload failed");
+            resetUploadUi();
+            alert("❌ Upload Failed: " + errMsg);
+            return;
+        }
+
+        const startPayload = await res.json();
+        const jobId = startPayload?.jobId;
+        if (!jobId) {
+            resetUploadUi();
+            alert("❌ Upload Failed: Missing ingestion job handle from server.");
+            return;
+        }
+
+        const initProg = computeUploadProgressPercent(startPayload);
+        updateUploadProgressUi({
+            show: true,
+            phase: startPayload.phase || "QUEUED",
+            message: startPayload.message || "Queued for document extraction...",
+            percent: initProg.percent,
+            pageLabel: initProg.pageLabel
+        });
+
+        let consecutivePollErrors = 0;
+        const maxPollAttempts = 400; // Up to ~10 minutes for multi-page AI Vision OCR
+        for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+            await sleep(1500);
+
+            const activeToken = localStorage.getItem("jwt_token");
+            if (!activeToken) {
+                resetUploadUi();
+                handleUnauthorized("Session expired. Please sign in again.");
+                return;
+            }
+
+            let statusRes;
+            try {
+                statusRes = await fetch(`/api/admin/knowledge/upload-status/${encodeURIComponent(jobId)}`, {
+                    headers: { "Authorization": `Bearer ${activeToken}` }
+                });
+            } catch (netErr) {
+                consecutivePollErrors++;
+                if (consecutivePollErrors > 4) {
+                    throw new Error("Lost connection while checking upload progress: " + netErr.message);
+                }
+                continue;
+            }
+
+            if (statusRes.status === 401) {
+                resetUploadUi();
+                handleUnauthorized("Session expired. Please sign in again.");
+                return;
+            }
+
+            if (!statusRes.ok) {
+                if (statusRes.status === 404 || statusRes.status === 400) {
+                    const errMsg = await parseErrorMessage(statusRes, "Upload job unavailable");
+                    resetUploadUi();
+                    alert("❌ Upload Failed: " + errMsg);
+                    return;
+                }
+                consecutivePollErrors++;
+                if (consecutivePollErrors > 3) {
+                    const errMsg = await parseErrorMessage(statusRes, "Upload status check failed");
+                    resetUploadUi();
+                    alert("❌ Upload Failed: " + errMsg);
+                    return;
+                }
+                continue;
+            }
+
+            consecutivePollErrors = 0;
+            const jobStatus = await statusRes.json();
+            const prog = computeUploadProgressPercent(jobStatus);
+            updateUploadProgressUi({
+                show: true,
+                phase: jobStatus.phase || jobStatus.status || "PROCESSING",
+                message: jobStatus.message || "Processing document...",
+                percent: prog.percent,
+                pageLabel: prog.pageLabel
+            });
+
+            if (jobStatus.status === "COMPLETED") {
+                const doc = jobStatus.document || {};
+                resetUploadUi();
+                if (fileInput) fileInput.value = "";
+                setVal("knowledgeDocTitle", "");
+                if (typeof window.loadAdminKnowledge === "function") {
+                    window.loadAdminKnowledge();
+                }
+                alert(`✅ Document "${doc.title || title || file.name}" successfully indexed into ${doc.chunkCount || 0} vector chunks!`);
+                return;
+            }
+
+            if (jobStatus.status === "FAILED") {
+                const errMsg = jobStatus.error || jobStatus.message || "Document processing failed.";
+                resetUploadUi();
+                alert("❌ Upload Failed: " + errMsg);
+                return;
+            }
+        }
+
+        resetUploadUi();
+        alert("⚠️ Upload is still running in the background. Click 'Refresh List' in a moment to verify completion.");
     } catch (e) {
         console.error(e);
+        resetUploadUi();
         alert("❌ Error: " + e.message);
-    } finally {
-        if (btn) { btn.innerHTML = "<i class='fas fa-upload me-1'></i> Upload & Vectorize"; btn.disabled = false; }
     }
 };
 

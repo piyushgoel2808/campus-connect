@@ -2,7 +2,7 @@
  * Main Single-Page Application (SPA) shell router and initializer for `dashboard.html`.
  */
 
-import { getCurrentUser } from './utils/api.js?v=20261110_1';
+import { getCurrentUser } from './utils/api.js?v=20261112_1';
 import { escapeHtml } from './utils/sanitize.js?v=20261110_1';
 import { fetchJobs } from './modules/jobs.js?v=20261110_1';
 import { fetchEvents } from './modules/events.js?v=20261110_1';
@@ -129,7 +129,7 @@ window.switchTab = async function(tab) {
                 });
                 break;
             case 'admin':
-                import('./modules/admin.js?v=20261110_2').then(m => m.loadAdminModule());
+                import('./modules/admin.js?v=20261112_1').then(m => m.loadAdminModule());
                 break;
             case 'profile':
                 import('./modules/profile.js?v=20261110_1').then(m => m.loadProfile());

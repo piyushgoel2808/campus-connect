@@ -318,6 +318,16 @@
                                 <label class="form-label small fw-bold">File (.pdf, .png, .jpg, .txt, .md)</label>
                                 <input type="file" class="form-control" id="knowledgeFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.csv,.html">
                             </div>
+                            <div id="knowledgeUploadProgress" class="d-none mb-3 p-2 rounded bg-light border small">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-semibold text-primary" id="knowledgeUploadPhase">Preparing...</span>
+                                    <span class="text-muted fw-semibold" id="knowledgeUploadPercent">0%</span>
+                                </div>
+                                <div class="progress mb-1" style="height: 6px;">
+                                    <div id="knowledgeUploadBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 15%"></div>
+                                </div>
+                                <div class="text-muted text-truncate" id="knowledgeUploadMessage">Starting ingestion...</div>
+                            </div>
                             <button class="btn btn-primary w-100 mt-auto" id="btnUploadDoc" onclick="window.uploadKnowledgeDocument()">
                                 <i class="fas fa-upload me-1"></i> Upload &amp; Vectorize
                             </button>

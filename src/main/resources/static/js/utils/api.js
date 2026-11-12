@@ -30,21 +30,31 @@ function redirectToLogin(message) {
     }
 }
 
+export function handleUnauthorized(message = "Session expired. Please sign in again.") {
+    redirectToLogin(message);
+}
+
 /**
  * Extracts a human-readable error message from a failed Fetch `Response`.
  */
 export async function parseErrorMessage(response, fallback = "Request failed") {
+    const status = response?.status;
+    const statusFallback = status ? `${fallback} (HTTP ${status})` : fallback;
     try {
         const text = await response.text();
-        if (!text) return fallback;
+        if (!text) return statusFallback;
         try {
             const json = JSON.parse(text);
-            return json.error || json.message || fallback;
+            return json.error || json.message || statusFallback;
         } catch (_) {
-            return text;
+            const trimmed = text.trim();
+            if (!trimmed || trimmed.startsWith("<")) {
+                return statusFallback;
+            }
+            return trimmed.length > 260 ? `${trimmed.slice(0, 260)}...` : trimmed;
         }
     } catch (_) {
-        return fallback;
+        return statusFallback;
     }
 }
 

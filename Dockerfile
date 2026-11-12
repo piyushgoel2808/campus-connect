@@ -36,8 +36,12 @@ COPY --from=build /app/target/*.jar app.jar
 # Expose the default Spring Boot HTTP port
 EXPOSE 8080
 
-# 🚀 MEMORY OPTIMIZATION (Prevents crashing on Free Tier cloud hosts like Render/Railway)
-# -Djava.awt.headless=true: Enables PDFBox image rendering cleanly inside headless containers.
-# -Xmx384m: Caps the maximum JVM heap size at 384 MB to stay within container limits.
-# -Xms256m: Pre-allocates 256 MB initial heap size for predictable startup performance.
-ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Xmx384m", "-Xms256m", "-jar", "app.jar"]
+# ==============================================================================
+# 🚀 MEMORY OPTIMIZATION (Render Free Tier 512Mi cgroup limit)
+# -Djava.awt.headless=true   : Enables PDFBox image rendering inside headless containers.
+# -XX:+UseSerialGC           : Low-overhead collector suited to small containers (512Mi).
+# -Xms128m / -Xmx240m        : Leaves headroom for Metaspace, CodeCache, threads & AWT/ImageIO buffers.
+# -Xss256k                   : Reduces per-thread stack native footprint.
+# -XX:MaxMetaspaceSize=160m  : Bounds class metadata native memory.
+# -XX:ReservedCodeCacheSize=40m & -XX:MaxDirectMemorySize=32m : Bounds JIT & NIO direct buffers.
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-XX:+UseSerialGC", "-Xms128m", "-Xmx240m", "-Xss256k", "-XX:MaxMetaspaceSize=160m", "-XX:ReservedCodeCacheSize=40m", "-XX:MaxDirectMemorySize=32m", "-jar", "app.jar"]
