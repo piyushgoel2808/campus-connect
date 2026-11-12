@@ -52,6 +52,9 @@ public class CampusAiService {
     private final QdrantClientService qdrantClientService;
 
     @Autowired(required = false)
+    private GroqClientService groqClientService;
+
+    @Autowired(required = false)
     private KnowledgeDocumentRepository documentRepository;
 
     @Value("${ai.rag.max-fallback-chunks:500}")
@@ -157,37 +160,64 @@ public class CampusAiService {
                     .append("</official_context>\n");
         }
 
-        // 4. Generate answer via Ollama
-        String answer = ollamaClientService.generateChatResponse(systemPrompt.toString(), question);
-        String chatModel = ollamaClientService.getChatModel() != null
-                ? ollamaClientService.getChatModel()
-                : "gemma4:e4b";
+        // 4. Generate answer via Groq Cloud if configured, otherwise fallback to local Ollama runner
+        String answer = null;
+        String chatModel = null;
+
+        if (groqClientService != null && groqClientService.isConfigured()) {
+            answer = groqClientService.generateChatResponse(systemPrompt.toString(), question);
+            if (answer != null && !answer.isBlank()) {
+                chatModel = groqClientService.getModel();
+            }
+        }
+
+        if (answer == null || answer.isBlank()) {
+            answer = ollamaClientService.generateChatResponse(systemPrompt.toString(), question);
+            chatModel = ollamaClientService.getChatModel() != null
+                    ? ollamaClientService.getChatModel()
+                    : "gemma4:e4b";
+        }
 
         return new BotAskResponse(answer, chatModel, citations);
     }
 
     /**
-     * Checks if the external local AI runner (Ollama & Qdrant) is active and reachable.
+     * Checks if the AI runners (Groq Cloud, Ollama & Qdrant) are active and reachable.
      */
     public Map<String, Object> getHealthStatus() {
+        boolean groqConfigured = groqClientService != null && groqClientService.isConfigured();
+        boolean groqHealthy = groqConfigured && groqClientService.isHealthy();
         boolean ollamaHealthy = ollamaClientService != null && ollamaClientService.isHealthy();
         boolean qdrantHealthy = qdrantClientService != null && qdrantClientService.isHealthy();
-        String model = ollamaClientService != null && ollamaClientService.getChatModel() != null
-                ? ollamaClientService.getChatModel()
-                : "gemma4:e4b";
+
+        String model;
+        if (groqConfigured) {
+            model = groqClientService.getModel() + " (Groq Cloud)";
+        } else {
+            model = ollamaClientService != null && ollamaClientService.getChatModel() != null
+                    ? ollamaClientService.getChatModel()
+                    : "gemma4:e4b";
+        }
+
         String embedding = ollamaClientService != null && ollamaClientService.getEmbeddingModel() != null
                 ? ollamaClientService.getEmbeddingModel()
                 : "embeddinggemma-2:latest";
 
         Map<String, Object> status = new LinkedHashMap<>();
-        status.put("status", ollamaHealthy ? "ONLINE" : "STANDBY");
+        status.put("status", (groqHealthy || ollamaHealthy) ? "ONLINE" : "STANDBY");
+        status.put("groqConfigured", groqConfigured);
+        status.put("groqHealthy", groqHealthy);
         status.put("model", model);
         status.put("embeddingModel", embedding);
         status.put("vectorDb", qdrantHealthy ? "Qdrant (HNSW Vector Engine)" : "Relational Cosine Fallback");
         status.put("vectorDbStatus", qdrantHealthy ? "ONLINE" : "OFFLINE");
-        status.put("mode", ollamaHealthy
-                ? (qdrantHealthy ? "Mac AI Runner Connected (gemma4:e4b + Qdrant)" : "Mac AI Runner Connected (gemma4:e4b)")
-                : "Standby (Rule-Based Fallback)");
+        if (groqHealthy) {
+            status.put("mode", "Groq Cloud Accelerated (" + groqClientService.getModel() + ")");
+        } else if (ollamaHealthy) {
+            status.put("mode", qdrantHealthy ? "Mac AI Runner Connected (gemma4:e4b + Qdrant)" : "Mac AI Runner Connected (gemma4:e4b)");
+        } else {
+            status.put("mode", "Standby (Rule-Based Fallback)");
+        }
         return status;
     }
 

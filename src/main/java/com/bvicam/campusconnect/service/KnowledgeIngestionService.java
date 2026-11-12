@@ -124,6 +124,8 @@ public class KnowledgeIngestionService {
     @Autowired(required = false)
     private UserRepository userRepository;
 
+    @Autowired(required = false)
+    private GroqClientService groqClientService;
     @Qualifier("taskExecutor")
     @Autowired(required = false)
     private Executor asyncExecutor;
@@ -1162,10 +1164,19 @@ public class KnowledgeIngestionService {
                         if (base64Image.isEmpty()) {
                             continue;
                         }
-                        String pageText = ollamaClientService.extractTextFromImage(
-                                base64Image,
-                                "Page " + (pageIndex + 1) + " of " + totalPages
-                        );
+                        String pageText = null;
+                        if (groqClientService != null && groqClientService.isConfigured()) {
+                            pageText = groqClientService.extractTextFromImage(
+                                    base64Image,
+                                    "Page " + (pageIndex + 1) + " of " + totalPages
+                            );
+                        }
+                        if ((pageText == null || pageText.isBlank()) && ollamaClientService != null) {
+                            pageText = ollamaClientService.extractTextFromImage(
+                                    base64Image,
+                                    "Page " + (pageIndex + 1) + " of " + totalPages
+                            );
+                        }
                         if (pageText != null && !pageText.isBlank()) {
                             if (pagesToProcess > 1) {
                                 combined.append("\n--- Page ").append(pageIndex + 1).append(" ---\n");
@@ -1249,15 +1260,24 @@ public class KnowledgeIngestionService {
     }
 
     /**
-     * Extracts readable text from a raw uploaded image (PNG, JPG, WEBP) via Ollama Vision OCR,
+     * Extracts readable text from a raw uploaded image (PNG, JPG, WEBP) via Groq Vision OCR or Ollama,
      * downscaling oversized uploads so container memory stays bounded.
      */
     private String extractTextFromImageBytes(byte[] imageBytes, String filename) {
-        if (imageBytes == null || imageBytes.length == 0 || ollamaClientService == null) {
+        if (imageBytes == null || imageBytes.length == 0) {
             return "";
         }
         String base64 = prepareCompactImageBase64(imageBytes);
-        return ollamaClientService.extractTextFromImage(base64, filename);
+        if (groqClientService != null && groqClientService.isConfigured()) {
+            String text = groqClientService.extractTextFromImage(base64, filename);
+            if (text != null && !text.isBlank()) {
+                return text;
+            }
+        }
+        if (ollamaClientService != null) {
+            return ollamaClientService.extractTextFromImage(base64, filename);
+        }
+        return "";
     }
 
     private String prepareCompactImageBase64(byte[] imageBytes) {
