@@ -42,6 +42,7 @@ public class OllamaClientService {
     private final String authToken;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private volatile long offlineCooldownUntil = 0L;
 
     @org.springframework.beans.factory.annotation.Autowired
     public OllamaClientService(
@@ -254,6 +255,9 @@ public class OllamaClientService {
     }
 
     private String executeChatCompletion(Map<String, Object> requestPayload, Duration requestTimeout, String operationLabel) {
+        if (System.currentTimeMillis() < offlineCooldownUntil) {
+            return "";
+        }
         try {
             String jsonBody = objectMapper.writeValueAsString(requestPayload);
             HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -266,6 +270,7 @@ public class OllamaClientService {
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
+                offlineCooldownUntil = 0L;
                 JsonNode root = objectMapper.readTree(response.body());
                 JsonNode messageNode = root.path("message").path("content");
                 if (!messageNode.isMissingNode() && !messageNode.asText().isBlank()) {
@@ -275,6 +280,7 @@ public class OllamaClientService {
                 log.warn("Ollama /api/chat ({}) returned HTTP {}: {}", operationLabel, response.statusCode(), response.body());
             }
         } catch (IOException | InterruptedException e) {
+            offlineCooldownUntil = System.currentTimeMillis() + 60_000L;
             log.warn("Ollama {} failed or timed out (runner offline): {}", operationLabel, e.getMessage());
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -290,7 +296,7 @@ public class OllamaClientService {
      * @return list of floating-point embedding coordinates, or empty list on failure
      */
     public List<Double> generateEmbedding(String text) {
-        if (text == null || text.isBlank()) {
+        if (text == null || text.isBlank() || System.currentTimeMillis() < offlineCooldownUntil) {
             return Collections.emptyList();
         }
 
@@ -311,6 +317,7 @@ public class OllamaClientService {
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
+                offlineCooldownUntil = 0L;
                 JsonNode root = objectMapper.readTree(response.body());
                 JsonNode embeddingNode = root.path("embedding");
                 if (embeddingNode.isArray()) {
@@ -324,6 +331,7 @@ public class OllamaClientService {
                 log.warn("Ollama /api/embeddings returned HTTP {}: {}", response.statusCode(), response.body());
             }
         } catch (IOException | InterruptedException e) {
+            offlineCooldownUntil = System.currentTimeMillis() + 60_000L;
             log.warn("Ollama embedding generation failed (runner offline): {}", e.getMessage());
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -382,6 +390,7 @@ public class OllamaClientService {
         String normalized = normalizeBaseUrl(newBaseUrl);
         validateEndpointUri(normalized, this.authToken, "ollama");
         this.baseUrl = normalized;
+        this.offlineCooldownUntil = 0L;
         log.info("Updated live Ollama endpoint dynamically to {}", normalized);
     }
 
