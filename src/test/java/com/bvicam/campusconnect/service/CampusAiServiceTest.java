@@ -14,11 +14,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.net.InetAddress;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -130,5 +135,99 @@ class CampusAiServiceTest {
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         verify(ollamaClientService).generateChatResponse(promptCaptor.capture(), eq("Any upcoming events?"));
         assertThat(promptCaptor.getValue()).contains("INDIACom 2026 Conference at Auditorium A");
+    }
+
+    @Test
+    @DisplayName("updateRunnerEndpoint fails closed when token unconfigured or invalid")
+    void updateRunnerEndpoint_authChecks_failClosed() {
+        when(ollamaClientService.hasAuthToken()).thenReturn(false);
+        assertThatThrownBy(() -> campusAiService.updateRunnerEndpoint("any", "https://fast-fox.trycloudflare.com"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+
+        when(ollamaClientService.hasAuthToken()).thenReturn(true);
+        when(ollamaClientService.matchesAuthToken("wrong")).thenReturn(false);
+        assertThatThrownBy(() -> campusAiService.updateRunnerEndpoint("wrong", "https://fast-fox.trycloudflare.com"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verify(ollamaClientService, never()).updateBaseUrl(anyString());
+    }
+
+    @Test
+    @DisplayName("updateRunnerEndpoint rejects non-HTTPS, disallowed domains, ports, paths, and private IPs")
+    void updateRunnerEndpoint_ssrfAndSchemeGuards_rejectBadUrls() {
+        when(ollamaClientService.hasAuthToken()).thenReturn(true);
+        when(ollamaClientService.matchesAuthToken("good-secret")).thenReturn(true);
+
+        List<String> invalidUrls = List.of(
+                "http://fast-fox.trycloudflare.com",
+                "https://trycloudflare.com",
+                "https://evil.example.com",
+                "https://user:pass@fast-fox.trycloudflare.com",
+                "https://fast-fox.trycloudflare.com:8443",
+                "https://fast-fox.trycloudflare.com/qdrant",
+                "https://fast-fox.trycloudflare.com?foo=bar",
+                "https://127.0.0.1"
+        );
+        for (String badUrl : invalidUrls) {
+            assertThatThrownBy(() -> campusAiService.updateRunnerEndpoint("good-secret", badUrl))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        }
+
+        // Private RFC1918 DNS resolution SSRF test via package-private override
+        QdrantClientService mockQdrant = mock(QdrantClientService.class);
+        CampusAiService ssrfTestService = new CampusAiService(
+                chunkRepository, eventRepository, jobRepository, userRepository, ollamaClientService, mockQdrant) {
+            @Override
+            InetAddress[] resolveHostAddresses(String host) {
+                return new InetAddress[]{InetAddress.getLoopbackAddress()};
+            }
+        };
+        assertThatThrownBy(() -> ssrfTestService.updateRunnerEndpoint("good-secret", "https://rebind-test.trycloudflare.com"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        verify(ollamaClientService, never()).updateBaseUrl(anyString());
+        verify(mockQdrant, never()).updateBaseUrl(anyString());
+    }
+
+    @Test
+    @DisplayName("updateRunnerEndpoint probes tunnel first (502 if down) and updates both Ollama and Qdrant when reachable")
+    void updateRunnerEndpoint_probeAndAtomicSwap() throws Exception {
+        QdrantClientService mockQdrant = mock(QdrantClientService.class);
+        InetAddress publicIp = InetAddress.getByAddress("fast-fox.trycloudflare.com", new byte[]{104, 16, 1, 1});
+        CampusAiService spyService = new CampusAiService(
+                chunkRepository, eventRepository, jobRepository, userRepository, ollamaClientService, mockQdrant) {
+            @Override
+            InetAddress[] resolveHostAddresses(String host) {
+                return new InetAddress[]{publicIp};
+            }
+        };
+        spyService.setHealthProbeRetryDelayMs(0L);
+
+        when(ollamaClientService.hasAuthToken()).thenReturn(true);
+        when(ollamaClientService.matchesAuthToken("good-secret")).thenReturn(true);
+        when(ollamaClientService.isHealthyAt("https://fast-fox.trycloudflare.com")).thenReturn(false);
+
+        assertThatThrownBy(() -> spyService.updateRunnerEndpoint("good-secret", "https://fast-fox.trycloudflare.com/"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
+        verify(ollamaClientService, never()).updateBaseUrl(anyString());
+
+        when(ollamaClientService.isHealthyAt("https://fast-fox.trycloudflare.com")).thenReturn(true);
+        when(ollamaClientService.getChatModel()).thenReturn("gemma4:e4b");
+        when(ollamaClientService.getEmbeddingModel()).thenReturn("embeddinggemma-2:latest");
+        when(mockQdrant.isHealthy()).thenReturn(true);
+
+        Map<String, Object> result = spyService.updateRunnerEndpoint("good-secret", "https://Fast-Fox.trycloudflare.com/");
+
+        assertThat(result.get("status")).isEqualTo("UPDATED");
+        assertThat(result.get("baseUrl")).isEqualTo("https://fast-fox.trycloudflare.com");
+        assertThat(result.get("ollamaOnline")).isEqualTo(true);
+        assertThat(result.get("qdrantOnline")).isEqualTo(true);
+        verify(ollamaClientService).updateBaseUrl("https://fast-fox.trycloudflare.com");
+        verify(mockQdrant).updateBaseUrl("https://fast-fox.trycloudflare.com/qdrant");
     }
 }

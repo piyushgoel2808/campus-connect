@@ -186,4 +186,14 @@ class SecurityRbacIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Current password is incorrect."));
     }
+
+    @Test
+    @DisplayName("POST /api/bot/runner-endpoint bypasses JWT filter cleanly and fails closed when auth token is unset")
+    void runnerEndpointSync_failsClosedWhenTokenUnset() throws Exception {
+        mockMvc.perform(post("/api/bot/runner-endpoint")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"baseUrl\":\"https://test-tunnel.trycloudflare.com\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").exists());
+    }
 }

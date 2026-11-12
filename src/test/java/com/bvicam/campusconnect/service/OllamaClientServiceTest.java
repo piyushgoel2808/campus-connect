@@ -124,4 +124,58 @@ class OllamaClientServiceTest {
         String extracted = service.extractTextFromImage("aGVsbG8=", "Page 1");
         assertThat(extracted).isEmpty();
     }
+
+    @Test
+    @DisplayName("matchesAuthToken validates shared secrets securely and rejects blank or mismatched tokens")
+    void matchesAuthToken_verifiesInConstantTime() {
+        OllamaClientService configured = new OllamaClientService(
+                "https://tunnel-one.trycloudflare.com",
+                "gemma4:e4b",
+                "embeddinggemma-2:latest",
+                5,
+                "X-GradBot-Key",
+                "super-secret-hex-key",
+                objectMapper
+        );
+        assertThat(configured.hasAuthToken()).isTrue();
+        assertThat(configured.matchesAuthToken("super-secret-hex-key")).isTrue();
+        assertThat(configured.matchesAuthToken("  super-secret-hex-key  ")).isTrue();
+        assertThat(configured.matchesAuthToken("wrong-secret")).isFalse();
+        assertThat(configured.matchesAuthToken(null)).isFalse();
+        assertThat(configured.matchesAuthToken("   ")).isFalse();
+
+        OllamaClientService unconfigured = new OllamaClientService(
+                "http://localhost:11434",
+                "gemma4:e4b",
+                "embeddinggemma-2:latest",
+                5,
+                objectMapper
+        );
+        assertThat(unconfigured.hasAuthToken()).isFalse();
+        assertThat(unconfigured.matchesAuthToken("any-token")).isFalse();
+    }
+
+    @Test
+    @DisplayName("updateBaseUrl updates endpoint for valid HTTPS and rejects insecure plain HTTP with token")
+    void updateBaseUrl_enforcesHttpsAndUpdatesState() {
+        OllamaClientService service = new OllamaClientService(
+                "https://old-tunnel.trycloudflare.com/",
+                "gemma4:e4b",
+                "embeddinggemma-2:latest",
+                2,
+                "X-GradBot-Key",
+                "secret-token-123",
+                objectMapper
+        );
+        assertThat(service.getBaseUrl()).isEqualTo("https://old-tunnel.trycloudflare.com");
+
+        service.updateBaseUrl("https://new-tunnel.trycloudflare.com///");
+        assertThat(service.getBaseUrl()).isEqualTo("https://new-tunnel.trycloudflare.com");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateBaseUrl("http://insecure.trycloudflare.com")
+        );
+        assertThat(service.getBaseUrl()).isEqualTo("https://new-tunnel.trycloudflare.com");
+    }
 }

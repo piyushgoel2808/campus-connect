@@ -2,6 +2,7 @@ package com.bvicam.campusconnect.controller;
 
 import com.bvicam.campusconnect.dto.BotAskResponse;
 import com.bvicam.campusconnect.service.CampusAiService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BotController {
 
     private static final int MAX_REQUESTS_PER_MINUTE = 20;
+    private static final int MAX_SYNC_REQUESTS_PER_MINUTE = 10;
     private static final long WINDOW_MILLIS = 60_000L;
 
     private final CampusAiService campusAiService;
@@ -71,7 +73,36 @@ public class BotController {
         return campusAiService.getHealthStatus();
     }
 
+    /**
+     * Shared-secret webhook enabling the local AI runner to hot-reload its active Cloudflare
+     * tunnel URL in-memory with zero standby delay before/alongside Render persistence.
+     */
+    @PostMapping("/runner-endpoint")
+    public Map<String, Object> updateRunnerEndpoint(@RequestBody(required = false) Map<String, String> payload,
+                                                    HttpServletRequest request) {
+        enforceRateLimit(
+                "__runner_sync__",
+                MAX_SYNC_REQUESTS_PER_MINUTE,
+                "Too many runner endpoint sync attempts. Please wait a minute."
+        );
+        String authHeaderName = campusAiService.getRunnerAuthHeader();
+        if (authHeaderName == null || authHeaderName.isBlank()) {
+            authHeaderName = "X-GradBot-Key";
+        }
+        String providedSecret = request != null ? request.getHeader(authHeaderName) : null;
+        String baseUrl = payload != null ? payload.get("baseUrl") : null;
+        return campusAiService.updateRunnerEndpoint(providedSecret, baseUrl);
+    }
+
     private void enforceRateLimit(String userKey) {
+        enforceRateLimit(
+                userKey,
+                MAX_REQUESTS_PER_MINUTE,
+                "Too many GradBot requests. Please wait a minute before trying again."
+        );
+    }
+
+    private void enforceRateLimit(String userKey, int maxRequests, String message) {
         long now = System.currentTimeMillis();
         if (rateLimitWindows.size() > 1000) {
             rateLimitWindows.entrySet().removeIf(e -> {
@@ -88,10 +119,10 @@ public class BotController {
             while (!timestamps.isEmpty() && now - timestamps.peekFirst() > WINDOW_MILLIS) {
                 timestamps.pollFirst();
             }
-            if (timestamps.size() >= MAX_REQUESTS_PER_MINUTE) {
+            if (timestamps.size() >= maxRequests) {
                 throw new ResponseStatusException(
                         HttpStatusCode.valueOf(429),
-                        "Too many GradBot requests. Please wait a minute before trying again."
+                        message
                 );
             }
             timestamps.addLast(now);

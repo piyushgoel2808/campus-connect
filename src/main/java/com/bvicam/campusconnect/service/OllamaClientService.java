@@ -12,6 +12,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,7 +34,7 @@ public class OllamaClientService {
 
     private static final Logger log = LoggerFactory.getLogger(OllamaClientService.class);
 
-    private final String baseUrl;
+    private volatile String baseUrl;
     private final String chatModel;
     private final String embeddingModel;
     private final Duration timeout;
@@ -69,7 +71,7 @@ public class OllamaClientService {
             String authHeader,
             String authToken,
             ObjectMapper objectMapper) {
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.baseUrl = normalizeBaseUrl(baseUrl);
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.timeout = Duration.ofSeconds(Math.max(5, timeoutSeconds));
@@ -77,13 +79,7 @@ public class OllamaClientService {
         this.authToken = (authToken != null) ? authToken.trim() : "";
 
         // Enforce HTTPS or loopback if an authentication secret token is configured (CWE-319 protection)
-        URI base = URI.create(this.baseUrl);
-        String host = base.getHost();
-        boolean loopback = host == null || "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)
-                || "[::1]".equals(host) || "host.docker.internal".equalsIgnoreCase(host);
-        if (!this.authToken.isEmpty() && !"https".equalsIgnoreCase(base.getScheme()) && !loopback) {
-            throw new IllegalArgumentException("ollama.auth-token requires an https:// or loopback ollama.base-url");
-        }
+        validateEndpointUri(this.baseUrl, this.authToken, "ollama");
 
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -97,9 +93,22 @@ public class OllamaClientService {
      * @return true if Ollama daemon reports healthy status with required models, false otherwise
      */
     public boolean isHealthy() {
+        return isHealthyAt(this.baseUrl);
+    }
+
+    /**
+     * Probes a candidate Ollama base URL with the configured shared-secret header and verifies
+     * that both the required chat and embedding models are present.
+     *
+     * @param candidateBaseUrl base URL to probe (e.g. Cloudflare tunnel HTTPS URL)
+     * @return true if the endpoint responds 200 OK with required models, false otherwise
+     */
+    public boolean isHealthyAt(String candidateBaseUrl) {
         try {
+            String normalized = normalizeBaseUrl(candidateBaseUrl);
+            validateEndpointUri(normalized, this.authToken, "ollama");
             HttpRequest.Builder builder = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/api/tags"))
+                    .uri(URI.create(normalized + "/api/tags"))
                     .timeout(Duration.ofSeconds(5))
                     .GET();
             applyAuth(builder);
@@ -124,6 +133,9 @@ public class OllamaClientService {
                     return hasChat && hasEmbed;
                 }
             }
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         } catch (Exception e) {
             return false;
@@ -340,5 +352,68 @@ public class OllamaClientService {
 
     public String getBaseUrl() {
         return baseUrl;
+    }
+
+    public String getAuthHeader() {
+        return authHeader;
+    }
+
+    public boolean hasAuthToken() {
+        return !authToken.isEmpty();
+    }
+
+    /**
+     * Verifies a candidate runner shared secret in constant time.
+     */
+    public boolean matchesAuthToken(String providedToken) {
+        if (authToken.isEmpty() || providedToken == null || providedToken.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                authToken.getBytes(StandardCharsets.UTF_8),
+                providedToken.trim().getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    /**
+     * Atomically updates the active Ollama base URL at runtime after validating CWE-319 transport rules.
+     */
+    public void updateBaseUrl(String newBaseUrl) {
+        String normalized = normalizeBaseUrl(newBaseUrl);
+        validateEndpointUri(normalized, this.authToken, "ollama");
+        this.baseUrl = normalized;
+        log.info("Updated live Ollama endpoint dynamically to {}", normalized);
+    }
+
+    public static String normalizeBaseUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            throw new IllegalArgumentException("Base URL must not be blank");
+        }
+        String trimmed = rawUrl.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    public static boolean isLoopbackHost(String host) {
+        return host == null
+                || "localhost".equalsIgnoreCase(host)
+                || "127.0.0.1".equals(host)
+                || "[::1]".equals(host)
+                || "host.docker.internal".equalsIgnoreCase(host);
+    }
+
+    public static URI validateEndpointUri(String normalizedUrl, String authToken, String serviceLabel) {
+        URI base = URI.create(normalizedUrl);
+        String scheme = base.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            throw new IllegalArgumentException(serviceLabel + ".base-url must use http:// or https://");
+        }
+        String host = base.getHost();
+        if (authToken != null && !authToken.isEmpty() && !"https".equalsIgnoreCase(scheme) && !isLoopbackHost(host)) {
+            throw new IllegalArgumentException(serviceLabel + ".auth-token requires an https:// or loopback " + serviceLabel + ".base-url");
+        }
+        return base;
     }
 }

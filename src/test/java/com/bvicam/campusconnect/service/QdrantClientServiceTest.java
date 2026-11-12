@@ -86,4 +86,27 @@ class QdrantClientServiceTest {
                 )
         );
     }
+
+    @Test
+    @DisplayName("updateBaseUrl rejects insecure non-loopback HTTP when token is set and accepts valid HTTPS")
+    void updateBaseUrl_enforcesCwe319AndUpdates() {
+        QdrantClientService service = new QdrantClientService(
+                "https://old-tunnel.trycloudflare.com/qdrant/",
+                "campus_knowledge",
+                "X-GradBot-Key",
+                "secret-key-xyz",
+                2,
+                objectMapper
+        );
+        assertThat(service.getBaseUrl()).isEqualTo("https://old-tunnel.trycloudflare.com/qdrant");
+
+        service.updateBaseUrl("https://new-tunnel.trycloudflare.com/qdrant/");
+        assertThat(service.getBaseUrl()).isEqualTo("https://new-tunnel.trycloudflare.com/qdrant");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateBaseUrl("http://evil.trycloudflare.com/qdrant")
+        );
+        assertThat(service.getBaseUrl()).isEqualTo("https://new-tunnel.trycloudflare.com/qdrant");
+    }
 }

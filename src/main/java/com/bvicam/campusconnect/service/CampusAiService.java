@@ -15,9 +15,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.UnknownHostException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -51,6 +56,12 @@ public class CampusAiService {
 
     @Value("${ai.rag.max-fallback-chunks:500}")
     private int maxFallbackChunks = 500;
+
+    @Value("${ai.runner.allowed-domains:trycloudflare.com}")
+    private String allowedRunnerDomains = "trycloudflare.com";
+
+    private long healthProbeRetryDelayMs = 1500L;
+    private final Object endpointUpdateLock = new Object();
 
     private final Map<Long, double[]> embeddingCache = Collections.synchronizedMap(
             new LinkedHashMap<>(256, 0.75f, true) {
@@ -178,6 +189,199 @@ public class CampusAiService {
                 ? (qdrantHealthy ? "Mac AI Runner Connected (gemma4:e4b + Qdrant)" : "Mac AI Runner Connected (gemma4:e4b)")
                 : "Standby (Rule-Based Fallback)");
         return status;
+    }
+
+    public String getRunnerAuthHeader() {
+        return (ollamaClientService != null && ollamaClientService.getAuthHeader() != null)
+                ? ollamaClientService.getAuthHeader()
+                : "X-GradBot-Key";
+    }
+
+    void setAllowedRunnerDomains(String allowedRunnerDomains) {
+        this.allowedRunnerDomains = allowedRunnerDomains;
+    }
+
+    void setHealthProbeRetryDelayMs(long healthProbeRetryDelayMs) {
+        this.healthProbeRetryDelayMs = Math.max(0L, healthProbeRetryDelayMs);
+    }
+
+    /**
+     * Authenticates an external AI runner hot-reload request using the configured shared secret,
+     * validates the tunnel URL against strict HTTPS + SSRF + domain allowlist policies,
+     * verifies live tunnel reachability before committing, and updates Ollama + Qdrant URLs in-memory.
+     */
+    public Map<String, Object> updateRunnerEndpoint(String providedSecret, String rawBaseUrl) {
+        if (ollamaClientService == null || !ollamaClientService.hasAuthToken()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "GradBot runner auth token is not configured on this server."
+            );
+        }
+        if (!ollamaClientService.matchesAuthToken(providedSecret)) {
+            log.warn("Rejected unauthorized GradBot runner endpoint update attempt.");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid or missing GradBot runner authentication key."
+            );
+        }
+
+        URI validatedUri;
+        try {
+            validatedUri = validateRunnerTunnelUrl(rawBaseUrl);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+        String normalizedUrl = validatedUri.toString();
+
+        // Verify the candidate tunnel is genuinely reachable with our secret before switching live traffic
+        boolean reachable = ollamaClientService.isHealthyAt(normalizedUrl);
+        if (!reachable && healthProbeRetryDelayMs > 0) {
+            try {
+                Thread.sleep(healthProbeRetryDelayMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Interrupted while probing candidate tunnel URL."
+                );
+            }
+            reachable = ollamaClientService.isHealthyAt(normalizedUrl);
+        }
+        if (!reachable) {
+            log.warn("Rejected runner endpoint update for {} because Ollama health probe failed.", normalizedUrl);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Tunnel URL failed live Ollama health and authentication verification."
+            );
+        }
+
+        boolean qdrantOnline = false;
+        synchronized (endpointUpdateLock) {
+            ollamaClientService.updateBaseUrl(normalizedUrl);
+            if (qdrantClientService != null) {
+                qdrantClientService.updateBaseUrl(normalizedUrl + "/qdrant");
+                qdrantOnline = qdrantClientService.isHealthy();
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "UPDATED");
+        response.put("baseUrl", normalizedUrl);
+        response.put("ollamaOnline", true);
+        response.put("qdrantOnline", qdrantOnline);
+        response.put("chatModel", ollamaClientService.getChatModel() != null ? ollamaClientService.getChatModel() : "gemma4:e4b");
+        response.put("embeddingModel", ollamaClientService.getEmbeddingModel() != null ? ollamaClientService.getEmbeddingModel() : "embeddinggemma-2:latest");
+        return response;
+    }
+
+    /**
+     * Strictly validates an external tunnel URL (HTTPS only, port 443, allowlisted suffix, no SSRF targets).
+     */
+    public URI validateRunnerTunnelUrl(String rawBaseUrl) {
+        if (rawBaseUrl == null || rawBaseUrl.isBlank()) {
+            throw new IllegalArgumentException("Runner baseUrl is required.");
+        }
+        String trimmed = rawBaseUrl.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+
+        URI uri;
+        try {
+            uri = URI.create(trimmed);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Malformed runner URL: " + e.getMessage());
+        }
+
+        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new IllegalArgumentException("Runner baseUrl must use https://");
+        }
+        if (uri.getRawUserInfo() != null) {
+            throw new IllegalArgumentException("Runner baseUrl must not contain user credentials.");
+        }
+        if (uri.getRawQuery() != null || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException("Runner baseUrl must not include query parameters or fragments.");
+        }
+        String path = uri.getPath();
+        if (path != null && !path.isEmpty()) {
+            throw new IllegalArgumentException("Runner baseUrl must not include a path segment.");
+        }
+        int port = uri.getPort();
+        if (port != -1 && port != 443) {
+            throw new IllegalArgumentException("Runner baseUrl must use standard HTTPS port 443.");
+        }
+
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Runner baseUrl must include a valid hostname.");
+        }
+        String lowerHost = host.toLowerCase(Locale.ROOT);
+        if (!lowerHost.matches("^[a-z0-9.-]+$") || lowerHost.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+            throw new IllegalArgumentException("Runner hostname must be a valid DNS domain.");
+        }
+        if ("localhost".equals(lowerHost) || lowerHost.endsWith(".local") || lowerHost.endsWith(".internal")) {
+            throw new IllegalArgumentException("Internal or localhost runner URLs are not permitted.");
+        }
+
+        String domainsCsv = allowedRunnerDomains != null ? allowedRunnerDomains : "trycloudflare.com";
+        List<String> allowedDomains = Arrays.stream(domainsCsv.split(","))
+                .map(String::trim)
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        boolean domainMatched = allowedDomains.stream().anyMatch(domain -> {
+            if ("trycloudflare.com".equals(domain)) {
+                return lowerHost.endsWith(".trycloudflare.com") && lowerHost.length() > ".trycloudflare.com".length();
+            }
+            return lowerHost.equals(domain) || lowerHost.endsWith("." + domain);
+        });
+        if (!domainMatched) {
+            throw new IllegalArgumentException("Runner host '" + host + "' is not in the approved tunnel domain allowlist.");
+        }
+
+        try {
+            InetAddress[] addresses = resolveHostAddresses(lowerHost);
+            if (addresses == null || addresses.length == 0) {
+                throw new IllegalArgumentException("Unable to resolve runner hostname: " + host);
+            }
+            for (InetAddress addr : addresses) {
+                if (isPrivateOrReservedAddress(addr)) {
+                    throw new IllegalArgumentException("Runner hostname resolves to a private, loopback, or restricted network address.");
+                }
+            }
+        } catch (UnknownHostException e) {
+            throw new IllegalArgumentException("Unable to resolve runner hostname: " + host);
+        }
+
+        return URI.create("https://" + lowerHost);
+    }
+
+    InetAddress[] resolveHostAddresses(String host) throws UnknownHostException {
+        return InetAddress.getAllByName(host);
+    }
+
+    private boolean isPrivateOrReservedAddress(InetAddress addr) {
+        if (addr.isAnyLocalAddress()
+                || addr.isLoopbackAddress()
+                || addr.isLinkLocalAddress()
+                || addr.isSiteLocalAddress()
+                || addr.isMulticastAddress()) {
+            return true;
+        }
+        byte[] raw = addr.getAddress();
+        if (raw.length == 4) {
+            int first = raw[0] & 0xFF;
+            int second = raw[1] & 0xFF;
+            if (first == 100 && (second >= 64 && second <= 127)) {
+                return true;
+            }
+        } else if (raw.length == 16) {
+            if ((raw[0] & 0xFE) == 0xFC) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<ScoredChunk> findRelevantChunks(String question) {

@@ -316,6 +316,7 @@ GradBot is built so Render production **never crashes** even when laptops sleep 
 | :--- | :--- | :--- |
 | `POST /api/bot/ask` | Authenticated (`STUDENT` / `ALUMNI` / `ADMIN`) | Body: `{"question": "..."}` → Returns `{answer, model, citations[]}` |
 | `GET /api/bot/health` | Authenticated | Live health JSON for Ollama (`ONLINE`/`STANDBY`) and Qdrant (`ONLINE`/`OFFLINE`) |
+| `POST /api/bot/runner-endpoint` | Shared Secret (`X-GradBot-Key`, max `10 req/min`) | Validates HTTPS `*.trycloudflare.com` tunnel (SSRF + live health probe) and atomically hot-reloads Ollama & Qdrant URLs in `<1s` |
 | `POST /api/admin/knowledge/upload` | `ADMIN` | Multipart file upload + `title` + `category` |
 | `POST /api/admin/knowledge/scrape-url` | `ADMIN` | Body: `{url, title, category}` (`bvicam.in` allowlisted) |
 | `GET /api/admin/knowledge/documents` | `ADMIN` | Lists all indexed documents with `chunkCount` and `syncStatus` |
@@ -323,13 +324,13 @@ GradBot is built so Render production **never crashes** even when laptops sleep 
 | `POST /api/admin/knowledge/sync-bvicam?mode=...` | `ADMIN` | Modes: `FULL`, `NOTICES`, `SYLLABUS_AND_INFO`, `COURSE_MATERIALS`, `COURSE_MATERIALS_MCA`, `COURSE_MATERIALS_BAJMC` |
 | `GET /api/admin/knowledge/sync-status` | `ADMIN` | Live progress snapshot (`phase`, `discoveredCount`, `indexedNewCount`, `scannedFallbackCount`, `updatedCount`, `skippedExistingCount`, `failedCount`) |
 
-### Automated Render Deployment Loop ([`start-ai-runner.sh`](../start-ai-runner.sh#L274-L301))
+### Automated Render Deployment Loop ([`start-ai-runner.sh`](../start-ai-runner.sh#L256-L399) & [`start-ai-runner-docker.sh`](../start-ai-runner-docker.sh#L236-L404))
 
-1. Verifies Python 3, `cloudflared`, local Ollama (`11434`), `gemma4:e4b`, `embeddinggemma-2`, and Qdrant (`6333` — auto-downloading prebuilt v1.20.0 binary if absent).
+1. Verifies Python 3, `cloudflared`, local Ollama (`11434`), `gemma4:e4b`, `embeddinggemma-2:latest`, and Qdrant (`6333`).
 2. Loads persistent `GRADBOT_SECRET_KEY`, `RENDER_API_KEY`, and `RENDER_SERVICE_ID` from gitignored `.env.ai-runner` (`chmod 600`).
-3. Scans from `PROXY_PORT` (`11435`+) and auto-picks the next free TCP port if another service occupies it.
-4. Launches [`scripts/ai_proxy.py`](../scripts/ai_proxy.py) + Cloudflare Tunnel and verifies `200 OK` at `/api/tags`.
-5. Calls `PUT /v1/services/{id}/env-vars/OLLAMA_BASE_URL` and `OLLAMA_AUTH_TOKEN`, then calls `POST /v1/services/{id}/deploys` so Render immediately restarts into the live tunnel.
+3. Forces fresh tunnel creation (`--force-recreate cloudflared` in Docker) and verifies `HTTP 200` at `$TUNNEL_URL/api/tags`.
+4. **Instant Zero-Downtime Hot-Reload:** Calls `POST /api/bot/runner-endpoint` signed with `X-GradBot-Key` so the already-running Render JVM verifies and switches both Ollama and Qdrant to the new tunnel URL in **`< 1 second`** (eliminating the ~3.5-minute Standby Mode gap).
+5. **Automatic Persistent Rebuild:** Calls `PUT /v1/services/{id}/env-vars/*` (`OLLAMA_BASE_URL`, `OLLAMA_AUTH_TOKEN`, `OLLAMA_AUTH_HEADER`) and triggers `POST /v1/services/{id}/deploys` automatically so future Render restarts/wakeups retain the updated endpoint; if hot-reload did not apply (`HTTP != 200`), polls Render deploy status until `live` before declaring ready.
 
 ### Quick CLI Cheat Sheet
 

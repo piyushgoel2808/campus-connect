@@ -66,6 +66,8 @@ public class SecurityConfig {
                         ).permitAll()
                         // Only login & registration are public; /api/auth/change-password requires authentication
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                        // Shared-secret (X-GradBot-Key) authenticated webhook for zero-downtime AI tunnel hot-reload
+                        .requestMatchers(HttpMethod.POST, "/api/bot/runner-endpoint").permitAll()
                         .requestMatchers("/error").permitAll()
                         // Strict Role-Based Access Control (RBAC)
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

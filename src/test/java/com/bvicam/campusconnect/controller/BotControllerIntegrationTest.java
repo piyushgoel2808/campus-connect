@@ -13,9 +13,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -138,5 +140,44 @@ class BotControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ONLINE"))
                 .andExpect(jsonPath("$.model").value("gemma4:e4b"));
+    }
+
+    @Test
+    @DisplayName("POST /api/bot/runner-endpoint forwards shared secret and updates live endpoint")
+    void updateRunnerEndpoint_validSecret_returnsUpdated() throws Exception {
+        when(campusAiService.getRunnerAuthHeader()).thenReturn("X-GradBot-Key");
+        when(campusAiService.updateRunnerEndpoint(eq("runner-secret-42"), eq("https://swift-owl.trycloudflare.com")))
+                .thenReturn(Map.of(
+                        "status", "UPDATED",
+                        "baseUrl", "https://swift-owl.trycloudflare.com",
+                        "ollamaOnline", true,
+                        "qdrantOnline", true
+                ));
+
+        mockMvc.perform(post("/api/bot/runner-endpoint")
+                        .header("X-GradBot-Key", "runner-secret-42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"baseUrl\":\"https://swift-owl.trycloudflare.com\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UPDATED"))
+                .andExpect(jsonPath("$.baseUrl").value("https://swift-owl.trycloudflare.com"))
+                .andExpect(jsonPath("$.ollamaOnline").value(true))
+                .andExpect(jsonPath("$.qdrantOnline").value(true));
+
+        verify(campusAiService).updateRunnerEndpoint("runner-secret-42", "https://swift-owl.trycloudflare.com");
+    }
+
+    @Test
+    @DisplayName("POST /api/bot/runner-endpoint propagates 401 when shared secret is rejected")
+    void updateRunnerEndpoint_invalidSecret_returnsUnauthorized() throws Exception {
+        when(campusAiService.getRunnerAuthHeader()).thenReturn("X-GradBot-Key");
+        when(campusAiService.updateRunnerEndpoint(eq("wrong-key"), eq("https://swift-owl.trycloudflare.com")))
+                .thenThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid runner key"));
+
+        mockMvc.perform(post("/api/bot/runner-endpoint")
+                        .header("X-GradBot-Key", "wrong-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"baseUrl\":\"https://swift-owl.trycloudflare.com\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }

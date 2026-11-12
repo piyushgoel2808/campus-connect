@@ -108,16 +108,23 @@ if [ -z "$GRADBOT_SECRET_KEY" ]; then
         GRADBOT_SECRET_KEY=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 48 | head -n 1)
     fi
 
-    cat <<EOF >> "$ENV_FILE"
+    (
+        umask 077
+        if [ -s "$ENV_FILE" ]; then
+            printf "\n" >> "$ENV_FILE"
+        fi
+        cat <<EOF >> "$ENV_FILE"
 # GradBot Local AI Runner Authentication Secret
 # Keep this file private and never commit to version control!
 GRADBOT_SECRET_KEY=${GRADBOT_SECRET_KEY}
 AUTH_HEADER=${AUTH_HEADER}
 
-# Optional: Add Render credentials for 100% automated environment variable sync
+# Optional: Add Render credentials for 100% automated environment variable sync & rebuild
 # RENDER_API_KEY=rnd_xxxxxxxxxxxx
 # RENDER_SERVICE_ID=srv-xxxxxxxxxxxx
+# RENDER_APP_URL=https://campus-connect-live.onrender.com
 EOF
+    )
     chmod 600 "$ENV_FILE"
     echo -e "${GREEN}✓ Secret generated and saved to ${ENV_FILE}${NC}"
 else
@@ -166,11 +173,13 @@ fi
 if [ "$USE_HOST_OLLAMA" = true ]; then
     echo -e "${GREEN}✓ Native host Ollama detected on port 11434 (preserving GPU acceleration & cached models)${NC}"
     export AI_OLLAMA_TARGET="http://host.docker.internal:11434"
-    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build qdrant ai-proxy cloudflared
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build qdrant
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build --force-recreate ai-proxy cloudflared
     OLLAMA_MODE_LABEL="Host Native GPU (http://host.docker.internal:11434)"
 else
     export AI_OLLAMA_TARGET="http://ollama:11434"
-    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build qdrant ollama
+    $COMPOSE_CMD -f docker-compose.ai-runner.yml up -d --build --force-recreate ai-proxy cloudflared
     OLLAMA_MODE_LABEL="Docker Container (campus-ai-ollama)"
 fi
 
@@ -225,14 +234,22 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 5. RETRIEVE PUBLIC CLOUDFLARE TUNNEL URL & TEST
+# 5. RETRIEVE PUBLIC CLOUDFLARE TUNNEL URL, VERIFY & SYNC RENDER
 # ------------------------------------------------------------------------------
-echo -e "\n${CYAN}[5/5] Connecting Cloudflare Tunnel to Render...${NC}"
-echo "Waiting for public HTTPS tunnel to assign hostname..."
+echo -e "\n${CYAN}[5/5] Verifying Docker proxy, Cloudflare Tunnel & syncing Render...${NC}"
 
+# Ensure local ai-proxy container responds on host port
+for i in {1..15}; do
+    if curl -s "http://127.0.0.1:${AI_PROXY_PORT}/health" | grep -q "ONLINE"; then
+        break
+    fi
+    sleep 1
+done
+
+echo "Waiting for fresh public HTTPS tunnel hostname..."
 TUNNEL_URL=""
 for i in {1..30}; do
-    TUNNEL_URL=$(docker logs campus-ai-tunnel 2>&1 | grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' | tail -1 || true)
+    TUNNEL_URL=$(docker logs campus-ai-tunnel 2>&1 | grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' | tail -n 1 || true)
     if [ -n "$TUNNEL_URL" ]; then
         break
     fi
@@ -245,12 +262,61 @@ if [ -z "$TUNNEL_URL" ]; then
     TUNNEL_URL="https://<pending-check-docker-logs>.trycloudflare.com"
 else
     echo -e "${GREEN}✓ Cloudflare Tunnel active: ${BOLD}${TUNNEL_URL}${NC}"
+    HTTP_CODE="000"
+    for attempt in {1..10}; do
+        HTTP_CODE=$(curl -s -m 8 -H "${AUTH_HEADER}: ${GRADBOT_SECRET_KEY}" -o /dev/null -w "%{http_code}" "${TUNNEL_URL}/api/tags" || true)
+        if [ "$HTTP_CODE" = "200" ]; then
+            break
+        fi
+        sleep 2
+    done
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo -e "${GREEN}✓ End-to-end tunnel verification successful! (HTTP 200 OK from tunnel)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Tunnel verification returned HTTP ${HTTP_CODE}. Proceeding with sync...${NC}"
+    fi
 fi
 
-# Optional automated Render API sync (per-key updates so unrelated Render env vars are never overwritten)
+RENDER_APP_URL="${RENDER_APP_URL:-https://campus-connect-live.onrender.com}"
+RENDER_APP_URL="${RENDER_APP_URL%/}"
+
+extract_json_field() {
+    local json="$1"
+    local key="$2"
+    if command -v python3 &>/dev/null; then
+        JSON_INPUT="$json" JSON_KEY="$key" python3 -c "import json,os; d=json.loads(os.environ['JSON_INPUT']); v=d.get(os.environ['JSON_KEY'],''); print(str(v).lower() if isinstance(v,bool) else (v if isinstance(v,(str,int,float)) else ''))" 2>/dev/null || true
+    else
+        echo "$json" | tr -d '\n\r' | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
+    fi
+}
+
+# Step 5A: Instant zero-downtime hot-reload so active Render container switches in <1s
+HOT_RELOADED=false
+if [ -n "$RENDER_APP_URL" ] && [ "$TUNNEL_URL" != "https://<pending-check-docker-logs>.trycloudflare.com" ]; then
+    echo -e "\n${CYAN}⚡ Syncing live Render endpoint via zero-downtime hot-reload (${RENDER_APP_URL})...${NC}"
+    HOT_RESP_FILE=$(mktemp 2>/dev/null || echo "/tmp/gradbot_docker_hot_reload_$$.json")
+    HOT_CODE=$(curl -s -o "$HOT_RESP_FILE" -w "%{http_code}" --connect-timeout 15 --max-time 75 \
+        -X POST "${RENDER_APP_URL}/api/bot/runner-endpoint" \
+        -H "Content-Type: application/json" \
+        -H "${AUTH_HEADER}: ${GRADBOT_SECRET_KEY}" \
+        -d "{\"baseUrl\": \"${TUNNEL_URL}\"}" || true)
+    HOT_CODE=${HOT_CODE:-000}
+    HOT_BODY=$(cat "$HOT_RESP_FILE" 2>/dev/null || true)
+    rm -f "$HOT_RESP_FILE"
+
+    if [ "$HOT_CODE" = "200" ] && echo "$HOT_BODY" | grep -q '"ollamaOnline"[[:space:]]*:[[:space:]]*true'; then
+        HOT_RELOADED=true
+        echo -e "${GREEN}✓ Instant Hot-Reload applied! Live GradBot on Render is ONLINE now (<1s).${NC}"
+    else
+        echo -e "${YELLOW}ℹ️  Instant hot-reload returned HTTP ${HOT_CODE}; Render rebuild will apply the updated URL.${NC}"
+    fi
+fi
+
+# Step 5B: Persist Render env vars & automatically trigger Render rebuild (poll until live if needed)
 RENDER_SYNCED=false
+DEPLOY_ID=""
 if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ] && [ "$TUNNEL_URL" != "https://<pending-check-docker-logs>.trycloudflare.com" ]; then
-    echo "Auto-syncing environment variables to Render via API (per-key to protect existing config)..."
+    echo -e "\n${CYAN}🔄 Persisting Render environment variables & queuing automatic rebuild...${NC}"
     sync_render_var() {
         local key="$1"
         local val="$2"
@@ -269,8 +335,69 @@ if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ] && [ "$TUNNEL_URL" !=
     if { [ "$URL_STATUS" = "200" ] || [ "$URL_STATUS" = "201" ]; } && \
        { [ "$TOKEN_STATUS" = "200" ] || [ "$TOKEN_STATUS" = "201" ]; } && \
        { [ "$HEADER_STATUS" = "200" ] || [ "$HEADER_STATUS" = "201" ]; }; then
-        echo -e "${GREEN}✓ Render environment variables updated successfully!${NC}"
+        echo -e "${GREEN}✓ Render environment variables persisted successfully!${NC}"
         RENDER_SYNCED=true
+
+        DEPLOY_RESP_FILE=$(mktemp 2>/dev/null || echo "/tmp/gradbot_docker_deploy_$$.json")
+        DEPLOY_HTTP=$(curl -s -o "$DEPLOY_RESP_FILE" -w "%{http_code}" -X POST \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_not_clear"}' || true)
+        DEPLOY_BODY=$(cat "$DEPLOY_RESP_FILE" 2>/dev/null || true)
+        rm -f "$DEPLOY_RESP_FILE"
+
+        if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
+            DEPLOY_ID=$(extract_json_field "$DEPLOY_BODY" "id")
+            echo -e "${GREEN}✓ Triggered automatic Render rolling rebuild${DEPLOY_ID:+ (Deploy: ${DEPLOY_ID})}!${NC}"
+
+            if [ "$HOT_RELOADED" = false ] && [ -n "$DEPLOY_ID" ]; then
+                echo -e "${CYAN}⏳ Waiting for Render deploy to go LIVE (so GradBot never opens in standby mode)...${NC}"
+                POLL_START=$(date +%s)
+                LAST_STATUS=""
+                FINAL_STATUS=""
+                for attempt in $(seq 1 45); do
+                    STATUS_JSON=$(curl -s -m 10 \
+                        -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                        "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}" || true)
+                    CURR_STATUS=$(extract_json_field "$STATUS_JSON" "status")
+                    ELAPSED=$(( $(date +%s) - POLL_START ))
+                    if [ "$CURR_STATUS" != "$LAST_STATUS" ] || [ $((attempt % 3)) -eq 0 ]; then
+                        echo -e "   [${ELAPSED}s] Render deploy status: ${BOLD}${CURR_STATUS:-checking}${NC}"
+                        LAST_STATUS="$CURR_STATUS"
+                    fi
+                    if [ "$CURR_STATUS" = "live" ]; then
+                        FINAL_STATUS="live"
+                        break
+                    elif [ "$CURR_STATUS" = "build_failed" ] || [ "$CURR_STATUS" = "update_failed" ] || [ "$CURR_STATUS" = "canceled" ] || [ "$CURR_STATUS" = "deactivated" ]; then
+                        FINAL_STATUS="$CURR_STATUS"
+                        break
+                    fi
+                    sleep 8
+                done
+
+                if [ "$FINAL_STATUS" = "live" ]; then
+                    echo -e "${GREEN}✓ Render deploy ${DEPLOY_ID} is LIVE! Verifying GradBot tunnel link...${NC}"
+                    POST_LIVE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 15 --max-time 30 \
+                        -X POST "${RENDER_APP_URL}/api/bot/runner-endpoint" \
+                        -H "Content-Type: application/json" \
+                        -H "${AUTH_HEADER}: ${GRADBOT_SECRET_KEY}" \
+                        -d "{\"baseUrl\": \"${TUNNEL_URL}\"}" || true)
+                    if [ "$POST_LIVE_CODE" = "200" ]; then
+                        HOT_RELOADED=true
+                        echo -e "${GREEN}✓ End-to-end Render <-> Docker AI link verified (HTTP 200)!${NC}"
+                    fi
+                elif [ -n "$FINAL_STATUS" ]; then
+                    echo -e "${RED}⚠️  Render deploy ended with status '${FINAL_STATUS}'. Check Render dashboard logs.${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Render deploy is still in progress after 6 minutes. Check Render dashboard.${NC}"
+                fi
+            elif [ "$HOT_RELOADED" = true ]; then
+                echo -e "${GREEN}✓ Background Render rebuild queued — GradBot is already LIVE right now via hot-reload!${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️  Render deploy trigger returned HTTP ${DEPLOY_HTTP}. Check Render dashboard or API key.${NC}"
+        fi
     else
         echo -e "${YELLOW}⚠️  Render API sync returned statuses (${URL_STATUS}, ${TOKEN_STATUS}, ${HEADER_STATUS}). Please verify manually.${NC}"
     fi
@@ -292,7 +419,7 @@ echo -e "  ${BOLD}Vector Database   :${NC} Qdrant (HNSW Vector Engine in campus-
 echo -e "  ${BOLD}Tunnel Multiplex  :${NC} Ollama (/api/*) & Qdrant (/qdrant/*, /collections/*)"
 echo -e "${BOLD}${GREEN}────────────────────────────────────────────────────────────────${NC}"
 
-if [ "$RENDER_SYNCED" = false ]; then
+if [ "$RENDER_SYNCED" = false ] && [ "$HOT_RELOADED" = false ]; then
     echo -e "\n${BOLD}${YELLOW}👉 ACTION REQUIRED IN RENDER DASHBOARD:${NC}"
     echo "1. Go to: https://dashboard.render.com"
     echo "2. Open your Campus Connect Web Service -> 'Environment' tab"
@@ -304,7 +431,14 @@ if [ "$RENDER_SYNCED" = false ]; then
     echo ""
     echo -e "   ${GREEN}(Note: Qdrant automatically multiplexes over ${TUNNEL_URL}/qdrant — zero extra variables needed!)${NC}"
     echo ""
-    echo "4. Render will auto-deploy or restart and connect to this Docker runner!"
+    echo "4. Trigger 'Manual Deploy' (or configure RENDER_API_KEY + RENDER_SERVICE_ID in .env.ai-runner for 100% automation)!"
+elif [ "$RENDER_SYNCED" = true ]; then
+    echo -e "\n  ${GREEN}✓ Render env vars persisted & automatic rebuild triggered${DEPLOY_ID:+ (${DEPLOY_ID})}.${NC}"
+    if [ "$HOT_RELOADED" = true ]; then
+        echo -e "  ${GREEN}✓ Live GradBot is ALREADY CONNECTED now via Instant Hot-Reload (<1s).${NC}"
+    fi
+else
+    echo -e "\n  ${GREEN}✓ Live GradBot connected via Instant Hot-Reload (set RENDER_API_KEY to also persist env vars).${NC}"
 fi
 
 echo -e "\n${BOLD}Helpful Docker Commands:${NC}"

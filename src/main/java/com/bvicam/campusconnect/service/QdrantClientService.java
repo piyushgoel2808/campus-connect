@@ -26,7 +26,7 @@ public class QdrantClientService {
 
     private static final Logger log = LoggerFactory.getLogger(QdrantClientService.class);
 
-    private final String baseUrl;
+    private volatile String baseUrl;
     private final String collectionName;
     private final String authHeader;
     private final String authToken;
@@ -51,20 +51,14 @@ public class QdrantClientService {
             String authToken,
             int timeoutSeconds,
             ObjectMapper objectMapper) {
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.baseUrl = OllamaClientService.normalizeBaseUrl(baseUrl);
         this.collectionName = (collectionName != null && !collectionName.isBlank()) ? collectionName.trim() : "campus_knowledge";
         this.authHeader = (authHeader != null && !authHeader.isBlank()) ? authHeader.trim() : "X-GradBot-Key";
         this.authToken = (authToken != null) ? authToken.trim() : "";
         this.timeout = Duration.ofSeconds(Math.max(3, timeoutSeconds));
 
         // Enforce HTTPS or loopback if an authentication secret token is configured (CWE-319 protection)
-        URI base = URI.create(this.baseUrl);
-        String host = base.getHost();
-        boolean loopback = host == null || "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)
-                || "[::1]".equals(host) || "host.docker.internal".equalsIgnoreCase(host);
-        if (!this.authToken.isEmpty() && !"https".equalsIgnoreCase(base.getScheme()) && !loopback) {
-            throw new IllegalArgumentException("qdrant.auth-token requires an https:// or loopback qdrant.base-url");
-        }
+        OllamaClientService.validateEndpointUri(this.baseUrl, this.authToken, "qdrant");
 
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
@@ -291,6 +285,16 @@ public class QdrantClientService {
         if (!authToken.isEmpty()) {
             builder.header(authHeader, authToken);
         }
+    }
+
+    /**
+     * Atomically updates the active Qdrant base URL at runtime after validating CWE-319 transport rules.
+     */
+    public void updateBaseUrl(String newBaseUrl) {
+        String normalized = OllamaClientService.normalizeBaseUrl(newBaseUrl);
+        OllamaClientService.validateEndpointUri(normalized, this.authToken, "qdrant");
+        this.baseUrl = normalized;
+        log.info("Updated live Qdrant endpoint dynamically to {}", normalized);
     }
 
     public String getBaseUrl() {

@@ -2,7 +2,7 @@
 # ==============================================================================
 # GradBot Local AI Runner (BVICAM | Campus Connect)
 # ==============================================================================
-# Exposes local Ollama (gemma4:e4b + nomic-embed-text) to Render over a secure
+# Exposes local Ollama (gemma4:e4b + embeddinggemma-2:latest) and Qdrant to Render over a secure
 # Cloudflare Tunnel with shared-secret header authentication (X-GradBot-Key).
 #
 # Usage:
@@ -145,9 +145,10 @@ if [ -z "$GRADBOT_SECRET_KEY" ]; then
 GRADBOT_SECRET_KEY=$GRADBOT_SECRET_KEY
 PROXY_PORT=11435
 
-# Optional: Add your Render credentials for 1-click automatic environment variable sync
+# Optional: Add your Render credentials for 1-click automatic environment variable sync & rebuild
 # RENDER_API_KEY=rnd_...
 # RENDER_SERVICE_ID=srv-...
+# RENDER_APP_URL=https://campus-connect-live.onrender.com
 EOF
     )
     chmod 600 "$ENV_FILE"
@@ -252,51 +253,148 @@ fi
 echo -e "${GREEN}✓ Public HTTPS Tunnel: ${BOLD}${TUNNEL_URL}${NC}"
 
 # ------------------------------------------------------------------------------
-# 5. END-TO-END VERIFICATION
+# 5. END-TO-END VERIFICATION, INSTANT HOT-RELOAD & RENDER AUTO-REBUILD
 # ------------------------------------------------------------------------------
-echo -e "\n${CYAN}[5/5] Running end-to-end verification ping...${NC}"
+echo -e "\n${CYAN}[5/5] Running end-to-end tunnel verification & Render synchronization...${NC}"
 
 HTTP_CODE="000"
-for attempt in {1..5}; do
-    HTTP_CODE=$(curl -s -m 5 -H "$AUTH_HEADER: $GRADBOT_SECRET_KEY" -o /dev/null -w "%{http_code}" "$TUNNEL_URL/api/tags" || true)
+for attempt in {1..10}; do
+    HTTP_CODE=$(curl -s -m 8 -H "$AUTH_HEADER: $GRADBOT_SECRET_KEY" -o /dev/null -w "%{http_code}" "$TUNNEL_URL/api/tags" || true)
     if [ "$HTTP_CODE" = "200" ]; then
         break
     fi
-    sleep 1
+    sleep 2
 done
 
 if [ "$HTTP_CODE" = "200" ]; then
     echo -e "${GREEN}✓ End-to-end verification successful! (HTTP 200 OK from tunnel)${NC}"
 else
-    echo -e "${YELLOW}⚠️  Tunnel verification returned HTTP $HTTP_CODE. Still proceeding...${NC}"
+    echo -e "${YELLOW}⚠️  Tunnel verification returned HTTP $HTTP_CODE. Proceeding with sync...${NC}"
 fi
 
-# Optional Render auto-sync if API key is provided
-RENDER_SYNCED=false
-if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
-    echo -e "\n${CYAN}🔄 Auto-updating Render environment variables (per-key to protect existing config)...${NC}"
-    URL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars/OLLAMA_BASE_URL" \
-        -H "Authorization: Bearer $RENDER_API_KEY" \
-        -H "Content-Type: application/json" \
-        -d "{\"value\": \"$TUNNEL_URL\"}" || true)
-    TOKEN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "https://api.render.com/v1/services/$RENDER_SERVICE_ID/env-vars/OLLAMA_AUTH_TOKEN" \
-        -H "Authorization: Bearer $RENDER_API_KEY" \
-        -H "Content-Type: application/json" \
-        -d "{\"value\": \"$GRADBOT_SECRET_KEY\"}" || true)
+RENDER_APP_URL="${RENDER_APP_URL:-https://campus-connect-live.onrender.com}"
+RENDER_APP_URL="${RENDER_APP_URL%/}"
 
-    if [ "$URL_STATUS" = "200" ] && [ "$TOKEN_STATUS" = "200" ]; then
-        echo -e "${GREEN}✓ Render environment variables (OLLAMA_BASE_URL, OLLAMA_AUTH_TOKEN) updated automatically!${NC}"
-        # Trigger an immediate rolling deploy so the running container loads the new tunnel URL
-        DEPLOY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
+extract_json_field() {
+    local json="$1"
+    local key="$2"
+    if command -v python3 &>/dev/null; then
+        JSON_INPUT="$json" JSON_KEY="$key" python3 -c "import json,os; d=json.loads(os.environ['JSON_INPUT']); v=d.get(os.environ['JSON_KEY'],''); print(str(v).lower() if isinstance(v,bool) else (v if isinstance(v,(str,int,float)) else ''))" 2>/dev/null || true
+    else
+        echo "$json" | tr -d '\n\r' | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
+    fi
+}
+
+# Step 5A: Instant zero-downtime hot-reload so the active Render server connects in <1s
+HOT_RELOADED=false
+if [ -n "$RENDER_APP_URL" ]; then
+    echo -e "\n${CYAN}⚡ Syncing live Render endpoint via zero-downtime hot-reload (${RENDER_APP_URL})...${NC}"
+    HOT_RESP_FILE=$(mktemp 2>/dev/null || echo "/tmp/gradbot_hot_reload_$$.json")
+    HOT_CODE=$(curl -s -o "$HOT_RESP_FILE" -w "%{http_code}" --connect-timeout 15 --max-time 75 \
+        -X POST "${RENDER_APP_URL}/api/bot/runner-endpoint" \
+        -H "Content-Type: application/json" \
+        -H "${AUTH_HEADER}: ${GRADBOT_SECRET_KEY}" \
+        -d "{\"baseUrl\": \"${TUNNEL_URL}\"}" || true)
+    HOT_CODE=${HOT_CODE:-000}
+    HOT_BODY=$(cat "$HOT_RESP_FILE" 2>/dev/null || true)
+    rm -f "$HOT_RESP_FILE"
+
+    if [ "$HOT_CODE" = "200" ] && echo "$HOT_BODY" | grep -q '"ollamaOnline"[[:space:]]*:[[:space:]]*true'; then
+        HOT_RELOADED=true
+        echo -e "${GREEN}✓ Instant Hot-Reload applied! Live GradBot on Render is ONLINE now (<1s).${NC}"
+    else
+        echo -e "${YELLOW}ℹ️  Instant hot-reload returned HTTP ${HOT_CODE}; Render rebuild will apply the updated URL.${NC}"
+    fi
+fi
+
+# Step 5B: Persist Render env vars & automatically trigger Render rebuild (poll until live if hot-reload didn't succeed)
+RENDER_SYNCED=false
+DEPLOY_ID=""
+if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+    echo -e "\n${CYAN}🔄 Persisting Render environment variables & queuing automatic rebuild...${NC}"
+    sync_render_var() {
+        local key="$1"
+        local val="$2"
+        curl -s -o /dev/null -w "%{http_code}" -X PUT \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/env-vars/${key}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -d "{\"value\": \"${val}\"}" || true
+    }
+
+    URL_STATUS=$(sync_render_var "OLLAMA_BASE_URL" "${TUNNEL_URL}")
+    TOKEN_STATUS=$(sync_render_var "OLLAMA_AUTH_TOKEN" "${GRADBOT_SECRET_KEY}")
+    HEADER_STATUS=$(sync_render_var "OLLAMA_AUTH_HEADER" "${AUTH_HEADER}")
+
+    if { [ "$URL_STATUS" = "200" ] || [ "$URL_STATUS" = "201" ]; } && \
+       { [ "$TOKEN_STATUS" = "200" ] || [ "$TOKEN_STATUS" = "201" ]; } && \
+       { [ "$HEADER_STATUS" = "200" ] || [ "$HEADER_STATUS" = "201" ]; }; then
+        echo -e "${GREEN}✓ Render env vars (OLLAMA_BASE_URL, OLLAMA_AUTH_TOKEN, OLLAMA_AUTH_HEADER) persisted!${NC}"
+        RENDER_SYNCED=true
+
+        DEPLOY_RESP_FILE=$(mktemp 2>/dev/null || echo "/tmp/gradbot_deploy_$$.json")
+        DEPLOY_HTTP=$(curl -s -o "$DEPLOY_RESP_FILE" -w "%{http_code}" -X POST \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{"clearCache": "do_not_clear"}' || true)
-        if [ "$DEPLOY_STATUS" = "201" ]; then
-            echo -e "${GREEN}✓ Triggered Render rolling deployment to load the new AI runner connection!${NC}"
+        DEPLOY_BODY=$(cat "$DEPLOY_RESP_FILE" 2>/dev/null || true)
+        rm -f "$DEPLOY_RESP_FILE"
+
+        if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
+            DEPLOY_ID=$(extract_json_field "$DEPLOY_BODY" "id")
+            echo -e "${GREEN}✓ Triggered automatic Render rolling rebuild${DEPLOY_ID:+ (Deploy: ${DEPLOY_ID})}!${NC}"
+
+            if [ "$HOT_RELOADED" = false ] && [ -n "$DEPLOY_ID" ]; then
+                echo -e "${CYAN}⏳ Waiting for Render deploy to go LIVE (so GradBot never opens in standby mode)...${NC}"
+                POLL_START=$(date +%s)
+                LAST_STATUS=""
+                FINAL_STATUS=""
+                for attempt in $(seq 1 45); do
+                    STATUS_JSON=$(curl -s -m 10 \
+                        -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                        "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}" || true)
+                    CURR_STATUS=$(extract_json_field "$STATUS_JSON" "status")
+                    ELAPSED=$(( $(date +%s) - POLL_START ))
+                    if [ "$CURR_STATUS" != "$LAST_STATUS" ] || [ $((attempt % 3)) -eq 0 ]; then
+                        echo -e "   [${ELAPSED}s] Render deploy status: ${BOLD}${CURR_STATUS:-checking}${NC}"
+                        LAST_STATUS="$CURR_STATUS"
+                    fi
+                    if [ "$CURR_STATUS" = "live" ]; then
+                        FINAL_STATUS="live"
+                        break
+                    elif [ "$CURR_STATUS" = "build_failed" ] || [ "$CURR_STATUS" = "update_failed" ] || [ "$CURR_STATUS" = "canceled" ] || [ "$CURR_STATUS" = "deactivated" ]; then
+                        FINAL_STATUS="$CURR_STATUS"
+                        break
+                    fi
+                    sleep 8
+                done
+
+                if [ "$FINAL_STATUS" = "live" ]; then
+                    echo -e "${GREEN}✓ Render deploy ${DEPLOY_ID} is LIVE! Verifying GradBot tunnel link...${NC}"
+                    POST_LIVE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 15 --max-time 30 \
+                        -X POST "${RENDER_APP_URL}/api/bot/runner-endpoint" \
+                        -H "Content-Type: application/json" \
+                        -H "${AUTH_HEADER}: ${GRADBOT_SECRET_KEY}" \
+                        -d "{\"baseUrl\": \"${TUNNEL_URL}\"}" || true)
+                    if [ "$POST_LIVE_CODE" = "200" ]; then
+                        HOT_RELOADED=true
+                        echo -e "${GREEN}✓ End-to-end Render <-> Mac AI link verified (HTTP 200)!${NC}"
+                    fi
+                elif [ -n "$FINAL_STATUS" ]; then
+                    echo -e "${RED}⚠️  Render deploy ended with status '${FINAL_STATUS}'. Check Render dashboard logs.${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Render deploy is still in progress after 6 minutes. Check Render dashboard.${NC}"
+                fi
+            elif [ "$HOT_RELOADED" = true ]; then
+                echo -e "${GREEN}✓ Background Render rebuild queued — GradBot is already LIVE right now via hot-reload!${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️  Render deploy trigger returned HTTP ${DEPLOY_HTTP}. Check Render dashboard or API key.${NC}"
         fi
-        RENDER_SYNCED=true
     else
-        echo -e "${YELLOW}⚠️  Render env var update returned status ($URL_STATUS, $TOKEN_STATUS). Check your RENDER_API_KEY and RENDER_SERVICE_ID.${NC}"
+        echo -e "${YELLOW}⚠️  Render env var update returned status ($URL_STATUS, $TOKEN_STATUS, $HEADER_STATUS). Check your RENDER_API_KEY and RENDER_SERVICE_ID.${NC}"
     fi
 fi
 
@@ -316,7 +414,7 @@ echo -e "  ${BOLD}Vector Database   :${NC} Qdrant (HNSW Vector Index on Port 633
 echo -e "  ${BOLD}Tunnel Multiplex  :${NC} Ollama (/api/*) & Qdrant (/qdrant/*, /collections/*)"
 echo -e "${BOLD}${GREEN}────────────────────────────────────────────────────────────────${NC}"
 
-if [ "$RENDER_SYNCED" = false ]; then
+if [ "$RENDER_SYNCED" = false ] && [ "$HOT_RELOADED" = false ]; then
     echo -e "${BOLD}👉 To connect your Render deployment:${NC}"
     echo -e "   1. Go to your Render Dashboard -> Your Service -> ${BOLD}Environment${NC}"
     echo -e "   2. Update or add these two environment variables:"
@@ -325,9 +423,14 @@ if [ "$RENDER_SYNCED" = false ]; then
     echo -e "      ${BOLD}OLLAMA_AUTH_TOKEN${NC} = ${YELLOW}${GRADBOT_SECRET_KEY}${NC}"
     echo ""
     echo -e "   (Optionally set RENDER_API_KEY and RENDER_SERVICE_ID in .env.ai-runner"
-    echo -e "    so the script syncs Render automatically on future launches!)"
+    echo -e "    so the script persists & rebuilds Render automatically on future launches!)"
+elif [ "$RENDER_SYNCED" = true ]; then
+    echo -e "  ${GREEN}✓ Render env vars persisted & automatic rebuild triggered${DEPLOY_ID:+ (${DEPLOY_ID})}.${NC}"
+    if [ "$HOT_RELOADED" = true ]; then
+        echo -e "  ${GREEN}✓ Live GradBot is ALREADY CONNECTED now via Instant Hot-Reload (<1s).${NC}"
+    fi
 else
-    echo -e "  ${GREEN}✓ Render environment synchronized automatically.${NC}"
+    echo -e "  ${GREEN}✓ Live GradBot connected via Instant Hot-Reload (set RENDER_API_KEY to also persist env vars).${NC}"
 fi
 
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════${NC}"
